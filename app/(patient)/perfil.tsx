@@ -1,28 +1,32 @@
-import React, { useState, useRef } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Animated,
-  StatusBar,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+    ActivityIndicator,
+    Alert,
+    Animated,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import {
+    getMe,
+    getPatientProfile,
+    updateMe,
+    updatePatientProfile,
+} from "../../services/api";
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_PATIENT = {
-  name: 'Ana Beatriz Santos',
-  email: 'ana.beatriz@email.com',
-  phone: '(11) 98765-4321',
-  birthDate: '12/05/1995',
-  cpf: '123.456.789-00',
-  emergencyName: 'Carlos Santos',
-  emergencyPhone: '(11) 91234-5678',
+// Campos enviados no PATCH /api/auth/patients/{id}/profile/
+// phone e full_name NÃO ficam aqui — pertencem ao User, salvos via updateMe
+interface ProfilePayload {
+  birth_date?: string;
+  cpf?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,12 +62,19 @@ interface EditableRowProps {
   label: string;
   value: string;
   onChangeText: (val: string) => void;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric';
+  keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
   editable: boolean;
   readOnly?: boolean;
 }
 
-const EditableRow = ({ label, value, onChangeText, keyboardType, editable, readOnly }: EditableRowProps) => (
+const EditableRow = ({
+  label,
+  value,
+  onChangeText,
+  keyboardType,
+  editable,
+  readOnly,
+}: EditableRowProps) => (
   <View style={styles.editableRow}>
     <Text style={styles.infoLabel}>{label}</Text>
     {editable && !readOnly ? (
@@ -71,12 +82,14 @@ const EditableRow = ({ label, value, onChangeText, keyboardType, editable, readO
         style={styles.editInput}
         value={value}
         onChangeText={onChangeText}
-        keyboardType={keyboardType ?? 'default'}
+        keyboardType={keyboardType ?? "default"}
         autoCapitalize="none"
         placeholderTextColor="#9bbfb0"
       />
     ) : (
-      <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>{value}</Text>
+      <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
+        {value}
+      </Text>
     )}
   </View>
 );
@@ -85,13 +98,14 @@ const EditableRow = ({ label, value, onChangeText, keyboardType, editable, readO
 export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
   const [fields, setFields] = useState<EditableFields>({
-    name: MOCK_PATIENT.name,
-    phone: MOCK_PATIENT.phone,
-    birthDate: MOCK_PATIENT.birthDate,
-    cpf: MOCK_PATIENT.cpf,
-    emergencyName: MOCK_PATIENT.emergencyName,
-    emergencyPhone: MOCK_PATIENT.emergencyPhone,
+    name: "",
+    phone: "",
+    birthDate: "",
+    cpf: "",
+    emergencyName: "",
+    emergencyPhone: "",
   });
   const [original, setOriginal] = useState<EditableFields>({ ...fields });
 
@@ -99,9 +113,64 @@ export default function ProfileScreen() {
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   React.useEffect(() => {
+    const loadProfile = async () => {
+      setLoading(true);
+      const meResult = await getMe();
+      if (!meResult.ok || !meResult.data?.id) {
+        Alert.alert(
+          "Erro",
+          meResult.error || "Não foi possível carregar o perfil.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      const profileResult = await getPatientProfile(meResult.data.id);
+      if (!profileResult.ok || !profileResult.data) {
+        Alert.alert(
+          "Erro",
+          profileResult.error || "Não foi possível carregar o perfil.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      const profile = profileResult.data;
+      setFields({
+        name: profile.user.full_name || profile.user.email || "",
+        phone: profile.user.phone || "",
+        birthDate: profile.birth_date || "",
+        cpf: profile.cpf || "",
+        emergencyName: profile.emergency_contact_name || "",
+        emergencyPhone: profile.emergency_contact_phone || "",
+      });
+      setEmail(profile.user.email || "");
+      setOriginal({
+        name: profile.user.full_name || profile.user.email || "",
+        phone: profile.user.phone || "",
+        birthDate: profile.birth_date || "",
+        cpf: profile.cpf || "",
+        emergencyName: profile.emergency_contact_name || "",
+        emergencyPhone: profile.emergency_contact_phone || "",
+      });
+      setLoading(false);
+    };
+
+    void loadProfile();
+  }, []);
+
+  React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
@@ -122,17 +191,53 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // TODO: PATCH /api/patient/profile/
-      // await fetch('https://sua-api.com/api/patient/profile/', {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json', Authorization: `Bearer TOKEN` },
-      //   body: JSON.stringify(fields),
-      // });
-      await new Promise((r) => setTimeout(r, 1000)); // simula delay
+      const meResult = await getMe();
+      if (!meResult.ok || !meResult.data?.id) {
+        Alert.alert("Erro", "Não foi possível identificar o paciente.");
+        setLoading(false);
+        return;
+      }
+
+      const userId = meResult.data.id;
+
+      // ── Passo 1: salvar full_name e phone no User via PATCH /api/auth/me/
+      // phone pertence ao model User — updatePatientProfile não consegue salvá-lo
+      const meUpdateResult = await updateMe({
+        full_name: fields.name,
+        phone: fields.phone,
+      });
+      if (!meUpdateResult.ok) {
+        console.error("Erro ao salvar dados do usuário:", meUpdateResult.error, meUpdateResult.data);
+        Alert.alert(
+          "Erro",
+          meUpdateResult.error || "Não foi possível salvar nome/telefone.",
+        );
+        return;
+      }
+
+      // ── Passo 2: salvar campos do PatientProfile
+      const profilePayload: ProfilePayload = {
+        birth_date: fields.birthDate || undefined,
+        cpf: fields.cpf || undefined,
+        emergency_contact_name: fields.emergencyName || undefined,
+        emergency_contact_phone: fields.emergencyPhone || undefined,
+      };
+
+      const profileResult = await updatePatientProfile(userId, profilePayload);
+      if (!profileResult.ok) {
+        console.error("Erro ao salvar perfil:", profileResult.error, profileResult.data);
+        Alert.alert(
+          "Erro",
+          profileResult.error || "Não foi possível salvar as alterações.",
+        );
+        return;
+      }
+
+      setOriginal({ ...fields });
       setEditing(false);
-      Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
+      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
     } catch {
-      Alert.alert('Erro', 'Não foi possível salvar as alterações.');
+      Alert.alert("Erro", "Não foi possível salvar as alterações.");
     } finally {
       setLoading(false);
     }
@@ -164,11 +269,15 @@ export default function ProfileScreen() {
       <View style={styles.avatarSection}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {fields.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+            {fields.name
+              .split(" ")
+              .map((n) => n[0])
+              .slice(0, 2)
+              .join("")}
           </Text>
         </View>
-        <Text style={styles.avatarName}>{fields.name}</Text>
-        <Text style={styles.avatarEmail}>{MOCK_PATIENT.email}</Text>
+        <Text style={styles.avatarName}>{fields.name || "Paciente"}</Text>
+        <Text style={styles.avatarEmail}>{email || "carregando..."}</Text>
       </View>
 
       <ScrollView
@@ -176,8 +285,9 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           {/* ── Dados Pessoais ── */}
           <View style={styles.card}>
             <SectionHeader icon="person-outline" title="Dados Pessoais" />
@@ -185,18 +295,18 @@ export default function ProfileScreen() {
             <EditableRow
               label="Nome completo"
               value={fields.name}
-              onChangeText={set('name')}
+              onChangeText={set("name")}
               editable={editing}
             />
             <View style={styles.rowDivider} />
 
-            <InfoRow label="E-mail" value={MOCK_PATIENT.email} />
+            <InfoRow label="E-mail" value={email || "---"} />
             <View style={styles.rowDivider} />
 
             <EditableRow
               label="Telefone"
               value={fields.phone}
-              onChangeText={set('phone')}
+              onChangeText={set("phone")}
               keyboardType="phone-pad"
               editable={editing}
             />
@@ -205,7 +315,7 @@ export default function ProfileScreen() {
             <EditableRow
               label="Data de nascimento"
               value={fields.birthDate}
-              onChangeText={set('birthDate')}
+              onChangeText={set("birthDate")}
               editable={editing}
             />
             <View style={styles.rowDivider} />
@@ -213,7 +323,7 @@ export default function ProfileScreen() {
             <EditableRow
               label="CPF"
               value={fields.cpf}
-              onChangeText={set('cpf')}
+              onChangeText={set("cpf")}
               keyboardType="numeric"
               editable={editing}
             />
@@ -226,7 +336,7 @@ export default function ProfileScreen() {
             <EditableRow
               label="Nome"
               value={fields.emergencyName}
-              onChangeText={set('emergencyName')}
+              onChangeText={set("emergencyName")}
               editable={editing}
             />
             <View style={styles.rowDivider} />
@@ -234,16 +344,11 @@ export default function ProfileScreen() {
             <EditableRow
               label="Telefone"
               value={fields.emergencyPhone}
-              onChangeText={set('emergencyPhone')}
+              onChangeText={set("emergencyPhone")}
               keyboardType="phone-pad"
               editable={editing}
             />
           </View>
-
-         
-      
-           
-          
 
           {/* ── Botão Salvar ── */}
           {editing && (
@@ -270,9 +375,9 @@ export default function ProfileScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const WHITE = '#ffffff';
-const BG = '#f0faf5';
+const GREEN = "#2e8b6e";
+const WHITE = "#ffffff";
+const BG = "#f0faf5";
 
 const styles = StyleSheet.create({
   screen: {
@@ -286,29 +391,29 @@ const styles = StyleSheet.create({
     paddingTop: 52,
     paddingBottom: 16,
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "700",
     color: WHITE,
     letterSpacing: 0.2,
   },
   editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: "rgba(255,255,255,0.18)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
@@ -316,24 +421,24 @@ const styles = StyleSheet.create({
   editBtnText: {
     color: WHITE,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   cancelBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   cancelBtnText: {
     color: WHITE,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Avatar section
   avatarSection: {
     backgroundColor: GREEN,
-    alignItems: 'center',
+    alignItems: "center",
     paddingBottom: 28,
     paddingTop: 4,
   },
@@ -341,27 +446,27 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 10,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: "rgba(255,255,255,0.35)",
   },
   avatarText: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: "800",
     color: WHITE,
   },
   avatarName: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
     color: WHITE,
     letterSpacing: -0.3,
   },
   avatarEmail: {
     fontSize: 13,
-    color: '#b2dfcf',
+    color: "#b2dfcf",
     marginTop: 3,
   },
 
@@ -387,8 +492,8 @@ const styles = StyleSheet.create({
 
   // Section header
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 16,
   },
@@ -396,14 +501,14 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 8,
-    backgroundColor: '#e8f7f1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#e8f7f1",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#1a3d31',
+    fontWeight: "700",
+    color: "#1a3d31",
     letterSpacing: 0.1,
   },
 
@@ -413,19 +518,19 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 11,
-    color: '#7aab96',
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    color: "#7aab96",
+    fontWeight: "600",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 3,
   },
   infoValue: {
     fontSize: 15,
-    color: '#1a3d31',
-    fontWeight: '500',
+    color: "#1a3d31",
+    fontWeight: "500",
   },
   infoValueMuted: {
-    color: '#4a7a66',
+    color: "#4a7a66",
   },
 
   // Editable row
@@ -434,8 +539,8 @@ const styles = StyleSheet.create({
   },
   editInput: {
     fontSize: 15,
-    color: '#1a3d31',
-    fontWeight: '500',
+    color: "#1a3d31",
+    fontWeight: "500",
     borderBottomWidth: 1.5,
     borderBottomColor: GREEN,
     paddingBottom: 4,
@@ -445,16 +550,16 @@ const styles = StyleSheet.create({
   // Divider
   rowDivider: {
     height: 1,
-    backgroundColor: '#f0f8f4',
+    backgroundColor: "#f0f8f4",
   },
 
   // Read-only badge
   readOnlyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    backgroundColor: '#f0faf5',
-    alignSelf: 'flex-start',
+    backgroundColor: "#f0faf5",
+    alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -462,14 +567,14 @@ const styles = StyleSheet.create({
   },
   readOnlyText: {
     fontSize: 11,
-    color: '#7aab96',
-    fontWeight: '600',
+    color: "#7aab96",
+    fontWeight: "600",
   },
 
   // Long text
   longText: {
     fontSize: 14,
-    color: '#3a6054',
+    color: "#3a6054",
     lineHeight: 22,
   },
 
@@ -478,9 +583,9 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     borderRadius: 16,
     height: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     marginTop: 4,
     shadowColor: GREEN,
@@ -495,7 +600,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: WHITE,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.2,
   },
 });

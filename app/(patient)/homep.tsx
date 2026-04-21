@@ -1,39 +1,73 @@
-import React, { useRef } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Animated,
-  StatusBar,
-  Dimensions,
-  Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+    Alert,
+    Animated,
+    Dimensions,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { getAppointments, getMe, getPsychologists } from "../../services/api";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const PATIENT = {
-  name: 'Ana Beatriz',
-  nextAppointment: {
-    date: 'Quinta-feira, 27 de março',
-    time: '14:30',
-    professional: 'Dra. Camila Rocha',
-    specialty: 'Psicóloga Clínica',
-    avatar: 'CR',
-  },
-};
+const DEFAULT_PATIENT_NAME = "Paciente";
+
+interface NextAppointment {
+  date: string;
+  time: string;
+  professional: string;
+  specialty: string;
+  avatar: string;
+}
 
 // ─── Shortcut Cards Data ──────────────────────────────────────────────────────
 const SHORTCUTS = [
-  { id: '1', label: 'Agendar\nConsulta', icon: 'calendar-outline', color: '#2e8b6e', bg: '#e8f7f1', route: 'Schedule' },
-  { id: '2', label: 'Minhas\nConsultas', icon: 'time-outline', color: '#3a7bd5', bg: '#e8f0fc', route: 'MyAppointments' },
-  { id: '3', label: 'Chat', icon: 'chatbubble-ellipses-outline', color: '#8b5cf6', bg: '#f0ebff', route: 'Chat' },
-  { id: '4', label: 'Documentos', icon: 'document-text-outline', color: '#e67e22', bg: '#fef3e8', route: 'Documents' },
-  { id: '5', label: 'Perfil', icon: 'person-outline', color: '#e05c7a', bg: '#fdeef2', route: 'Profile' },
+  {
+    id: "1",
+    label: "Agendar\nConsulta",
+    icon: "calendar-outline",
+    color: "#2e8b6e",
+    bg: "#e8f7f1",
+    route: "Schedule",
+  },
+  {
+    id: "2",
+    label: "Minhas\nConsultas",
+    icon: "time-outline",
+    color: "#3a7bd5",
+    bg: "#e8f0fc",
+    route: "MyAppointments",
+  },
+  {
+    id: "3",
+    label: "Chat",
+    icon: "chatbubble-ellipses-outline",
+    color: "#8b5cf6",
+    bg: "#f0ebff",
+    route: "Chat",
+  },
+  {
+    id: "4",
+    label: "Documentos",
+    icon: "document-text-outline",
+    color: "#e67e22",
+    bg: "#fef3e8",
+    route: "Documents",
+  },
+  {
+    id: "5",
+    label: "Perfil",
+    icon: "person-outline",
+    color: "#e05c7a",
+    bg: "#fdeef2",
+    route: "Profile",
+  },
 ];
 
 // ─── Decorative Background ───────────────────────────────────────────────────
@@ -53,8 +87,18 @@ interface ShortcutCardProps {
   onPress: () => void;
 }
 
-const ShortcutCard = ({ label, icon, color, bg, onPress }: ShortcutCardProps) => (
-  <TouchableOpacity style={styles.shortcutCard} onPress={onPress} activeOpacity={0.8}>
+const ShortcutCard = ({
+  label,
+  icon,
+  color,
+  bg,
+  onPress,
+}: ShortcutCardProps) => (
+  <TouchableOpacity
+    style={styles.shortcutCard}
+    onPress={onPress}
+    activeOpacity={0.8}
+  >
     <View style={[styles.shortcutIconBox, { backgroundColor: bg }]}>
       <Ionicons name={icon as any} size={26} color={color} />
     </View>
@@ -65,21 +109,122 @@ const ShortcutCard = ({ label, icon, color, bg, onPress }: ShortcutCardProps) =>
 // ─── Props ────────────────────────────────────────────────────────────────────
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function HomeP() {
+  const [patientName, setPatientName] = useState(DEFAULT_PATIENT_NAME);
+  const [nextAppointment, setNextAppointment] =
+    useState<NextAppointment | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadingAppointment, setLoadingAppointment] = useState(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      setLoadingProfile(true);
+      const result = await getMe();
+      if (result.ok && result.data) {
+        const name =
+          result.data.full_name || result.data.name || DEFAULT_PATIENT_NAME;
+        setPatientName(name);
+      } else {
+        Alert.alert(
+          "Erro",
+          result.error || "Não foi possível carregar o perfil.",
+        );
+      }
+      setLoadingProfile(false);
+    };
+
+    const loadAppointment = async () => {
+      setLoadingAppointment(true);
+
+      // ── FIX BUG 1: carregar profissionais primeiro para montar o mapa UUID→nome
+      const profsResult = await getPsychologists();
+      const profMap: Record<string, string> = {};
+      if (profsResult.ok && Array.isArray(profsResult.data)) {
+        for (const prof of profsResult.data) {
+          const name =
+            prof.user?.full_name ||
+            prof.full_name ||
+            prof.name ||
+            prof.psychologistName ||
+            "Profissional";
+          profMap[prof.id] = name;
+        }
+      }
+
+      const result = await getAppointments();
+      if (result.ok && Array.isArray(result.data)) {
+        const upcoming = result.data
+          .filter(
+            (item) => item.status === "scheduled" || item.status === "agendada",
+          )
+          .map((item) => {
+            const scheduledAt = item.scheduled_at ?? "";
+            const date = scheduledAt.split("T")[0] ?? "";
+            const time = scheduledAt.split("T")[1]?.slice(0, 5) ?? "";
+
+            // ── FIX BUG 1: resolver UUID → nome usando o mapa local
+            const professionalId = item.professional ?? "";
+            const professionalName =
+              profMap[professionalId] || "Profissional";
+
+            // Iniciais geradas a partir do nome resolvido, não do UUID
+            const avatar = professionalName
+              .split(" ")
+              .filter((part) => part.length > 0)
+              .map((part) => part[0].toUpperCase())
+              .slice(0, 2)
+              .join("");
+
+            return {
+              date,
+              time,
+              professional: professionalName,
+              specialty: item.specialty || "Psicologia",
+              avatar: avatar || "P",
+            };
+          })
+          .filter((item) => item.date && item.time)
+          .sort((a, b) => {
+            const dateA = new Date(`${a.date}T${a.time}:00`).getTime();
+            const dateB = new Date(`${b.date}T${b.time}:00`).getTime();
+            return dateA - dateB;
+          })
+          .find(
+            (item) => new Date(`${item.date}T${item.time}:00`) > new Date(),
+          );
+
+        if (upcoming) {
+          setNextAppointment(upcoming);
+        }
+      }
+      setLoadingAppointment(false);
+    };
+
+    void loadProfile();
+    void loadAppointment();
+  }, []);
+
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
   const getGreeting = (): string => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
-    return 'Boa noite';
+    if (hour < 12) return "Bom dia";
+    if (hour < 18) return "Boa tarde";
+    return "Boa noite";
   };
 
   return (
@@ -89,14 +234,20 @@ export default function HomeP() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.patientName}>{PATIENT.name} 👋</Text>
+          <Text style={styles.patientName}>
+            {loadingProfile ? "Carregando..." : `${patientName} 👋`}
+          </Text>
         </Animated.View>
 
         <TouchableOpacity
           style={styles.notifBtn}
-          onPress={() => Alert.alert('Avisos', 'Central de notificacoes em breve.')}
+          onPress={() =>
+            Alert.alert("Avisos", "Central de notificacoes em breve.")
+          }
         >
           <Ionicons name="notifications-outline" size={22} color="#fff" />
           <View style={styles.notifDot} />
@@ -109,48 +260,74 @@ export default function HomeP() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Próxima Consulta ── */}
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <Text style={styles.sectionTitle}>Próxima consulta</Text>
 
-          <View style={styles.appointmentCard}>
-            {/* Faixa lateral */}
-            <View style={styles.appointmentAccent} />
+          {loadingAppointment ? (
+            <Text style={styles.emptyText}>Carregando próxima consulta...</Text>
+          ) : nextAppointment ? (
+            <View style={styles.appointmentCard}>
+              {/* Faixa lateral */}
+              <View style={styles.appointmentAccent} />
 
-            <View style={styles.appointmentContent}>
-              {/* Data e hora */}
-              <View style={styles.appointmentDateRow}>
-                <Ionicons name="calendar-outline" size={15} color={GREEN} />
-                <Text style={styles.appointmentDate}>{PATIENT.nextAppointment.date}</Text>
-              </View>
-              <View style={styles.appointmentTimeRow}>
-                <Ionicons name="time-outline" size={15} color={GREEN} />
-                <Text style={styles.appointmentTime}>{PATIENT.nextAppointment.time}</Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              {/* Profissional */}
-              <View style={styles.professionalRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{PATIENT.nextAppointment.avatar}</Text>
+              <View style={styles.appointmentContent}>
+                {/* Data e hora */}
+                <View style={styles.appointmentDateRow}>
+                  <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                  <Text style={styles.appointmentDate}>
+                    {nextAppointment.date}
+                  </Text>
                 </View>
-                <View>
-                  <Text style={styles.professionalName}>{PATIENT.nextAppointment.professional}</Text>
-                  <Text style={styles.professionalSpecialty}>{PATIENT.nextAppointment.specialty}</Text>
+                <View style={styles.appointmentTimeRow}>
+                  <Ionicons name="time-outline" size={15} color={GREEN} />
+                  <Text style={styles.appointmentTime}>
+                    {nextAppointment.time}
+                  </Text>
                 </View>
-              </View>
 
-              {/* Botão */}
-              <TouchableOpacity style={styles.detailsBtn} activeOpacity={0.8}>
-                <Text style={styles.detailsBtnText}>Ver detalhes</Text>
-                <Ionicons name="arrow-forward-outline" size={14} color={GREEN} />
-              </TouchableOpacity>
+                <View style={styles.divider} />
+
+                {/* Profissional */}
+                <View style={styles.professionalRow}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {nextAppointment.avatar}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.professionalName}>
+                      {nextAppointment.professional}
+                    </Text>
+                    <Text style={styles.professionalSpecialty}>
+                      {nextAppointment.specialty}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Botão */}
+                <TouchableOpacity style={styles.detailsBtn} activeOpacity={0.8}>
+                  <Text style={styles.detailsBtnText}>Ver detalhes</Text>
+                  <Ionicons
+                    name="arrow-forward-outline"
+                    size={14}
+                    color={GREEN}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              Nenhuma consulta agendada no momento.
+            </Text>
+          )}
         </Animated.View>
 
         {/* ── Atalhos ── */}
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <Text style={styles.sectionTitle}>O que você precisa?</Text>
 
           <View style={styles.shortcutsGrid}>
@@ -164,13 +341,17 @@ export default function HomeP() {
                 onPress={() => {
                   const routes: Record<
                     string,
-                    '/agendamento' | '/consultas' | '/chat' | '/documento' | '/perfil'
+                    | "/agendamento"
+                    | "/consultas"
+                    | "/chat"
+                    | "/documento"
+                    | "/perfil"
                   > = {
-                    Schedule: '/agendamento',
-                    MyAppointments: '/consultas',
-                    Chat: '/chat',
-                    Documents: '/documento',
-                    Profile: '/perfil',
+                    Schedule: "/agendamento",
+                    MyAppointments: "/consultas",
+                    Chat: "/chat",
+                    Documents: "/documento",
+                    Profile: "/perfil",
                   };
 
                   const targetRoute = routes[item.route];
@@ -180,7 +361,10 @@ export default function HomeP() {
                     return;
                   }
 
-                  Alert.alert('Tela indisponivel', 'Esse atalho ainda nao foi configurado.');
+                  Alert.alert(
+                    "Tela indisponivel",
+                    "Esse atalho ainda nao foi configurado.",
+                  );
                 }}
               />
             ))}
@@ -203,32 +387,32 @@ export default function HomeP() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const WHITE = '#ffffff';
+const GREEN = "#2e8b6e";
+const WHITE = "#ffffff";
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f0faf5',
+    backgroundColor: "#f0faf5",
   },
 
   // Decorative
   circle1: {
-    position: 'absolute',
+    position: "absolute",
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: '#27795f',
+    backgroundColor: "#27795f",
     top: -100,
     right: -80,
     opacity: 0.5,
   },
   circle2: {
-    position: 'absolute',
+    position: "absolute",
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: '#1e6b54',
+    backgroundColor: "#1e6b54",
     top: -60,
     left: -60,
     opacity: 0.3,
@@ -240,18 +424,18 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 28,
     paddingHorizontal: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   greeting: {
     fontSize: 15,
-    color: '#b2dfcf',
-    fontWeight: '500',
+    color: "#b2dfcf",
+    fontWeight: "500",
   },
   patientName: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: "800",
     color: WHITE,
     letterSpacing: -0.5,
     marginTop: 2,
@@ -260,19 +444,19 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 4,
   },
   notifDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#f87171',
+    backgroundColor: "#f87171",
     borderWidth: 1.5,
     borderColor: GREEN,
   },
@@ -288,8 +472,8 @@ const styles = StyleSheet.create({
   // Section title
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#1a3d31',
+    fontWeight: "700",
+    color: "#1a3d31",
     marginBottom: 14,
     marginTop: 4,
   },
@@ -298,14 +482,14 @@ const styles = StyleSheet.create({
   appointmentCard: {
     backgroundColor: WHITE,
     borderRadius: 20,
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 28,
     shadowColor: GREEN,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   appointmentAccent: {
     width: 5,
@@ -318,35 +502,35 @@ const styles = StyleSheet.create({
     padding: 18,
   },
   appointmentDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 6,
   },
   appointmentDate: {
     fontSize: 13,
-    color: '#4a7a66',
-    fontWeight: '600',
+    color: "#4a7a66",
+    fontWeight: "600",
   },
   appointmentTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   appointmentTime: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#1a3d31',
+    fontWeight: "800",
+    color: "#1a3d31",
     letterSpacing: -0.5,
   },
   divider: {
     height: 1,
-    backgroundColor: '#e8f4ef',
+    backgroundColor: "#e8f4ef",
     marginVertical: 14,
   },
   professionalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginBottom: 14,
   },
@@ -354,31 +538,31 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#e8f7f1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#e8f7f1",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
     color: GREEN,
   },
   professionalName: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#1a3d31',
+    fontWeight: "700",
+    color: "#1a3d31",
   },
   professionalSpecialty: {
     fontSize: 12,
-    color: '#7aab96',
+    color: "#7aab96",
     marginTop: 1,
   },
   detailsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    alignSelf: 'flex-start',
-    backgroundColor: '#e8f7f1',
+    alignSelf: "flex-start",
+    backgroundColor: "#e8f7f1",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -386,13 +570,13 @@ const styles = StyleSheet.create({
   detailsBtnText: {
     fontSize: 12,
     color: GREEN,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Shortcuts grid
   shortcutsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     marginBottom: 28,
   },
@@ -402,8 +586,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 10,
-    alignItems: 'center',
-    shadowColor: '#2e8b6e',
+    alignItems: "center",
+    shadowColor: "#2e8b6e",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
     shadowRadius: 10,
@@ -413,15 +597,15 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 10,
   },
   shortcutLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#2a5044',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#2a5044",
+    textAlign: "center",
     lineHeight: 15,
   },
 
@@ -430,9 +614,9 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     borderRadius: 20,
     padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     shadowColor: GREEN,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
@@ -445,13 +629,19 @@ const styles = StyleSheet.create({
   },
   bannerTitle: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: "800",
     color: WHITE,
     marginBottom: 4,
   },
   bannerSubtitle: {
     fontSize: 12,
-    color: '#b2dfcf',
+    color: "#b2dfcf",
     lineHeight: 17,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#6b7a72",
+    textAlign: "center",
+    marginVertical: 12,
   },
 });

@@ -1,74 +1,30 @@
-import React, { useState, useRef } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
   Animated,
+  TextInput as RNTextInput,
+  ScrollView,
   StatusBar,
-  TextInput,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { getPsychologists, ProfessionalApiItem } from "../../services/api";
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const PSYCHOLOGISTS = [
-  {
-    id: '1',
-    name: 'Dra. Camila Rocha',
-    crp: 'CRP 06/12345',
-    specialty: 'Ansiedade e Depressão',
-    bio: 'Especialista em Terapia Cognitivo-Comportamental com foco em transtornos de ansiedade, depressão e burnout. Mais de 8 anos de experiência clínica.',
-    initials: 'CR',
-    color: '#2e8b6e',
-    bg: '#e8f7f1',
-    rating: 4.9,
-    sessions: 320,
-    available: true,
-  },
-  {
-    id: '2',
-    name: 'Dr. Rafael Mendes',
-    crp: 'CRP 06/98765',
-    specialty: 'Relacionamentos e Autoestima',
-    bio: 'Psicoterapeuta com abordagem humanista e existencial. Atua com questões de relacionamento, autoconhecimento e desenvolvimento pessoal.',
-    initials: 'RM',
-    color: '#3a7bd5',
-    bg: '#e8f0fc',
-    rating: 4.8,
-    sessions: 210,
-    available: true,
-  },
-  {
-    id: '3',
-    name: 'Dra. Fernanda Lima',
-    crp: 'CRP 06/54321',
-    specialty: 'Trauma e TEPT',
-    bio: 'Especializada em trauma psicológico e TEPT, utilizando EMDR e técnicas de mindfulness. Experiência com adultos e adolescentes.',
-    initials: 'FL',
-    color: '#8b5cf6',
-    bg: '#f0ebff',
-    rating: 5.0,
-    sessions: 180,
-    available: false,
-  },
-  {
-    id: '4',
-    name: 'Dr. Lucas Tavares',
-    crp: 'CRP 06/11223',
-    specialty: 'Infância e Adolescência',
-    bio: 'Psicólogo clínico com especialização em psicologia infantil e do adolescente. Atua com ludoterapia e orientação familiar.',
-    initials: 'LT',
-    color: '#e67e22',
-    bg: '#fef3e8',
-    rating: 4.7,
-    sessions: 95,
-    available: true,
-  },
+// Alias para evitar conflitos
+const TextInput = RNTextInput;
+
+const SPECIALTIES = [
+  "Todos",
+  "Ansiedade",
+  "Relacionamentos",
+  "Trauma",
+  "Infância",
 ];
-
-const SPECIALTIES = ['Todos', 'Ansiedade', 'Relacionamentos', 'Trauma', 'Infância'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Psychologist {
@@ -91,7 +47,7 @@ const Stars = ({ rating }: { rating: number }) => (
     {[1, 2, 3, 4, 5].map((i) => (
       <Ionicons
         key={i}
-        name={i <= Math.floor(rating) ? 'star' : 'star-outline'}
+        name={i <= Math.floor(rating) ? "star" : "star-outline"}
         size={11}
         color="#f4b942"
       />
@@ -107,86 +63,154 @@ const PsychologistCard = ({
   fadeAnim,
   index,
 }: {
-  item: Psychologist;
+  item: ProfessionalApiItem;
   onSchedule: () => void;
   fadeAnim: Animated.Value;
   index: number;
-}) => (
-  <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
-    {/* Availability badge */}
-    <View style={[styles.availBadge, { backgroundColor: item.available ? '#e8f7f1' : '#fef3f3' }]}>
-      <View style={[styles.availDot, { backgroundColor: item.available ? '#2e8b6e' : '#e05c5c' }]} />
-      <Text style={[styles.availText, { color: item.available ? '#2e8b6e' : '#e05c5c' }]}>
-        {item.available ? 'Disponível' : 'Indisponível'}
-      </Text>
-    </View>
+}) => {
+  const name =
+    item.user?.full_name ||
+    item.user?.first_name ||
+    item.full_name ||
+    item.name ||
+    "Psicólogo";
+  const specialty = item.specialty || "Psicologia";
+  const color = item.color || "#2e8b6e";
+  const bg = item.bg || "#e8f7f1";
+  const initials = name
+    .split(" ")
+    .filter((part) => part.length > 0)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("");
+  const available = item.available ?? true;
 
-    {/* Top row */}
-    <View style={styles.cardTop}>
-      <View style={[styles.avatar, { backgroundColor: item.bg }]}>
-        <Text style={[styles.avatarText, { color: item.color }]}>{item.initials}</Text>
+  return (
+    <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
+      {/* Availability badge */}
+      <View
+        style={[
+          styles.availBadge,
+          { backgroundColor: available ? "#e8f7f1" : "#fef3f3" },
+        ]}
+      >
+        <View
+          style={[
+            styles.availDot,
+            { backgroundColor: available ? "#2e8b6e" : "#e05c5c" },
+          ]}
+        />
+        <Text
+          style={[
+            styles.availText,
+            { color: available ? "#2e8b6e" : "#e05c5c" },
+          ]}
+        >
+          {available ? "Disponível" : "Indisponível"}
+        </Text>
       </View>
 
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardName}>{item.name}</Text>
-        <Text style={styles.cardCrp}>{item.crp}</Text>
-        <View style={[styles.specialtyBadge, { backgroundColor: item.bg }]}>
-          <Text style={[styles.specialtyText, { color: item.color }]}>{item.specialty}</Text>
+      {/* Top row */}
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, { backgroundColor: bg }]}>
+          <Text style={[styles.avatarText, { color }]}>{initials}</Text>
+        </View>
+
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardName}>{name}</Text>
+          <Text style={styles.cardCrp}>{item.crp}</Text>
+          <View style={[styles.specialtyBadge, { backgroundColor: bg }]}>
+            <Text style={[styles.specialtyText, { color }]}>{specialty}</Text>
+          </View>
         </View>
       </View>
-    </View>
 
-    {/* Stats */}
-    <View style={styles.statsRow}>
-      <Stars rating={item.rating} />
-      <View style={styles.statDivider} />
-      <Ionicons name="people-outline" size={13} color="#7aab96" />
-      <Text style={styles.statText}>{item.sessions} sessões</Text>
-    </View>
+      {/* Stats */}
+      <View style={styles.statsRow}>
+        <Stars rating={item.rating ?? 0} />
+        <View style={styles.statDivider} />
+        <Ionicons name="people-outline" size={13} color="#7aab96" />
+        <Text style={styles.statText}>{item.sessions ?? 0} sessões</Text>
+      </View>
 
-    {/* Bio */}
-    <Text style={styles.bio}>{item.bio}</Text>
+      {/* Bio */}
+      <Text style={styles.bio}>{item.bio}</Text>
 
-    {/* Schedule button */}
-    <TouchableOpacity
-      style={[styles.scheduleBtn, !item.available && styles.scheduleBtnDisabled]}
-      onPress={item.available ? onSchedule : undefined}
-      activeOpacity={0.85}
-      disabled={!item.available}
-    >
-      <Ionicons
-        name="calendar-outline"
-        size={16}
-        color={item.available ? '#fff' : '#aaa'}
-      />
-      <Text style={[styles.scheduleBtnText, !item.available && styles.scheduleBtnTextDisabled]}>
-        {item.available ? 'Agendar consulta' : 'Sem horários disponíveis'}
-      </Text>
-    </TouchableOpacity>
-  </Animated.View>
-);
+      {/* Schedule button */}
+      <TouchableOpacity
+        style={[styles.scheduleBtn, !available && styles.scheduleBtnDisabled]}
+        onPress={available ? onSchedule : undefined}
+        activeOpacity={0.85}
+        disabled={!available}
+      >
+        <Ionicons
+          name="calendar-outline"
+          size={16}
+          color={available ? "#fff" : "#aaa"}
+        />
+        <Text
+          style={[
+            styles.scheduleBtnText,
+            !available && styles.scheduleBtnTextDisabled,
+          ]}
+        >
+          {available ? "Agendar consulta" : "Sem horários disponíveis"}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function ChoosePsychologistScreen() {
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('Todos');
+  const [psychologists, setPsychologists] = useState<ProfessionalApiItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState("Todos");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   React.useEffect(() => {
+    const loadProfessionals = async () => {
+      setLoading(true);
+      const result = await getPsychologists();
+      if (result.ok && Array.isArray(result.data)) {
+        setPsychologists(result.data);
+      } else {
+        Alert.alert(
+          "Erro",
+          result.error || "Não foi possível carregar os psicólogos.",
+        );
+      }
+      setLoading(false);
+    };
+
+    void loadProfessionals();
+
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const filtered = PSYCHOLOGISTS.filter((p) => {
+  const filtered = psychologists.filter((p) => {
+    const name =
+      p.user?.full_name || p.user?.first_name || p.full_name || p.name || "";
+    const specialty = p.specialty || "";
     const matchSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.specialty.toLowerCase().includes(search.toLowerCase());
+      name.toLowerCase().includes(search.toLowerCase()) ||
+      specialty.toLowerCase().includes(search.toLowerCase());
     const matchFilter =
-      activeFilter === 'Todos' ||
-      p.specialty.toLowerCase().includes(activeFilter.toLowerCase());
+      activeFilter === "Todos" ||
+      specialty.toLowerCase().includes(activeFilter.toLowerCase());
     return matchSearch && matchFilter;
   });
 
@@ -201,14 +225,21 @@ export default function ChoosePsychologistScreen() {
         </TouchableOpacity>
         <View>
           <Text style={styles.headerTitle}>Nossos Psicólogos</Text>
-          <Text style={styles.headerSubtitle}>{PSYCHOLOGISTS.length} profissionais disponíveis</Text>
+          <Text style={styles.headerSubtitle}>
+            {loading
+              ? "Carregando profissionais..."
+              : `${psychologists.length} profissionais disponíveis`}
+          </Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
 
       {/* ── Search ── */}
       <Animated.View
-        style={[styles.searchSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        style={[
+          styles.searchSection,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        ]}
       >
         <View style={styles.searchBox}>
           <Ionicons name="search-outline" size={18} color="#7aab96" />
@@ -220,7 +251,7 @@ export default function ChoosePsychologistScreen() {
             onChangeText={setSearch}
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
+            <TouchableOpacity onPress={() => setSearch("")}>
               <Ionicons name="close-circle" size={18} color="#9bbfb0" />
             </TouchableOpacity>
           )}
@@ -235,10 +266,18 @@ export default function ChoosePsychologistScreen() {
           {SPECIALTIES.map((s) => (
             <TouchableOpacity
               key={s}
-              style={[styles.filterChip, activeFilter === s && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                activeFilter === s && styles.filterChipActive,
+              ]}
               onPress={() => setActiveFilter(s)}
             >
-              <Text style={[styles.filterChipText, activeFilter === s && styles.filterChipTextActive]}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === s && styles.filterChipTextActive,
+                ]}
+              >
                 {s}
               </Text>
             </TouchableOpacity>
@@ -251,7 +290,11 @@ export default function ChoosePsychologistScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
-        {filtered.length === 0 ? (
+        {loading ? (
+          <View style={styles.emptyBox}>
+            <ActivityIndicator size="large" color={GREEN} />
+          </View>
+        ) : filtered.length === 0 ? (
           <View style={styles.emptyBox}>
             <Ionicons name="search-outline" size={40} color="#b2dfcf" />
             <Text style={styles.emptyText}>Nenhum psicólogo encontrado</Text>
@@ -263,7 +306,12 @@ export default function ChoosePsychologistScreen() {
               item={item}
               index={index}
               fadeAnim={fadeAnim}
-              onSchedule={() => router.push({ pathname: '/agendamento', params: { psychologist: JSON.stringify(item) } })}
+              onSchedule={() =>
+                router.push({
+                  pathname: "/agendamento",
+                  params: { psychologist: JSON.stringify(item) },
+                })
+              }
             />
           ))
         )}
@@ -273,9 +321,9 @@ export default function ChoosePsychologistScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const WHITE = '#ffffff';
-const BG = '#f0faf5';
+const GREEN = "#2e8b6e";
+const WHITE = "#ffffff";
+const BG = "#f0faf5";
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
@@ -286,28 +334,28 @@ const styles = StyleSheet.create({
     paddingTop: 52,
     paddingBottom: 18,
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: "800",
     color: WHITE,
-    textAlign: 'center',
+    textAlign: "center",
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#b2dfcf',
-    textAlign: 'center',
+    color: "#b2dfcf",
+    textAlign: "center",
     marginTop: 2,
   },
 
@@ -324,22 +372,22 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0faf5',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0faf5",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#d4ede3',
+    borderColor: "#d4ede3",
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#1a3d31',
-    fontWeight: '500',
+    color: "#1a3d31",
+    fontWeight: "500",
   },
 
   // Filter chips
@@ -351,9 +399,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#f0faf5',
+    backgroundColor: "#f0faf5",
     borderWidth: 1,
-    borderColor: '#d4ede3',
+    borderColor: "#d4ede3",
   },
   filterChipActive: {
     backgroundColor: GREEN,
@@ -361,8 +409,8 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 13,
-    color: '#4a7a66',
-    fontWeight: '600',
+    color: "#4a7a66",
+    fontWeight: "600",
   },
   filterChipTextActive: {
     color: WHITE,
@@ -387,10 +435,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   availBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
@@ -403,10 +451,10 @@ const styles = StyleSheet.create({
   },
   availText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   cardTop: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 14,
     marginBottom: 12,
   },
@@ -414,31 +462,31 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   cardInfo: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     gap: 3,
   },
   cardName: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#1a3d31',
+    fontWeight: "800",
+    color: "#1a3d31",
     letterSpacing: -0.2,
   },
   cardCrp: {
     fontSize: 12,
-    color: '#7aab96',
-    fontWeight: '500',
+    color: "#7aab96",
+    fontWeight: "500",
   },
   specialtyBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -446,43 +494,43 @@ const styles = StyleSheet.create({
   },
   specialtyText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   // Stats
   statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 12,
   },
   starsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 2,
   },
   ratingText: {
     fontSize: 12,
-    color: '#4a7a66',
-    fontWeight: '700',
+    color: "#4a7a66",
+    fontWeight: "700",
     marginLeft: 4,
   },
   statDivider: {
     width: 1,
     height: 12,
-    backgroundColor: '#d4ede3',
+    backgroundColor: "#d4ede3",
     marginHorizontal: 2,
   },
   statText: {
     fontSize: 12,
-    color: '#7aab96',
-    fontWeight: '500',
+    color: "#7aab96",
+    fontWeight: "500",
   },
 
   // Bio
   bio: {
     fontSize: 13,
-    color: '#4a7a66',
+    color: "#4a7a66",
     lineHeight: 20,
     marginBottom: 16,
   },
@@ -492,9 +540,9 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     borderRadius: 12,
     height: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     shadowColor: GREEN,
     shadowOffset: { width: 0, height: 4 },
@@ -503,29 +551,29 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   scheduleBtnDisabled: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
     shadowOpacity: 0,
     elevation: 0,
   },
   scheduleBtnText: {
     color: WHITE,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   scheduleBtnTextDisabled: {
-    color: '#aaa',
+    color: "#aaa",
   },
 
   // Empty
   emptyBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingTop: 60,
     gap: 12,
   },
   emptyText: {
     fontSize: 15,
-    color: '#7aab96',
-    fontWeight: '500',
+    color: "#7aab96",
+    fontWeight: "500",
   },
 });

@@ -1,18 +1,29 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  Alert,
   Animated,
-  StatusBar,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+  TextInput as RNTextInput,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  getConversations,
+  getMessagesWithPsychologist,
+  getPsychologists,
+  markMessageRead,
+  sendChatMessage,
+} from "../../services/api";
+
+// Alias para evitar conflitos
+const TextInput = RNTextInput;
 
 interface Conversation {
   id: string;
@@ -29,104 +40,17 @@ interface Conversation {
 interface ChatMessage {
   id: string;
   conversationId: string;
-  sender: 'patient' | 'psychologist';
+  sender: "patient" | "psychologist" | string;
   text: string;
   createdAt: string;
   read: boolean;
 }
 
-const GREEN = '#2e8b6e';
-const GREEN_DARK = '#1e6b54';
-const GREEN_LIGHT = '#e8f7f1';
-const BG = '#f0faf5';
-const WHITE = '#ffffff';
-
-const MOCK_CONVERSATIONS: Conversation[] = [
-  {
-    id: 'conv-1',
-    psychologistId: '12',
-    psychologistName: 'Dra. Camila Rocha',
-    specialty: 'Psicologia Clinica',
-    avatar: 'CR',
-    unreadCount: 2,
-    lastMessage: 'Podemos retomar esse ponto na proxima sessao.',
-    lastMessageTime: '18:42',
-    online: true,
-  },
-  {
-    id: 'conv-2',
-    psychologistId: '18',
-    psychologistName: 'Dr. Felipe Moura',
-    specialty: 'TCC',
-    avatar: 'FM',
-    unreadCount: 0,
-    lastMessage: 'Qualquer mudanca no humor, me avise por aqui.',
-    lastMessageTime: 'Ontem',
-    online: false,
-  },
-  {
-    id: 'conv-3',
-    psychologistId: '24',
-    psychologistName: 'Dra. Marina Costa',
-    specialty: 'Ansiedade e Relacionamentos',
-    avatar: 'MC',
-    unreadCount: 1,
-    lastMessage: 'Vi seu retorno. Obrigada por compartilhar isso.',
-    lastMessageTime: 'Seg',
-    online: true,
-  },
-];
-
-const MOCK_MESSAGES: ChatMessage[] = [
-  {
-    id: 'm-1',
-    conversationId: 'conv-1',
-    sender: 'psychologist',
-    text: 'Oi, Ana. Como voce ficou depois da nossa ultima consulta?',
-    createdAt: '2026-03-31T17:50:00',
-    read: true,
-  },
-  {
-    id: 'm-2',
-    conversationId: 'conv-1',
-    sender: 'patient',
-    text: 'Me senti mais tranquila e consegui aplicar o exercicio de respiracao.',
-    createdAt: '2026-03-31T18:02:00',
-    read: true,
-  },
-  {
-    id: 'm-3',
-    conversationId: 'conv-1',
-    sender: 'psychologist',
-    text: 'Que bom. Se quiser, anote os momentos em que isso ajudou para conversarmos melhor.',
-    createdAt: '2026-03-31T18:20:00',
-    read: false,
-  },
-  {
-    id: 'm-4',
-    conversationId: 'conv-1',
-    sender: 'psychologist',
-    text: 'Podemos retomar esse ponto na proxima sessao.',
-    createdAt: '2026-03-31T18:42:00',
-    read: false,
-  },
-  {
-    id: 'm-5',
-    conversationId: 'conv-2',
-    sender: 'psychologist',
-    text: 'Qualquer mudanca no humor, me avise por aqui.',
-    createdAt: '2026-03-30T09:18:00',
-    read: true,
-  },
-  {
-    id: 'm-6',
-    conversationId: 'conv-3',
-    sender: 'psychologist',
-    text: 'Vi seu retorno. Obrigada por compartilhar isso.',
-    createdAt: '2026-03-29T15:05:00',
-    read: false,
-  },
-];
+const GREEN = "#2e8b6e";
+const GREEN_DARK = "#1e6b54";
+const GREEN_LIGHT = "#e8f7f1";
+const BG = "#f0faf5";
+const WHITE = "#ffffff";
 
 const DecorativeBackground = () => (
   <>
@@ -136,38 +60,109 @@ const DecorativeBackground = () => (
 );
 
 const formatMessageHour = (isoDate: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
+  new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(new Date(isoDate));
 
 const formatDayLabel = (isoDate: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'long',
+  new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
   }).format(new Date(isoDate));
 
 export default function ChatScreen() {
-  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
-  const [messages, setMessages] = useState<ChatMessage[]>(MOCK_MESSAGES);
-  const [selectedConversationId, setSelectedConversationId] = useState<string>(
-    MOCK_CONVERSATIONS[0].id
-  );
-  const [draft, setDraft] = useState('');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [selectedConversationId, setSelectedConversationId] =
+    useState<string>("");
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  useEffect(() => {
+    const loadConversations = async () => {
+      setLoading(true);
+      const [conversationsResult, psychologistsResult] = await Promise.all([
+        getConversations(),
+        getPsychologists(),
+      ]);
+      if (conversationsResult.ok && Array.isArray(conversationsResult.data)) {
+        const psychologistsMap = new Map(
+          psychologistsResult.ok && Array.isArray(psychologistsResult.data)
+            ? psychologistsResult.data.map((p) => [p.id, p.user.id])
+            : [],
+        );
+        const normalized = conversationsResult.data.map((item) => ({
+          id: item.id,
+          psychologistId:
+            psychologistsMap.get(item.psychologist_id ?? "") ||
+            item.psychologist_id ||
+            "",
+          psychologistName:
+            item.psychologistName || item.psychologistNameAlt || "Psicólogo",
+          specialty: item.specialty || "Psicologia",
+          avatar:
+            item.avatar ||
+            item.psychologistName
+              ?.split(" ")
+              .map((part) => part[0])
+              .slice(0, 2)
+              .join("") ||
+            "P",
+          unreadCount: item.unread_count ?? 0,
+          lastMessage: item.last_message || "",
+          lastMessageTime: item.last_message_time || "",
+          online: item.online ?? false,
+        }));
+
+        setConversations(normalized);
+        setSelectedConversationId(normalized[0]?.id || "");
+      } else {
+        Alert.alert(
+          "Erro",
+          conversationsResult.error ||
+            "Não foi possível carregar as conversas.",
+        );
+      }
+      setLoading(false);
+    };
+
+    void loadConversations();
+  }, []);
+
   const selectedConversation = useMemo(
-    () => conversations.find((item) => item.id === selectedConversationId) ?? conversations[0],
-    [conversations, selectedConversationId]
+    () =>
+      conversations.find((item) => item.id === selectedConversationId) ??
+      conversations[0] ?? {
+        id: "",
+        psychologistId: "",
+        psychologistName: "",
+        specialty: "",
+        avatar: "",
+        unreadCount: 0,
+        lastMessage: "",
+        lastMessageTime: "",
+        online: false,
+      },
+    [conversations, selectedConversationId],
   );
 
   const selectedMessages = useMemo(
@@ -176,60 +171,59 @@ export default function ChatScreen() {
         .filter((item) => item.conversationId === selectedConversation.id)
         .sort(
           (a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         ),
-    [messages, selectedConversation.id]
+    [messages, selectedConversation.id],
   );
 
   useEffect(() => {
-    if (!selectedConversation) return;
+    if (!selectedConversation?.id) return;
 
-    const pollMessages = async () => {
+    const loadMessages = async () => {
       try {
-        // TODO: substituir pelos dados reais da API
-        // const response = await fetch(`/api/chat/messages/?with=${selectedConversation.psychologistId}`);
-        // const data = await response.json();
-        // atualizar mensagens locais com data.results ou estrutura equivalente
-
-        const unreadIncoming = messages.filter(
-          (item) =>
-            item.conversationId === selectedConversation.id &&
-            item.sender === 'psychologist' &&
-            !item.read
+        const result = await getMessagesWithPsychologist(
+          selectedConversation.psychologistId,
         );
+        if (result.ok && Array.isArray(result.data)) {
+          const normalized = result.data.map((item) => ({
+            id: item.id,
+            conversationId:
+              item.conversation_id ||
+              item.conversation ||
+              selectedConversation.id,
+            sender: item.sender === "psychologist" ? "psychologist" : "patient",
+            text: item.text || item.content_encrypted || "",
+            createdAt: item.created_at,
+            read: item.read ?? true,
+          }));
 
-        if (unreadIncoming.length > 0) {
-          setMessages((current) =>
-            current.map((item) =>
-              unreadIncoming.some((unread) => unread.id === item.id)
-                ? { ...item, read: true }
-                : item
-            )
-          );
-
+          setMessages(normalized);
           setConversations((current) =>
             current.map((item) =>
-              item.id === selectedConversation.id ? { ...item, unreadCount: 0 } : item
-            )
+              item.id === selectedConversation.id
+                ? { ...item, unreadCount: 0 }
+                : item,
+            ),
           );
 
-          // TODO: PATCH /api/chat/messages/<id>/read/
-          // await Promise.all(
-          //   unreadIncoming.map((message) =>
-          //     fetch(`/api/chat/messages/${message.id}/read/`, { method: 'PATCH' })
-          //   )
-          // );
+          const unreadIncoming = normalized.filter(
+            (item) =>
+              item.conversationId === selectedConversation.id &&
+              item.sender === "psychologist" &&
+              !item.read,
+          );
+
+          await Promise.all(
+            unreadIncoming.map((message) => markMessageRead(message.id)),
+          );
         }
       } catch (error) {
-        console.log('Erro no polling do chat', error);
+        console.log("Erro no carregamento do chat", error);
       }
     };
 
-    pollMessages();
-    const interval = setInterval(pollMessages, 5000);
-
-    return () => clearInterval(interval);
-  }, [messages, selectedConversation]);
+    void loadMessages();
+  }, [selectedConversation]);
 
   const groupedMessages = useMemo(() => {
     const groups: { label: string; items: ChatMessage[] }[] = [];
@@ -253,26 +247,26 @@ export default function ChatScreen() {
     setSelectedConversationId(conversationId);
     setConversations((current) =>
       current.map((item) =>
-        item.id === conversationId ? { ...item, unreadCount: 0 } : item
-      )
+        item.id === conversationId ? { ...item, unreadCount: 0 } : item,
+      ),
     );
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     const trimmedDraft = draft.trim();
-    if (!trimmedDraft) return;
+    if (!trimmedDraft || !selectedConversation?.id) return;
 
     const now = new Date().toISOString();
-    const newMessage: ChatMessage = {
+    const outgoing: ChatMessage = {
       id: `local-${Date.now()}`,
       conversationId: selectedConversation.id,
-      sender: 'patient',
+      sender: "patient",
       text: trimmedDraft,
       createdAt: now,
       read: true,
     };
 
-    setMessages((current) => [...current, newMessage]);
+    setMessages((current) => [...current, outgoing]);
     setConversations((current) =>
       current.map((item) =>
         item.id === selectedConversation.id
@@ -281,19 +275,41 @@ export default function ChatScreen() {
               lastMessage: trimmedDraft,
               lastMessageTime: formatMessageHour(now),
             }
-          : item
-      )
+          : item,
+      ),
     );
-    setDraft('');
+    setDraft("");
 
-    // TODO: POST /api/chat/messages/
-    // enviar { with: selectedConversation.psychologistId, text: trimmedDraft }
+    const result = await sendChatMessage(
+      selectedConversation.psychologistId,
+      trimmedDraft,
+    );
+    if (!result.ok) {
+      Alert.alert(
+        "Erro",
+        result.error || "Não foi possível enviar a mensagem.",
+      );
+      return;
+    }
+
+    if (result.data) {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === outgoing.id
+            ? {
+                ...message,
+                id: result.data?.id || message.id,
+              }
+            : message,
+        ),
+      );
+    }
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
       <DecorativeBackground />
@@ -324,7 +340,11 @@ export default function ChatScreen() {
             <Text style={styles.cardTitle}>Conversas</Text>
             <View style={styles.cardBadge}>
               <Text style={styles.cardBadgeText}>
-                {conversations.reduce((total, item) => total + item.unreadCount, 0)} nao lidas
+                {conversations.reduce(
+                  (total, item) => total + item.unreadCount,
+                  0,
+                )}{" "}
+                nao lidas
               </Text>
             </View>
           </View>
@@ -340,14 +360,24 @@ export default function ChatScreen() {
               return (
                 <TouchableOpacity
                   key={conversation.id}
-                  style={[styles.conversationCard, isActive && styles.conversationCardActive]}
+                  style={[
+                    styles.conversationCard,
+                    isActive && styles.conversationCardActive,
+                  ]}
                   onPress={() => handleSelectConversation(conversation.id)}
                   activeOpacity={0.85}
                 >
                   <View style={styles.conversationTop}>
                     <View style={styles.avatarWrap}>
-                      <View style={[styles.avatar, isActive && styles.avatarActive]}>
-                        <Text style={[styles.avatarText, isActive && styles.avatarTextActive]}>
+                      <View
+                        style={[styles.avatar, isActive && styles.avatarActive]}
+                      >
+                        <Text
+                          style={[
+                            styles.avatarText,
+                            isActive && styles.avatarTextActive,
+                          ]}
+                        >
                           {conversation.avatar}
                         </Text>
                       </View>
@@ -356,14 +386,19 @@ export default function ChatScreen() {
 
                     {conversation.unreadCount > 0 && (
                       <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadBadgeText}>{conversation.unreadCount}</Text>
+                        <Text style={styles.unreadBadgeText}>
+                          {conversation.unreadCount}
+                        </Text>
                       </View>
                     )}
                   </View>
 
                   <Text
                     numberOfLines={1}
-                    style={[styles.conversationName, isActive && styles.conversationNameActive]}
+                    style={[
+                      styles.conversationName,
+                      isActive && styles.conversationNameActive,
+                    ]}
                   >
                     {conversation.psychologistName}
                   </Text>
@@ -377,7 +412,10 @@ export default function ChatScreen() {
                     {conversation.lastMessage}
                   </Text>
                   <Text
-                    style={[styles.conversationTime, isActive && styles.conversationTimeActive]}
+                    style={[
+                      styles.conversationTime,
+                      isActive && styles.conversationTimeActive,
+                    ]}
                   >
                     {conversation.lastMessageTime}
                   </Text>
@@ -391,10 +429,14 @@ export default function ChatScreen() {
           <View style={styles.chatHeader}>
             <View style={styles.chatHeaderLeft}>
               <View style={styles.chatHeaderAvatar}>
-                <Text style={styles.chatHeaderAvatarText}>{selectedConversation.avatar}</Text>
+                <Text style={styles.chatHeaderAvatarText}>
+                  {selectedConversation.avatar}
+                </Text>
               </View>
               <View>
-                <Text style={styles.chatHeaderName}>{selectedConversation.psychologistName}</Text>
+                <Text style={styles.chatHeaderName}>
+                  {selectedConversation.psychologistName}
+                </Text>
                 <Text style={styles.chatHeaderSubtitle}>
                   {selectedConversation.specialty}
                 </Text>
@@ -417,7 +459,7 @@ export default function ChatScreen() {
                     : styles.presenceTextOffline,
                 ]}
               >
-                {selectedConversation.online ? 'Online' : 'Ausente'}
+                {selectedConversation.online ? "Online" : "Ausente"}
               </Text>
             </View>
           </View>
@@ -435,14 +477,16 @@ export default function ChatScreen() {
                 </View>
 
                 {group.items.map((message) => {
-                  const fromPatient = message.sender === 'patient';
+                  const fromPatient = message.sender === "patient";
 
                   return (
                     <View
                       key={message.id}
                       style={[
                         styles.messageRow,
-                        fromPatient ? styles.messageRowOutgoing : styles.messageRowIncoming,
+                        fromPatient
+                          ? styles.messageRowOutgoing
+                          : styles.messageRowIncoming,
                       ]}
                     >
                       <View
@@ -492,7 +536,10 @@ export default function ChatScreen() {
             />
 
             <TouchableOpacity
-              style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
+              style={[
+                styles.sendButton,
+                !draft.trim() && styles.sendButtonDisabled,
+              ]}
               onPress={handleSendMessage}
               disabled={!draft.trim()}
               activeOpacity={0.85}
@@ -512,17 +559,17 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   circle1: {
-    position: 'absolute',
+    position: "absolute",
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: '#27795f',
+    backgroundColor: "#27795f",
     top: -110,
     right: -70,
     opacity: 0.45,
   },
   circle2: {
-    position: 'absolute',
+    position: "absolute",
     width: 180,
     height: 180,
     borderRadius: 90,
@@ -536,31 +583,31 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 24,
     backgroundColor: GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTextBox: {
     flex: 1,
     marginHorizontal: 14,
   },
   headerEyebrow: {
-    color: '#bce3d5',
+    color: "#bce3d5",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   headerTitle: {
     color: WHITE,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: 2,
     letterSpacing: -0.4,
   },
@@ -579,22 +626,22 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderRadius: 26,
     padding: 16,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
   cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 14,
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#183d32',
+    fontWeight: "800",
+    color: "#183d32",
   },
   cardBadge: {
     backgroundColor: GREEN_LIGHT,
@@ -604,7 +651,7 @@ const styles = StyleSheet.create({
   },
   cardBadgeText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: GREEN,
   },
   conversationsRow: {
@@ -615,50 +662,50 @@ const styles = StyleSheet.create({
     width: 164,
     borderRadius: 20,
     padding: 14,
-    backgroundColor: '#f7fbf9',
+    backgroundColor: "#f7fbf9",
     borderWidth: 1,
-    borderColor: '#eef5f1',
+    borderColor: "#eef5f1",
   },
   conversationCardActive: {
     backgroundColor: GREEN,
     borderColor: GREEN,
   },
   conversationTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 10,
   },
   avatarWrap: {
-    position: 'relative',
+    position: "relative",
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 16,
     backgroundColor: GREEN_LIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarActive: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   avatarText: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
     color: GREEN,
   },
   avatarTextActive: {
     color: WHITE,
   },
   onlineDot: {
-    position: 'absolute',
+    position: "absolute",
     right: 0,
     bottom: 0,
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#45c486',
+    backgroundColor: "#45c486",
     borderWidth: 2,
     borderColor: WHITE,
   },
@@ -666,20 +713,20 @@ const styles = StyleSheet.create({
     minWidth: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#df5d5d',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#df5d5d",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 6,
   },
   unreadBadgeText: {
     color: WHITE,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   conversationName: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#183d32',
+    fontWeight: "700",
+    color: "#183d32",
   },
   conversationNameActive: {
     color: WHITE,
@@ -688,27 +735,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     lineHeight: 17,
-    color: '#678176',
+    color: "#678176",
     minHeight: 34,
   },
   conversationSnippetActive: {
-    color: '#d9efe5',
+    color: "#d9efe5",
   },
   conversationTime: {
     marginTop: 8,
     fontSize: 12,
-    fontWeight: '700',
-    color: '#7c958b',
+    fontWeight: "700",
+    color: "#7c958b",
   },
   conversationTimeActive: {
-    color: '#c8e7da',
+    color: "#c8e7da",
   },
   chatCard: {
     minHeight: 700,
     backgroundColor: WHITE,
     borderRadius: 28,
-    overflow: 'hidden',
-    shadowColor: '#174c3e',
+    overflow: "hidden",
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -719,14 +766,14 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#edf4f0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderBottomColor: "#edf4f0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   chatHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   chatHeaderAvatar: {
@@ -734,24 +781,24 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 17,
     backgroundColor: GREEN_LIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   chatHeaderAvatarText: {
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: "800",
     color: GREEN,
   },
   chatHeaderName: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#183d32',
+    fontWeight: "800",
+    color: "#183d32",
   },
   chatHeaderSubtitle: {
     marginTop: 3,
     fontSize: 13,
-    color: '#6f877d',
+    color: "#6f877d",
   },
   presenceBadge: {
     borderRadius: 999,
@@ -759,24 +806,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   presenceBadgeOnline: {
-    backgroundColor: '#e8f8ef',
+    backgroundColor: "#e8f8ef",
   },
   presenceBadgeOffline: {
-    backgroundColor: '#f3f5f4',
+    backgroundColor: "#f3f5f4",
   },
   presenceText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   presenceTextOnline: {
-    color: '#2d9c67',
+    color: "#2d9c67",
   },
   presenceTextOffline: {
-    color: '#7b8d85',
+    color: "#7b8d85",
   },
   messagesScroll: {
     flex: 1,
-    backgroundColor: '#fcfefd',
+    backgroundColor: "#fcfefd",
   },
   messagesContent: {
     paddingHorizontal: 18,
@@ -784,8 +831,8 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   datePill: {
-    alignSelf: 'center',
-    backgroundColor: '#eef7f2',
+    alignSelf: "center",
+    backgroundColor: "#eef7f2",
     borderRadius: 999,
     paddingVertical: 7,
     paddingHorizontal: 12,
@@ -794,27 +841,27 @@ const styles = StyleSheet.create({
   },
   datePillText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#5d7c71',
+    fontWeight: "700",
+    color: "#5d7c71",
   },
   messageRow: {
     marginBottom: 12,
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   messageRowIncoming: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   messageRowOutgoing: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   messageBubble: {
-    maxWidth: '82%',
+    maxWidth: "82%",
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   messageBubbleIncoming: {
-    backgroundColor: '#eef4f1',
+    backgroundColor: "#eef4f1",
     borderBottomLeftRadius: 8,
   },
   messageBubbleOutgoing: {
@@ -826,7 +873,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   messageTextIncoming: {
-    color: '#1f3f35',
+    color: "#1f3f35",
   },
   messageTextOutgoing: {
     color: WHITE,
@@ -834,21 +881,21 @@ const styles = StyleSheet.create({
   messageTime: {
     marginTop: 8,
     fontSize: 11,
-    fontWeight: '700',
-    alignSelf: 'flex-end',
+    fontWeight: "700",
+    alignSelf: "flex-end",
   },
   messageTimeIncoming: {
-    color: '#71877d',
+    color: "#71877d",
   },
   messageTimeOutgoing: {
-    color: '#d6efe4',
+    color: "#d6efe4",
   },
   composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#edf4f0',
+    borderTopColor: "#edf4f0",
     backgroundColor: WHITE,
     gap: 12,
   },
@@ -857,21 +904,21 @@ const styles = StyleSheet.create({
     minHeight: 50,
     maxHeight: 140,
     borderRadius: 18,
-    backgroundColor: '#f4faf7',
+    backgroundColor: "#f4faf7",
     paddingHorizontal: 16,
     paddingVertical: 13,
     fontSize: 14,
-    color: '#1d4136',
+    color: "#1d4136",
   },
   sendButton: {
     width: 50,
     height: 50,
     borderRadius: 18,
     backgroundColor: GREEN,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sendButtonDisabled: {
-    backgroundColor: '#8fbbaa',
+    backgroundColor: "#8fbbaa",
   },
 });

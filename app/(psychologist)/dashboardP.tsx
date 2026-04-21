@@ -1,15 +1,17 @@
-import React, { useMemo, useRef } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+    Alert,
+    Animated,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { getMe } from "../../services/api";
 
 interface ProfessionalInfo {
   name: string;
@@ -20,50 +22,50 @@ interface ProfessionalInfo {
   totalPatients: number;
 }
 
-const GREEN = '#2e8b6e';
-const GREEN_DARK = '#1f684f';
-const GREEN_LIGHT = '#e8f7f1';
-const BLUE_LIGHT = '#eaf1ff';
-const ORANGE_LIGHT = '#fef3e8';
-const BG = '#f0faf5';
-const WHITE = '#ffffff';
+const GREEN = "#2e8b6e";
+const GREEN_DARK = "#1f684f";
+const GREEN_LIGHT = "#e8f7f1";
+const BLUE_LIGHT = "#eaf1ff";
+const ORANGE_LIGHT = "#fef3e8";
+const BG = "#f0faf5";
+const WHITE = "#ffffff";
 
 const MOCK_PROFESSIONAL: ProfessionalInfo = {
-  name: 'Dra. Camila Rocha',
-  crp: 'CRP 06/12345',
+  name: "Dra. Camila Rocha",
+  crp: "CRP 06/12345",
   todayAppointments: 6,
-  nextAppointmentTime: '14:30',
-  nextPatientName: 'Ana Beatriz',
+  nextAppointmentTime: "14:30",
+  nextPatientName: "Ana Beatriz",
   totalPatients: 48,
 };
 
 const QUICK_ACTIONS = [
   {
-    id: 'agenda',
-    title: 'Agenda',
-    description: 'Consulte horarios e atendimentos do dia.',
-    icon: 'calendar-outline',
-    color: '#2d6cdf',
+    id: "agenda",
+    title: "Agenda",
+    description: "Consulte horarios e atendimentos do dia.",
+    icon: "calendar-outline",
+    color: "#2d6cdf",
     bg: BLUE_LIGHT,
-    route: '/(psychologist)/agenda',
+    route: "/(psychologist)/agenda",
   },
   {
-    id: 'patients',
-    title: 'Pacientes',
-    description: 'Acesse o acompanhamento clinico dos pacientes.',
-    icon: 'people-outline',
+    id: "patients",
+    title: "Pacientes",
+    description: "Acesse o acompanhamento clinico dos pacientes.",
+    icon: "people-outline",
     color: GREEN,
     bg: GREEN_LIGHT,
-    route: '/(psychologist)/lista',
+    route: "/(psychologist)/lista",
   },
   {
-    id: 'chat',
-    title: 'Chat',
-    description: 'Converse com pacientes e acompanhe mensagens.',
-    icon: 'chatbubble-ellipses-outline',
-    color: '#c46a1a',
+    id: "chat",
+    title: "Chat",
+    description: "Converse com pacientes e acompanhe mensagens.",
+    icon: "chatbubble-ellipses-outline",
+    color: "#c46a1a",
     bg: ORANGE_LIGHT,
-    route: '/(psychologist)/chat',
+    route: "/(psychologist)/chat",
   },
 ];
 
@@ -75,21 +77,49 @@ const DecorativeBackground = () => (
 );
 
 export default function PsychologistDashboardScreen() {
+  const [profileName, setProfileName] = useState(MOCK_PROFESSIONAL.name);
+  const [profileCrp, setProfileCrp] = useState(MOCK_PROFESSIONAL.crp);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      const result = await getMe();
+      if (result.ok && result.data) {
+        setProfileName(
+          result.data.full_name || result.data.name || MOCK_PROFESSIONAL.name,
+        );
+        if (result.data.crp) {
+          setProfileCrp(result.data.crp);
+        }
+      } else if (result.error) {
+        Alert.alert("Erro", result.error);
+      }
+    };
+
+    void loadProfile();
+  }, []);
+
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
-    return 'Boa noite';
+    if (hour < 12) return "Bom dia";
+    if (hour < 18) return "Boa tarde";
+    return "Boa noite";
   }, []);
 
   return (
@@ -107,7 +137,10 @@ export default function PsychologistDashboardScreen() {
           <Text style={styles.headerTitle}>Dashboard profissional</Text>
         </View>
 
-        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(psychologist)')}>
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => router.replace("/(psychologist)")}
+        >
           <Ionicons name="grid-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -117,42 +150,61 @@ export default function PsychologistDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <View style={styles.heroCard}>
             <Text style={styles.heroEyebrow}>{greeting}</Text>
-            <Text style={styles.heroTitle}>{MOCK_PROFESSIONAL.name}</Text>
-            <Text style={styles.heroSubtitle}>{MOCK_PROFESSIONAL.crp}</Text>
+            <Text style={styles.heroTitle}>{profileName}</Text>
+            <Text style={styles.heroSubtitle}>{profileCrp}</Text>
 
             <View style={styles.heroBadge}>
               <Ionicons name="sparkles-outline" size={14} color={GREEN} />
-              <Text style={styles.heroBadgeText}>Painel inicial do profissional</Text>
+              <Text style={styles.heroBadgeText}>
+                Painel inicial do profissional
+              </Text>
             </View>
           </View>
 
           <Text style={styles.sectionTitle}>Resumo do dia</Text>
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
-              <View style={[styles.metricIconBox, { backgroundColor: GREEN_LIGHT }]}>
+              <View
+                style={[styles.metricIconBox, { backgroundColor: GREEN_LIGHT }]}
+              >
                 <Ionicons name="calendar-outline" size={20} color={GREEN} />
               </View>
-              <Text style={styles.metricValue}>{MOCK_PROFESSIONAL.todayAppointments}</Text>
+              <Text style={styles.metricValue}>
+                {MOCK_PROFESSIONAL.todayAppointments}
+              </Text>
               <Text style={styles.metricLabel}>Consultas de hoje</Text>
             </View>
 
             <View style={styles.metricCard}>
-              <View style={[styles.metricIconBox, { backgroundColor: BLUE_LIGHT }]}>
+              <View
+                style={[styles.metricIconBox, { backgroundColor: BLUE_LIGHT }]}
+              >
                 <Ionicons name="time-outline" size={20} color="#2d6cdf" />
               </View>
-              <Text style={styles.metricValue}>{MOCK_PROFESSIONAL.nextAppointmentTime}</Text>
+              <Text style={styles.metricValue}>
+                {MOCK_PROFESSIONAL.nextAppointmentTime}
+              </Text>
               <Text style={styles.metricLabel}>Proxima consulta</Text>
             </View>
 
             <View style={styles.metricCardWide}>
-              <View style={[styles.metricIconBox, { backgroundColor: ORANGE_LIGHT }]}>
+              <View
+                style={[
+                  styles.metricIconBox,
+                  { backgroundColor: ORANGE_LIGHT },
+                ]}
+              >
                 <Ionicons name="people-outline" size={20} color="#c46a1a" />
               </View>
               <View style={styles.metricTextBox}>
-                <Text style={styles.metricValue}>{MOCK_PROFESSIONAL.totalPatients}</Text>
+                <Text style={styles.metricValue}>
+                  {MOCK_PROFESSIONAL.totalPatients}
+                </Text>
                 <Text style={styles.metricLabel}>Pacientes atendidos</Text>
               </View>
             </View>
@@ -166,7 +218,9 @@ export default function PsychologistDashboardScreen() {
               </View>
               <View style={styles.nextTextBox}>
                 <Text style={styles.nextLabel}>Paciente</Text>
-                <Text style={styles.nextName}>{MOCK_PROFESSIONAL.nextPatientName}</Text>
+                <Text style={styles.nextName}>
+                  {MOCK_PROFESSIONAL.nextPatientName}
+                </Text>
               </View>
             </View>
 
@@ -175,9 +229,13 @@ export default function PsychologistDashboardScreen() {
             <View style={styles.nextBottomRow}>
               <View style={styles.nextTimeBadge}>
                 <Ionicons name="time-outline" size={16} color={GREEN} />
-                <Text style={styles.nextTimeText}>{MOCK_PROFESSIONAL.nextAppointmentTime}</Text>
+                <Text style={styles.nextTimeText}>
+                  {MOCK_PROFESSIONAL.nextAppointmentTime}
+                </Text>
               </View>
-              <Text style={styles.nextHint}>Prepare-se para o proximo atendimento.</Text>
+              <Text style={styles.nextHint}>
+                Prepare-se para o proximo atendimento.
+              </Text>
             </View>
           </View>
 
@@ -190,23 +248,35 @@ export default function PsychologistDashboardScreen() {
               onPress={() =>
                 router.push(
                   action.route as
-                    | '/(psychologist)/agenda'
-                    | '/(psychologist)/lista'
-                    | '/(psychologist)/dashboardP'
-                    | '/(psychologist)/chat'
+                    | "/(psychologist)/agenda"
+                    | "/(psychologist)/lista"
+                    | "/(psychologist)/dashboardP"
+                    | "/(psychologist)/chat",
                 )
               }
             >
-              <View style={[styles.actionIconBox, { backgroundColor: action.bg }]}>
-                <Ionicons name={action.icon as any} size={22} color={action.color} />
+              <View
+                style={[styles.actionIconBox, { backgroundColor: action.bg }]}
+              >
+                <Ionicons
+                  name={action.icon as any}
+                  size={22}
+                  color={action.color}
+                />
               </View>
 
               <View style={styles.actionTextBox}>
                 <Text style={styles.actionTitle}>{action.title}</Text>
-                <Text style={styles.actionDescription}>{action.description}</Text>
+                <Text style={styles.actionDescription}>
+                  {action.description}
+                </Text>
               </View>
 
-              <Ionicons name="chevron-forward-outline" size={20} color="#6c8c80" />
+              <Ionicons
+                name="chevron-forward-outline"
+                size={20}
+                color="#6c8c80"
+              />
             </TouchableOpacity>
           ))}
         </Animated.View>
@@ -221,17 +291,17 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   circle1: {
-    position: 'absolute',
+    position: "absolute",
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: '#27795f',
+    backgroundColor: "#27795f",
     top: -110,
     right: -70,
     opacity: 0.45,
   },
   circle2: {
-    position: 'absolute',
+    position: "absolute",
     width: 180,
     height: 180,
     borderRadius: 90,
@@ -245,39 +315,39 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 24,
     backgroundColor: GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   homeBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTextBox: {
     flex: 1,
     marginHorizontal: 14,
   },
   headerEyebrow: {
-    color: '#bce3d5',
+    color: "#bce3d5",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   headerTitle: {
     color: WHITE,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: 2,
     letterSpacing: -0.4,
   },
@@ -294,7 +364,7 @@ const styles = StyleSheet.create({
     padding: 22,
     marginTop: -18,
     marginBottom: 24,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
@@ -302,44 +372,44 @@ const styles = StyleSheet.create({
   },
   heroEyebrow: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: GREEN,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   heroTitle: {
     marginTop: 8,
     fontSize: 24,
-    fontWeight: '800',
-    color: '#173d31',
+    fontWeight: "800",
+    color: "#173d31",
     letterSpacing: -0.5,
   },
   heroSubtitle: {
     marginTop: 4,
     fontSize: 14,
-    color: '#5e7b70',
-    fontWeight: '700',
+    color: "#5e7b70",
+    fontWeight: "700",
   },
   heroBadge: {
     marginTop: 16,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     backgroundColor: GREEN_LIGHT,
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   heroBadgeText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     color: GREEN,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#173d31',
+    fontWeight: "800",
+    color: "#173d31",
     marginBottom: 14,
   },
   metricsGrid: {
@@ -350,7 +420,7 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderRadius: 24,
     padding: 18,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -360,9 +430,9 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderRadius: 24,
     padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#174c3e',
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -372,8 +442,8 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   metricTextBox: {
     marginLeft: 14,
@@ -381,38 +451,38 @@ const styles = StyleSheet.create({
   metricValue: {
     marginTop: 16,
     fontSize: 28,
-    fontWeight: '800',
-    color: '#173d31',
+    fontWeight: "800",
+    color: "#173d31",
   },
   metricLabel: {
     marginTop: 6,
     fontSize: 13,
     lineHeight: 18,
-    color: '#668277',
-    fontWeight: '600',
+    color: "#668277",
+    fontWeight: "600",
   },
   nextCard: {
     backgroundColor: WHITE,
     borderRadius: 26,
     padding: 20,
     marginBottom: 24,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
   nextTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   nextIconBox: {
     width: 44,
     height: 44,
     borderRadius: 14,
     backgroundColor: GREEN_LIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   nextTextBox: {
@@ -420,53 +490,53 @@ const styles = StyleSheet.create({
   },
   nextLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#719084',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    color: "#719084",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   nextName: {
     marginTop: 4,
     fontSize: 17,
-    fontWeight: '800',
-    color: '#173d31',
+    fontWeight: "800",
+    color: "#173d31",
   },
   nextDivider: {
     height: 1,
-    backgroundColor: '#edf4f0',
+    backgroundColor: "#edf4f0",
     marginVertical: 16,
   },
   nextBottomRow: {
     gap: 12,
   },
   nextTimeBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     backgroundColor: GREEN_LIGHT,
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   nextTimeText: {
     color: GREEN,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   nextHint: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#647f74',
+    color: "#647f74",
   },
   actionCard: {
     backgroundColor: WHITE,
     borderRadius: 22,
     padding: 18,
     marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#174c3e',
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -476,8 +546,8 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 14,
   },
   actionTextBox: {
@@ -486,13 +556,13 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#193f33',
+    fontWeight: "800",
+    color: "#193f33",
   },
   actionDescription: {
     marginTop: 5,
     fontSize: 13,
     lineHeight: 19,
-    color: '#69857a',
+    color: "#69857a",
   },
 });
