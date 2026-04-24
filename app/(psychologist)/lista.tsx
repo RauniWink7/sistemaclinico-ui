@@ -1,150 +1,26 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+    ActivityIndicator,
+    Alert,
+    Animated,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { getAppointments, getClinicPatients, getMe } from "../../services/api";
 
-interface PatientRecord {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  cpf: string;
-  birthDate: string;
-  age: number;
-  lastAppointment: string;
-  notes: string;
-  focus: string;
-  medicalHistory: string;
-  anamnesis: string;
-  documents: { id: string; title: string; type: string; date: string }[];
-  appointments: { id: string; date: string; time: string; status: string }[];
-}
-
-const GREEN = '#2e8b6e';
-const GREEN_DARK = '#1f684f';
-const GREEN_LIGHT = '#e8f7f1';
-const BLUE_LIGHT = '#eaf1ff';
-const BG = '#f0faf5';
-const WHITE = '#ffffff';
-
-const MOCK_PATIENTS: PatientRecord[] = [
-  {
-    id: '1',
-    name: 'Ana Beatriz Santos',
-    phone: '(11) 98765-4321',
-    email: 'ana.beatriz@email.com',
-    cpf: '123.456.789-00',
-    birthDate: '12/05/1996',
-    age: 29,
-    lastAppointment: '05/04/2026',
-    notes: 'Paciente aderente ao acompanhamento e com boa resposta aos exercicios de respiracao.',
-    focus: 'Ansiedade e rotina de autocuidado',
-    medicalHistory:
-      'Relata historico de crises de ansiedade em periodos de alta demanda. Sem comorbidades fisicas relevantes no momento.',
-    anamnesis:
-      'Queixa principal ligada a ansiedade antecipatoria, sobrecarga na rotina e dificuldade para manter pausas de descanso.',
-    documents: [
-      { id: 'd1', title: 'Termo de consentimento', type: 'PDF', date: '10/02/2026' },
-      { id: 'd2', title: 'Encaminhamento medico', type: 'PDF', date: '18/03/2026' },
-    ],
-    appointments: [
-      { id: 'a1', date: '05/04/2026', time: '14:30', status: 'Realizada' },
-      { id: 'a2', date: '29/03/2026', time: '14:30', status: 'Realizada' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Carlos Henrique Lima',
-    phone: '(11) 97654-0098',
-    email: 'carlos.lima@email.com',
-    cpf: '234.567.890-11',
-    birthDate: '20/07/1984',
-    age: 41,
-    lastAppointment: '02/04/2026',
-    notes: 'Em acompanhamento quinzenal. Relata melhora gradual na comunicacao familiar.',
-    focus: 'Relacionamentos familiares',
-    medicalHistory: 'Sem historico medicamentoso atual. Relata episodios previos de insonia.',
-    anamnesis:
-      'Busca suporte para conflitos familiares recorrentes e melhora de estrategias de comunicacao.',
-    documents: [
-      { id: 'd3', title: 'Ficha de triagem', type: 'PDF', date: '03/01/2026' },
-    ],
-    appointments: [
-      { id: 'a3', date: '02/04/2026', time: '10:00', status: 'Realizada' },
-      { id: 'a4', date: '19/03/2026', time: '10:00', status: 'Realizada' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Fernanda Costa',
-    phone: '(11) 99882-7733',
-    email: 'fernanda.costa@email.com',
-    cpf: '345.678.901-22',
-    birthDate: '09/10/1991',
-    age: 34,
-    lastAppointment: '31/03/2026',
-    notes: 'Mantem boa frequencia. Necessita reforco no plano de enfrentamento para crises.',
-    focus: 'Regulacao emocional',
-    medicalHistory: 'Historico de crises de panico esporadicas. Sem restricoes fisicas relevantes.',
-    anamnesis: 'Demanda principal voltada ao manejo de crises e organizacao emocional.',
-    documents: [
-      { id: 'd4', title: 'Relatorio medico', type: 'PDF', date: '22/02/2026' },
-    ],
-    appointments: [
-      { id: 'a5', date: '31/03/2026', time: '15:30', status: 'Realizada' },
-    ],
-  },
-  {
-    id: '4',
-    name: 'Juliana Alves',
-    phone: '(11) 99544-1100',
-    email: 'juliana.alves@email.com',
-    cpf: '456.789.012-33',
-    birthDate: '01/03/1998',
-    age: 27,
-    lastAppointment: '28/03/2026',
-    notes: 'Paciente em processo de adaptacao a nova rotina profissional.',
-    focus: 'Estresse ocupacional',
-    medicalHistory: 'Sem historico clinico relevante informado ate o momento.',
-    anamnesis: 'Paciente relata estresse persistente e dificuldade de desconexao do trabalho.',
-    documents: [
-      { id: 'd5', title: 'Questionario inicial', type: 'PDF', date: '14/02/2026' },
-    ],
-    appointments: [
-      { id: 'a6', date: '28/03/2026', time: '09:00', status: 'Realizada' },
-    ],
-  },
-  {
-    id: '5',
-    name: 'Matheus Lima',
-    phone: '(11) 99123-2234',
-    email: 'matheus.lima@email.com',
-    cpf: '567.890.123-44',
-    birthDate: '17/11/2003',
-    age: 22,
-    lastAppointment: '25/03/2026',
-    notes: 'Consulta recente com foco em organizacao academica e autoestima.',
-    focus: 'Autoestima e desempenho academico',
-    medicalHistory: 'Sem intercorrencias medicas relatadas.',
-    anamnesis:
-      'Demanda ligada a autocobranca, desempenho academico e comparacao social frequente.',
-    documents: [
-      { id: 'd6', title: 'Autorizacao de atendimento', type: 'PDF', date: '28/01/2026' },
-    ],
-    appointments: [
-      { id: 'a7', date: '25/03/2026', time: '17:00', status: 'Realizada' },
-    ],
-  },
-];
+const GREEN = "#2e8b6e";
+const GREEN_DARK = "#1f684f";
+const GREEN_LIGHT = "#e8f7f1";
+const BLUE_LIGHT = "#eaf1ff";
+const BG = "#f0faf5";
+const WHITE = "#ffffff";
 
 const DecorativeBackground = () => (
   <>
@@ -154,30 +30,119 @@ const DecorativeBackground = () => (
 );
 
 export default function PsychologistPatientListScreen() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
+  useEffect(() => {
+    const loadPatients = async () => {
+      setLoading(true);
+      try {
+        // getMe e getAppointments não dependem um do outro — rodam em paralelo
+        const [meResult, appointmentsResult] = await Promise.all([
+          getMe(),
+          getAppointments(),
+        ]);
+
+        if (!meResult.ok || !meResult.data?.clinic) {
+          Alert.alert("Erro", "Não foi possível obter a clínica do usuário.");
+          setLoading(false);
+          return;
+        }
+        const clinicId = meResult.data.clinic;
+
+        const patientsResult = await getClinicPatients(clinicId);
+        if (!patientsResult.ok) {
+          Alert.alert(
+            "Erro",
+            patientsResult.error || "Erro ao carregar pacientes.",
+          );
+          setLoading(false);
+          return;
+        }
+
+        const appointments = appointmentsResult.ok
+          ? appointmentsResult.data || []
+          : [];
+
+        const patientsWithLastAppointment = (patientsResult.data || []).map(
+          (patient: any) => {
+            // PatientListSerializer retorna campos flat do User (sem objeto user aninhado):
+            // patient.id = User.id, patient.full_name, patient.phone, patient.email
+            // O PatientProfile.id será carregado em ficha.tsx via getPatientProfile()
+            const userId = patient.id;
+            const profileId = patient.id; // placeholder — será sobrescrito em ficha.tsx com patient?.id
+
+            const patientAppointments = appointments
+              .filter(
+                (app: any) =>
+                  app.patient === profileId || app.patient === userId,
+              )
+              .sort(
+                (a: any, b: any) =>
+                  new Date(b.scheduled_at).getTime() -
+                  new Date(a.scheduled_at).getTime(),
+              );
+
+            const lastAppointment = patientAppointments[0];
+
+            return {
+              ...patient,
+              _userId: userId,
+              _profileId: profileId,
+              // Serializer flat: full_name e phone já estão na raiz do objeto
+              _displayName: patient.full_name ?? "Sem nome",
+              _displayPhone: patient.phone ?? "Telefone não informado",
+              lastAppointment: lastAppointment?.scheduled_at
+                ? new Date(lastAppointment.scheduled_at).toLocaleDateString(
+                    "pt-BR",
+                  )
+                : patient.created_at
+                  ? new Date(patient.created_at).toLocaleDateString("pt-BR")
+                  : "Não informado",
+            };
+          },
+        );
+
+        setPatients(patientsWithLastAppointment);
+      } catch {
+        Alert.alert("Erro", "Erro inesperado ao carregar pacientes.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPatients();
+  }, []);
+
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
   const filteredPatients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-
-    return MOCK_PATIENTS.filter((patient) => {
+    return patients.filter((patient) => {
       if (!normalizedQuery) return true;
-
       return (
-        patient.name.toLowerCase().includes(normalizedQuery) ||
-        patient.phone.toLowerCase().includes(normalizedQuery)
+        patient._displayName.toLowerCase().includes(normalizedQuery) ||
+        patient._displayPhone?.toLowerCase().includes(normalizedQuery)
       );
     });
-  }, [query]);
+  }, [query, patients]);
 
   return (
     <View style={styles.screen}>
@@ -194,7 +159,10 @@ export default function PsychologistPatientListScreen() {
           <Text style={styles.headerTitle}>Lista de pacientes</Text>
         </View>
 
-        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/dashboardP')}>
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => router.replace("/(psychologist)/dashboardP")}
+        >
           <Ionicons name="home-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -204,81 +172,113 @@ export default function PsychologistPatientListScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <View style={styles.heroCard}>
-            <Text style={styles.heroTitle}>Pacientes vinculados ao seu acompanhamento</Text>
-            <Text style={styles.heroSubtitle}>
-              Consulte rapidamente nome, telefone e data da ultima consulta. Toque em um paciente
-              para abrir a ficha completa.
-            </Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={GREEN} />
+            <Text style={styles.loadingText}>Carregando pacientes...</Text>
+          </View>
+        ) : (
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+            <View style={styles.heroCard}>
+              <Text style={styles.heroTitle}>
+                Pacientes vinculados ao seu acompanhamento
+              </Text>
+              <Text style={styles.heroSubtitle}>
+                Consulte rapidamente nome, telefone e data da ultima consulta.
+                Toque em um paciente para abrir a ficha completa.
+              </Text>
 
-            <View style={styles.heroBadge}>
-              <Ionicons name="people-outline" size={14} color={GREEN} />
-              <Text style={styles.heroBadgeText}>{MOCK_PATIENTS.length} pacientes ativos</Text>
+              <View style={styles.heroBadge}>
+                <Ionicons name="people-outline" size={14} color={GREEN} />
+                <Text style={styles.heroBadgeText}>
+                  {patients.length} pacientes ativos
+                </Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.searchCard}>
-            <Text style={styles.sectionTitle}>Buscar paciente</Text>
-            <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={18} color="#6c8c80" />
-              <TextInput
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Digite o nome do paciente"
-                placeholderTextColor="#8ba99d"
-              />
+            <View style={styles.searchCard}>
+              <Text style={styles.sectionTitle}>Buscar paciente</Text>
+              <View style={styles.searchBox}>
+                <Ionicons name="search-outline" size={18} color="#6c8c80" />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Digite o nome do paciente"
+                  placeholderTextColor="#8ba99d"
+                />
+              </View>
             </View>
-          </View>
 
-          <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Pacientes encontrados</Text>
-            <Text style={styles.resultCount}>{filteredPatients.length}</Text>
-          </View>
+            <View style={styles.listHeader}>
+              <Text style={styles.sectionTitle}>Pacientes encontrados</Text>
+              <Text style={styles.resultCount}>{filteredPatients.length}</Text>
+            </View>
 
-          {filteredPatients.map((patient) => {
-            const initials = patient.name
-              .split(' ')
-              .slice(0, 2)
-              .map((part) => part[0])
-              .join('');
+            {filteredPatients.map((patient) => {
+              const initials = patient._displayName
+                .split(" ")
+                .slice(0, 2)
+                .map((part: string) => part[0])
+                .join("");
 
-            return (
-              <TouchableOpacity
-                key={patient.id}
-                style={styles.patientCard}
-                activeOpacity={0.85}
-                onPress={() =>
-                  router.push({
-                    pathname: '/(psychologist)/ficha',
-                    params: { patient: JSON.stringify(patient) },
-                  })
-                }
-              >
-                <View style={styles.patientHeader}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{initials}</Text>
+              return (
+                <TouchableOpacity
+                  key={patient._profileId}
+                  style={styles.patientCard}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(psychologist)/ficha",
+                      params: {
+                        // user.id — necessário para carregar o perfil do paciente
+                        patientId: patient._userId,
+                        // patientProfileId será sobrescrito em ficha.tsx com patient?.id do getPatientProfile()
+                        // que é o verdadeiro PatientProfile.id exigido pelo backend para upload
+                        patientProfileId: patient._profileId,
+                        patientName: patient._displayName,
+                        patientPhone: patient._displayPhone,
+                      },
+                    })
+                  }
+                >
+                  <View style={styles.patientHeader}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{initials}</Text>
+                    </View>
+
+                    <View style={styles.patientTextBox}>
+                      <Text style={styles.patientName}>
+                        {patient._displayName}
+                      </Text>
+                      <Text style={styles.patientMeta}>
+                        {patient._displayPhone}
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name="chevron-forward-outline"
+                      size={20}
+                      color="#6c8c80"
+                    />
                   </View>
 
-                  <View style={styles.patientTextBox}>
-                    <Text style={styles.patientName}>{patient.name}</Text>
-                    <Text style={styles.patientMeta}>{patient.phone}</Text>
+                  <View style={styles.lastAppointmentBox}>
+                    <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                    <Text style={styles.lastAppointmentText}>
+                      Última consulta: {patient.lastAppointment}
+                    </Text>
                   </View>
-
-                  <Ionicons name="chevron-forward-outline" size={20} color="#6c8c80" />
-                </View>
-
-                <View style={styles.lastAppointmentBox}>
-                  <Ionicons name="calendar-outline" size={15} color={GREEN} />
-                  <Text style={styles.lastAppointmentText}>
-                    Ultima consulta: {patient.lastAppointment}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </Animated.View>
+                </TouchableOpacity>
+              );
+            })}
+          </Animated.View>
+        )}
       </ScrollView>
     </View>
   );
@@ -290,17 +290,17 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   circle1: {
-    position: 'absolute',
+    position: "absolute",
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: '#27795f',
+    backgroundColor: "#27795f",
     top: -110,
     right: -70,
     opacity: 0.45,
   },
   circle2: {
-    position: 'absolute',
+    position: "absolute",
     width: 180,
     height: 180,
     borderRadius: 90,
@@ -314,39 +314,39 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 24,
     backgroundColor: GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   homeBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTextBox: {
     flex: 1,
     marginHorizontal: 14,
   },
   headerEyebrow: {
-    color: '#bce3d5',
+    color: "#bce3d5",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   headerTitle: {
     color: WHITE,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: 2,
     letterSpacing: -0.4,
   },
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     padding: 22,
     marginTop: -18,
     marginBottom: 22,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
@@ -371,21 +371,21 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#163c31',
+    fontWeight: "800",
+    color: "#163c31",
     letterSpacing: -0.4,
   },
   heroSubtitle: {
     marginTop: 8,
     fontSize: 14,
     lineHeight: 21,
-    color: '#5d7c71',
+    color: "#5d7c71",
   },
   heroBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: GREEN_LIGHT,
     borderRadius: 999,
     paddingVertical: 8,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   heroBadgeText: {
     marginLeft: 6,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     color: GREEN,
   },
   searchCard: {
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 18,
     marginBottom: 18,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -410,35 +410,35 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#163c31',
+    fontWeight: "800",
+    color: "#163c31",
   },
   searchBox: {
     marginTop: 14,
     borderRadius: 18,
-    backgroundColor: '#f4faf7',
+    backgroundColor: "#f4faf7",
     borderWidth: 1,
-    borderColor: '#e3efe8',
+    borderColor: "#e3efe8",
     paddingHorizontal: 14,
     paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   searchInput: {
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
-    color: '#1f4036',
+    color: "#1f4036",
   },
   listHeader: {
     marginBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   resultCount: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: "800",
     color: GREEN,
   },
   patientCard: {
@@ -446,55 +446,67 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 18,
     marginBottom: 16,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
   patientHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   avatar: {
     width: 52,
     height: 52,
     borderRadius: 18,
     backgroundColor: BLUE_LIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   avatarText: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#2d6cdf',
+    fontWeight: "800",
+    color: "#2d6cdf",
   },
   patientTextBox: {
     flex: 1,
   },
   patientName: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#183d32',
+    fontWeight: "800",
+    color: "#183d32",
   },
   patientMeta: {
     marginTop: 4,
     fontSize: 13,
-    color: '#6a877c',
+    color: "#6a877c",
   },
   lastAppointmentBox: {
     marginTop: 16,
     borderRadius: 16,
-    backgroundColor: '#f7fbf9',
+    backgroundColor: "#f7fbf9",
     padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   lastAppointmentText: {
     marginLeft: 8,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#36594d',
+    fontWeight: "600",
+    color: "#36594d",
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 15,
+    color: "#5d7c71",
+    fontWeight: "600",
   },
 });

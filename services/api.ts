@@ -29,7 +29,6 @@ export interface RegisterPayload {
   full_name: string;
   email: string;
   password: string;
-  password_confirmation: string;
   phone?: string;
   clinic: string; // UUID obrigatório — sem fallback
 }
@@ -55,6 +54,14 @@ export interface AppointmentApiItem {
   professional?: string;
   patient?: string;
   duration_minutes?: number;
+  patient_detail?: {
+    user: {
+      id: string;
+      full_name: string;
+      email?: string;
+      phone?: string;
+    };
+  };
 }
 
 export interface ConversationApiItem {
@@ -332,9 +339,10 @@ export const getMe = async (): Promise<ApiResult> => {
 
 // Atualiza full_name e phone do usuário autenticado via PATCH /api/auth/me/
 // O phone pertence ao model User — este é o endpoint correto para salvá-lo
-export const updateMe = async (
-  payload: { full_name?: string; phone?: string },
-): Promise<ApiResult> => {
+export const updateMe = async (payload: {
+  full_name?: string;
+  phone?: string;
+}): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
   const { response, data } = await fetchJson(`${API_BASE_URL}/auth/me/`, {
@@ -389,18 +397,38 @@ export const updatePatientProfile = async (
   return { ok: true, data };
 };
 
-// Atualiza campos do model User (full_name, phone) via PATCH /api/auth/users/{id}/
-// O phone fica no User, não no PatientProfile — por isso precisa de endpoint separado
+// GET /api/auth/<clinicId>/patients/
+// Retorna lista de pacientes da clínica. Admin vê todos; psicólogo só vê os seus.
+// Nota: a rota fica em /api/auth/ (não em /api/clinics/) conforme urls.py de accounts.
+export const getClinicPatients = async (
+  clinicId: string,
+): Promise<ApiResult<any[]>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/${encodeURIComponent(clinicId)}/patients/`,
+    { method: "GET", headers },
+  );
+  const results = extractList<any>(data);
+  if (!response.ok)
+    return { ok: false, error: normalizeError(data), data: results };
+  return { ok: true, data: results };
+};
+
+// Atualiza campos do model User (full_name, phone) via PATCH /api/auth/me/
+// O endpoint /api/auth/users/:id/ não existe — o correto é /api/auth/me/
+// que já aceita full_name e phone do usuário autenticado
 export const updateUser = async (
-  userId: string,
+  _userId: string, // mantido para não quebrar chamadas existentes
   payload: { full_name?: string; phone?: string },
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
-  const { response, data } = await fetchJson(
-    `${API_BASE_URL}/auth/users/${encodeURIComponent(userId)}/`,
-    { method: "PATCH", headers, body: JSON.stringify(payload) },
-  );
+  const { response, data } = await fetchJson(`${API_BASE_URL}/auth/me/`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(payload),
+  });
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
@@ -439,6 +467,28 @@ export const getAppointments = async (): Promise<
   return { ok: true, data: results };
 };
 
+// GET /api/appointments/summary/
+// Retorna: { consultas_hoje, proxima_consulta, total_pacientes }
+export const getProfessionalSummary = async (): Promise<
+  ApiResult<{
+    consultas_hoje: number;
+    proxima_consulta: AppointmentApiItem | null;
+    total_pacientes: number;
+  }>
+> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/summary/`,
+    {
+      method: "GET",
+      headers,
+    },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 export const createAppointment = async (
   patientId: string,
   professionalId: string, // item.id do ProfessionalProfile
@@ -453,8 +503,16 @@ export const createAppointment = async (
   const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(scheduledAt);
   const scheduledAtUtc = hasTimezone ? scheduledAt : `${scheduledAt}Z`;
 
-  console.log(JSON.stringify({patient: patientId, professional: professionalId, clinic: clinicId, scheduled_at: scheduledAtUtc, duration_minutes: durationMinutes, }))
-  // ⚠️ NÃO enviar "patient" — backend pega do token automaticamente
+  console.log(
+    JSON.stringify({
+      patient: patientId,
+      professional: professionalId,
+      clinic: clinicId,
+      scheduled_at: scheduledAtUtc,
+      duration_minutes: durationMinutes,
+    }),
+  );
+  // "patient" é enviado explicitamente pois o backend espera o campo no body
   const { response, data } = await fetchJson(`${API_BASE_URL}/appointments/`, {
     method: "POST",
     headers,
@@ -504,6 +562,38 @@ export const rateAppointment = async (
   return { ok: true, data };
 };
 
+// PATCH /api/appointments/<id>/   { status: 'completed' | 'rescheduled' | 'scheduled' | 'no_show' }
+export const updateAppointmentStatus = async (
+  appointmentId: string,
+  status: "completed" | "rescheduled" | "scheduled" | "no_show",
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+
+  const url = `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/`;
+  const body = JSON.stringify({ status });
+
+  console.log(`📤 API PATCH ${url}`, { status });
+
+  const { response, data } = await fetchJson(url, {
+    method: "PATCH",
+    headers,
+    body,
+  });
+
+  console.log(`📥 Response status: ${response.status}`, { data });
+
+  if (!response.ok) {
+    const error = normalizeError(data);
+    console.error(`❌ Error: ${error}`, data);
+    return { ok: false, error, data };
+  }
+
+  console.log(`✅ Appointment updated successfully =---------`);
+  console.log(body)
+  return { ok: true, data };
+};
+
 export const getPsychologistAvailability = async (
   psychologistId: string,
 ): Promise<ApiResult<AppointmentAvailabilityApiItem[]>> => {
@@ -518,6 +608,28 @@ export const getPsychologistAvailability = async (
   if (!response.ok)
     return { ok: false, error: normalizeError(data), data: availability };
   return { ok: true, data: availability };
+};
+
+// POST /api/appointments/availability/  { weekday, start_time, end_time, blocked: true }
+export const createAvailabilityBlock = async (payload: {
+  professional: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  blocked: boolean;
+}): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/availability/`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
 };
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
@@ -601,7 +713,6 @@ export const getUnreadCount = async (): Promise<
 
 // ─── Documentos ───────────────────────────────────────────────────────────────
 
-
 export const getDocuments = async () => {
   try {
     const token = await getAccessToken();
@@ -624,10 +735,42 @@ export const getDocuments = async () => {
   }
 };
 
+export const getDocumentsByPatient = async (patientUserId: string) => {
+  try {
+    const token = await getAccessToken();
+
+    const res = await fetch(
+      `${API_BASE_URL}/records/documents/?patient=${encodeURIComponent(patientUserId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { ok: false, error: normalizeError(data) };
+    }
+
+    const list = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.results)
+        ? data.results
+        : [];
+
+    return { ok: true, data: list };
+  } catch (e) {
+    return { ok: false, error: "Erro ao buscar documentos do paciente" };
+  }
+};
+
 export const uploadDocument = async (
   title: string,
   fileType: string,
   file: { uri: string; name: string; type: string },
+  patientProfileId?: string, // profile.id — obrigatório quando enviado pelo psicólogo
 ) => {
   try {
     const token = await getAccessToken();
@@ -635,6 +778,11 @@ export const uploadDocument = async (
     const formData = new FormData();
     formData.append("title", title);
     formData.append("file_type", fileType);
+
+    // Psicólogo/admin precisa informar o PatientProfile — backend exige o campo 'patient'
+    if (patientProfileId) {
+      formData.append("patient", patientProfileId);
+    }
 
     // No Expo Web, o browser não entende o objeto { uri, name, type } do RN.
     // É necessário fazer fetch do URI para obter um Blob real antes de anexar.
@@ -677,7 +825,7 @@ export const deleteDocument = async (id: string) => {
   try {
     const token = await getAccessToken();
 
-    const res = await fetch(`${API_BASE_URL}/records/documents/${id}/`, { // 👈 barra aqui
+    const res = await fetch(`${API_BASE_URL}/records/documents/${id}/`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,

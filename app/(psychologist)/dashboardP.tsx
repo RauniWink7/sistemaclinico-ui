@@ -2,16 +2,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { getMe } from "../../services/api";
+import {
+  getMe,
+  getProfessionalSummary,
+  getPsychologists,
+} from "../../services/api";
 
 interface ProfessionalInfo {
   name: string;
@@ -30,14 +35,11 @@ const ORANGE_LIGHT = "#fef3e8";
 const BG = "#f0faf5";
 const WHITE = "#ffffff";
 
-const MOCK_PROFESSIONAL: ProfessionalInfo = {
-  name: "Dra. Camila Rocha",
-  crp: "CRP 06/12345",
-  todayAppointments: 6,
-  nextAppointmentTime: "14:30",
-  nextPatientName: "Ana Beatriz",
-  totalPatients: 48,
-};
+const formatTime = (isoDate: string) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(isoDate));
 
 const QUICK_ACTIONS = [
   {
@@ -77,27 +79,58 @@ const DecorativeBackground = () => (
 );
 
 export default function PsychologistDashboardScreen() {
-  const [profileName, setProfileName] = useState(MOCK_PROFESSIONAL.name);
-  const [profileCrp, setProfileCrp] = useState(MOCK_PROFESSIONAL.crp);
+  const [profileName, setProfileName] = useState("");
+  const [profileCrp, setProfileCrp] = useState("CRP não informado");
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<{
+    consultas_hoje: number;
+    proxima_consulta: any | null;
+    total_pacientes: number;
+  } | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
-    const loadProfile = async () => {
-      const result = await getMe();
-      if (result.ok && result.data) {
-        setProfileName(
-          result.data.full_name || result.data.name || MOCK_PROFESSIONAL.name,
-        );
-        if (result.data.crp) {
-          setProfileCrp(result.data.crp);
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        // Fetch profile and psychologists in parallel
+        const [meResult, profsResult] = await Promise.all([
+          getMe(),
+          getPsychologists(),
+        ]);
+        if (meResult.ok && meResult.data) {
+          setProfileName(
+            meResult.data.full_name || meResult.data.name || "Profissional",
+          );
+          const myProfile = profsResult.data?.find(
+            (p) => p.user.id === meResult.data.id,
+          );
+          setProfileCrp(
+            myProfile?.crp ? `CRP ${myProfile.crp}` : "CRP não informado",
+          );
+        } else {
+          Alert.alert("Erro", meResult.error || "Erro ao carregar perfil.");
         }
-      } else if (result.error) {
-        Alert.alert("Erro", result.error);
+
+        // Fetch summary
+        const summaryResult = await getProfessionalSummary();
+        if (summaryResult.ok && summaryResult.data) {
+          setSummary(summaryResult.data);
+        } else {
+          Alert.alert(
+            "Erro",
+            summaryResult.error || "Erro ao carregar resumo.",
+          );
+        }
+      } catch (error) {
+        Alert.alert("Erro", "Erro inesperado ao carregar dados.");
+      } finally {
+        setLoading(false);
       }
     };
 
-    void loadProfile();
+    void loadData();
   }, []);
 
   React.useEffect(() => {
@@ -150,136 +183,157 @@ export default function PsychologistDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View
-          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
-        >
-          <View style={styles.heroCard}>
-            <Text style={styles.heroEyebrow}>{greeting}</Text>
-            <Text style={styles.heroTitle}>{profileName}</Text>
-            <Text style={styles.heroSubtitle}>{profileCrp}</Text>
-
-            <View style={styles.heroBadge}>
-              <Ionicons name="sparkles-outline" size={14} color={GREEN} />
-              <Text style={styles.heroBadgeText}>
-                Painel inicial do profissional
-              </Text>
-            </View>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={GREEN} />
+            <Text style={styles.loadingText}>Carregando dados...</Text>
           </View>
+        ) : (
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+            <View style={styles.heroCard}>
+              <Text style={styles.heroEyebrow}>{greeting}</Text>
+              <Text style={styles.heroTitle}>{profileName}</Text>
+              <Text style={styles.heroSubtitle}>{profileCrp}</Text>
 
-          <Text style={styles.sectionTitle}>Resumo do dia</Text>
-          <View style={styles.metricsGrid}>
-            <View style={styles.metricCard}>
-              <View
-                style={[styles.metricIconBox, { backgroundColor: GREEN_LIGHT }]}
-              >
-                <Ionicons name="calendar-outline" size={20} color={GREEN} />
+              <View style={styles.heroBadge}>
+                <Ionicons name="sparkles-outline" size={14} color={GREEN} />
+                <Text style={styles.heroBadgeText}>
+                  Painel inicial do profissional
+                </Text>
               </View>
-              <Text style={styles.metricValue}>
-                {MOCK_PROFESSIONAL.todayAppointments}
-              </Text>
-              <Text style={styles.metricLabel}>Consultas de hoje</Text>
             </View>
 
-            <View style={styles.metricCard}>
-              <View
-                style={[styles.metricIconBox, { backgroundColor: BLUE_LIGHT }]}
-              >
-                <Ionicons name="time-outline" size={20} color="#2d6cdf" />
-              </View>
-              <Text style={styles.metricValue}>
-                {MOCK_PROFESSIONAL.nextAppointmentTime}
-              </Text>
-              <Text style={styles.metricLabel}>Proxima consulta</Text>
-            </View>
-
-            <View style={styles.metricCardWide}>
-              <View
-                style={[
-                  styles.metricIconBox,
-                  { backgroundColor: ORANGE_LIGHT },
-                ]}
-              >
-                <Ionicons name="people-outline" size={20} color="#c46a1a" />
-              </View>
-              <View style={styles.metricTextBox}>
+            <Text style={styles.sectionTitle}>Resumo do dia</Text>
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricCard}>
+                <View
+                  style={[
+                    styles.metricIconBox,
+                    { backgroundColor: GREEN_LIGHT },
+                  ]}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={GREEN} />
+                </View>
                 <Text style={styles.metricValue}>
-                  {MOCK_PROFESSIONAL.totalPatients}
+                  {summary?.consultas_hoje ?? 0}
                 </Text>
-                <Text style={styles.metricLabel}>Pacientes atendidos</Text>
+                <Text style={styles.metricLabel}>Consultas de hoje</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <View
+                  style={[
+                    styles.metricIconBox,
+                    { backgroundColor: BLUE_LIGHT },
+                  ]}
+                >
+                  <Ionicons name="time-outline" size={20} color="#2d6cdf" />
+                </View>
+                <Text style={styles.metricValue}>
+                  {summary?.proxima_consulta
+                    ? formatTime(summary.proxima_consulta.scheduled_at)
+                    : "--:--"}
+                </Text>
+                <Text style={styles.metricLabel}>Proxima consulta</Text>
+              </View>
+
+              <View style={styles.metricCardWide}>
+                <View
+                  style={[
+                    styles.metricIconBox,
+                    { backgroundColor: ORANGE_LIGHT },
+                  ]}
+                >
+                  <Ionicons name="people-outline" size={20} color="#c46a1a" />
+                </View>
+                <View style={styles.metricTextBox}>
+                  <Text style={styles.metricValue}>
+                    {summary?.total_pacientes ?? 0}
+                  </Text>
+                  <Text style={styles.metricLabel}>Pacientes atendidos</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          <Text style={styles.sectionTitle}>Proxima consulta</Text>
-          <View style={styles.nextCard}>
-            <View style={styles.nextTopRow}>
-              <View style={styles.nextIconBox}>
-                <Ionicons name="person-outline" size={18} color={GREEN} />
+            <Text style={styles.sectionTitle}>Proxima consulta</Text>
+            <View style={styles.nextCard}>
+              <View style={styles.nextTopRow}>
+                <View style={styles.nextIconBox}>
+                  <Ionicons name="person-outline" size={18} color={GREEN} />
+                </View>
+                <View style={styles.nextTextBox}>
+                  <Text style={styles.nextLabel}>Paciente</Text>
+                  <Text style={styles.nextName}>
+                    {summary?.proxima_consulta?.patient_detail?.user
+                      ?.full_name ?? "Não definido"}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.nextTextBox}>
-                <Text style={styles.nextLabel}>Paciente</Text>
-                <Text style={styles.nextName}>
-                  {MOCK_PROFESSIONAL.nextPatientName}
+
+              <View style={styles.nextDivider} />
+
+              <View style={styles.nextBottomRow}>
+                <View style={styles.nextTimeBadge}>
+                  <Ionicons name="time-outline" size={16} color={GREEN} />
+                  <Text style={styles.nextTimeText}>
+                    {summary?.proxima_consulta
+                      ? formatTime(summary.proxima_consulta.scheduled_at)
+                      : "--:--"}
+                  </Text>
+                </View>
+                <Text style={styles.nextHint}>
+                  Prepare-se para o proximo atendimento.
                 </Text>
               </View>
             </View>
 
-            <View style={styles.nextDivider} />
-
-            <View style={styles.nextBottomRow}>
-              <View style={styles.nextTimeBadge}>
-                <Ionicons name="time-outline" size={16} color={GREEN} />
-                <Text style={styles.nextTimeText}>
-                  {MOCK_PROFESSIONAL.nextAppointmentTime}
-                </Text>
-              </View>
-              <Text style={styles.nextHint}>
-                Prepare-se para o proximo atendimento.
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>Atalhos</Text>
-          {QUICK_ACTIONS.map((action) => (
-            <TouchableOpacity
-              key={action.id}
-              style={styles.actionCard}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push(
-                  action.route as
-                    | "/(psychologist)/agenda"
-                    | "/(psychologist)/lista"
-                    | "/(psychologist)/dashboardP"
-                    | "/(psychologist)/chat",
-                )
-              }
-            >
-              <View
-                style={[styles.actionIconBox, { backgroundColor: action.bg }]}
+            <Text style={styles.sectionTitle}>Atalhos</Text>
+            {QUICK_ACTIONS.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={styles.actionCard}
+                activeOpacity={0.85}
+                onPress={() =>
+                  router.push(
+                    action.route as
+                      | "/(psychologist)/agenda"
+                      | "/(psychologist)/lista"
+                      | "/(psychologist)/dashboardP"
+                      | "/(psychologist)/chat",
+                  )
+                }
               >
+                <View
+                  style={[styles.actionIconBox, { backgroundColor: action.bg }]}
+                >
+                  <Ionicons
+                    name={action.icon as any}
+                    size={22}
+                    color={action.color}
+                  />
+                </View>
+
+                <View style={styles.actionTextBox}>
+                  <Text style={styles.actionTitle}>{action.title}</Text>
+                  <Text style={styles.actionDescription}>
+                    {action.description}
+                  </Text>
+                </View>
+
                 <Ionicons
-                  name={action.icon as any}
-                  size={22}
-                  color={action.color}
+                  name="chevron-forward-outline"
+                  size={20}
+                  color="#6c8c80"
                 />
-              </View>
-
-              <View style={styles.actionTextBox}>
-                <Text style={styles.actionTitle}>{action.title}</Text>
-                <Text style={styles.actionDescription}>
-                  {action.description}
-                </Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward-outline"
-                size={20}
-                color="#6c8c80"
-              />
-            </TouchableOpacity>
-          ))}
-        </Animated.View>
+              </TouchableOpacity>
+            ))}
+          </Animated.View>
+        )}
       </ScrollView>
     </View>
   );
@@ -564,5 +618,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: "#69857a",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: GREEN,
+    fontWeight: "600",
   },
 });
