@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Animated,
   ScrollView,
@@ -8,90 +8,47 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { getMe, getProfessionalsByClinic, register, updateProfessionalProfile } from '../../services/api';
 
-type PatientStatus = 'ativo' | 'inativo' | 'pendente';
+type ProfessionalStatus = 'ativo' | 'inativo';
 
-interface PatientRecord {
+interface ProfessionalData {
   id: string;
-  name: string;
-  age: number;
-  phone: string;
-  email: string;
-  psychologist: string;
-  lastAppointment: string;
-  nextAppointment: string;
-  status: PatientStatus;
+  crp?: string;
+  specialty?: string;
+  bio?: string;
+  session_duration_minutes?: number;
+  user: {
+    id: string;
+    full_name: string;
+    email: string;
+    phone?: string;
+    is_active: boolean;
+  };
 }
 
 const GREEN = '#2e8b6e';
 const GREEN_DARK = '#1f684f';
 const GREEN_LIGHT = '#e8f7f1';
 const BLUE_LIGHT = '#eaf1ff';
-const ORANGE_LIGHT = '#fef3e8';
 const RED_LIGHT = '#fdeeee';
 const BG = '#f0faf5';
 const WHITE = '#ffffff';
 
-const MOCK_PATIENTS: PatientRecord[] = [
-  {
-    id: '1',
-    name: 'Ana Beatriz Santos',
-    age: 29,
-    phone: '(11) 98765-4321',
-    email: 'ana.beatriz@email.com',
-    psychologist: 'Dra. Camila Rocha',
-    lastAppointment: '02/04/2026',
-    nextAppointment: '09/04/2026',
-    status: 'ativo',
-  },
-  {
-    id: '2',
-    name: 'Lucas Almeida',
-    age: 35,
-    phone: '(11) 97654-2109',
-    email: 'lucas.almeida@email.com',
-    psychologist: 'Dr. Felipe Moura',
-    lastAppointment: '31/03/2026',
-    nextAppointment: '15/04/2026',
-    status: 'ativo',
-  },
-  {
-    id: '3',
-    name: 'Mariana Costa',
-    age: 26,
-    phone: '(11) 99881-3000',
-    email: 'mariana.costa@email.com',
-    psychologist: 'Dra. Marina Costa',
-    lastAppointment: '28/03/2026',
-    nextAppointment: 'Sem consulta',
-    status: 'pendente',
-  },
-  {
-    id: '4',
-    name: 'Carlos Eduardo Lima',
-    age: 41,
-    phone: '(11) 99112-8899',
-    email: 'carlos.lima@email.com',
-    psychologist: 'Dra. Camila Rocha',
-    lastAppointment: '18/03/2026',
-    nextAppointment: 'Sem consulta',
-    status: 'inativo',
-  },
-  {
-    id: '5',
-    name: 'Patricia Nunes',
-    age: 33,
-    phone: '(11) 99444-7788',
-    email: 'patricia.nunes@email.com',
-    psychologist: 'Dr. Felipe Moura',
-    lastAppointment: '04/04/2026',
-    nextAppointment: '11/04/2026',
-    status: 'ativo',
-  },
-];
+interface NewProfessionalForm {
+  fullName: string;
+  email: string;
+  phone: string;
+  crp: string;
+  specialty: string;
+  password: string;
+}
 
 const DecorativeBackground = () => (
   <>
@@ -100,35 +57,55 @@ const DecorativeBackground = () => (
   </>
 );
 
-const getStatusMeta = (status: PatientStatus) => {
-  switch (status) {
-    case 'ativo':
-      return {
-        label: 'Ativo',
-        color: GREEN,
-        bg: GREEN_LIGHT,
-        icon: 'checkmark-circle-outline',
-      };
-    case 'pendente':
-      return {
-        label: 'Pendente',
-        color: '#c46a1a',
-        bg: ORANGE_LIGHT,
-        icon: 'time-outline',
-      };
-    default:
-      return {
-        label: 'Inativo',
-        color: '#d95c5c',
-        bg: RED_LIGHT,
-        icon: 'pause-circle-outline',
-      };
+const normalizeProfessional = (item: any): ProfessionalData => ({
+  id: item.id,
+  crp: item.crp,
+  specialty: item.specialty,
+  bio: item.bio,
+  session_duration_minutes: item.session_duration_minutes,
+  user: {
+    id: item.user?.id ?? '',
+    full_name: item.user?.full_name ?? '',
+    email: item.user?.email ?? '',
+    phone: item.user?.phone,
+    is_active: item.user?.is_active ?? true,
+  },
+});
+
+const getStatusMeta = (isActive: boolean) => {
+  if (isActive) {
+    return {
+      label: 'Ativo',
+      color: GREEN,
+      bg: GREEN_LIGHT,
+      icon: 'checkmark-circle-outline',
+    };
+  } else {
+    return {
+      label: 'Inativo',
+      color: '#d95c5c',
+      bg: RED_LIGHT,
+      icon: 'pause-circle-outline',
+    };
   }
 };
 
-export default function AdminPatientsScreen() {
+export default function AdminUserManagementScreen() {
   const [query, setQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'todos' | PatientStatus>('todos');
+  const [activeFilter, setActiveFilter] = useState<'todos' | ProfessionalStatus>('todos');
+  const [professionals, setProfessionals] = useState<ProfessionalData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [clinicId, setClinicId] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [creatingProfessional, setCreatingProfessional] = useState(false);
+  const [newProfessional, setNewProfessional] = useState<NewProfessionalForm>({
+    fullName: '',
+    email: '',
+    phone: '',
+    crp: '',
+    specialty: '',
+    password: '',
+  });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -140,29 +117,155 @@ export default function AdminPatientsScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const filteredPatients = useMemo(() => {
+  // Carregamento de profissionais
+  useEffect(() => {
+    const loadProfessionals = async () => {
+      try {
+        setLoading(true);
+
+        // Busca clinic_id do usuário logado
+        const meResult = await getMe();
+        if (!meResult.ok || !meResult.data) {
+          Alert.alert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
+          return;
+        }
+
+        const cId = meResult.data.clinic;
+        if (!cId) {
+          Alert.alert('Erro', 'Nenhuma clínica associada ao usuário.');
+          return;
+        }
+
+        setClinicId(cId);
+
+        // Busca profissionais da clínica
+        const professionalsResult = await getProfessionalsByClinic(cId);
+        if (!professionalsResult.ok) {
+          Alert.alert('Erro', professionalsResult.error ?? 'Não foi possível carregar os profissionais.');
+          return;
+        }
+
+        setProfessionals((professionalsResult.data || []).map(normalizeProfessional));
+      } catch (err: any) {
+        Alert.alert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadProfessionals();
+  }, []);
+
+  const filteredProfessionals = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return MOCK_PATIENTS.filter((patient) => {
-      const matchFilter = activeFilter === 'todos' || patient.status === activeFilter;
+    return professionals.filter((professional) => {
+      const status = professional.user.is_active ? 'ativo' : 'inativo';
+      const matchFilter = activeFilter === 'todos' || status === activeFilter;
       const matchQuery =
         !normalizedQuery ||
-        patient.name.toLowerCase().includes(normalizedQuery) ||
-        patient.email.toLowerCase().includes(normalizedQuery) ||
-        patient.psychologist.toLowerCase().includes(normalizedQuery);
+        professional.user.full_name.toLowerCase().includes(normalizedQuery) ||
+        (professional.specialty && professional.specialty.toLowerCase().includes(normalizedQuery)) ||
+        (professional.crp && professional.crp.toLowerCase().includes(normalizedQuery));
 
       return matchFilter && matchQuery;
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, query, professionals]);
 
   const summary = useMemo(
     () => ({
-      total: MOCK_PATIENTS.length,
-      active: MOCK_PATIENTS.filter((item) => item.status === 'ativo').length,
-      pending: MOCK_PATIENTS.filter((item) => item.status === 'pendente').length,
+      total: professionals.length,
+      active: professionals.filter((item) => item.user.is_active).length,
+
     }),
-    []
+    [professionals]
   );
+
+  const handleCreateProfessional = async () => {
+    if (!clinicId) {
+      Alert.alert('Erro', 'Clínica não identificada.');
+      return;
+    }
+
+    if (!newProfessional.fullName || !newProfessional.email || !newProfessional.password) {
+      Alert.alert('Erro', 'Preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    if (newProfessional.password.length < 8) {
+      Alert.alert('Senha inválida', 'A senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+
+    setCreatingProfessional(true);
+
+    try {
+      // Primeiro, cria o usuário profissional
+      const registerResult = await register({
+        full_name: newProfessional.fullName,
+        email: newProfessional.email,
+        phone: newProfessional.phone || undefined,
+        password: newProfessional.password,
+        clinic: clinicId,
+        role: 'professional',
+      });
+
+      if (!registerResult.ok) {
+        Alert.alert('Erro', registerResult.error ?? 'Não foi possível criar o profissional.');
+        return;
+      }
+
+      Alert.alert('Sucesso', 'Profissional cadastrado com sucesso.');
+      setModalVisible(false);
+      setNewProfessional({
+        fullName: '',
+        email: '',
+        phone: '',
+        crp: '',
+        specialty: '',
+        password: '',
+      });
+
+      // Recarregar lista de profissionais
+      const professionalsResult = await getProfessionalsByClinic(clinicId);
+      if (professionalsResult.ok) {
+        setProfessionals((professionalsResult.data || []).map(normalizeProfessional));
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+    } finally {
+      setCreatingProfessional(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.screen}>
+        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <DecorativeBackground />
+
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerEyebrow}>Area administrativa</Text>
+            <Text style={styles.headerTitle}>Psicologos cadastrados</Text>
+          </View>
+
+          <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(admin)')}>
+            <Ionicons name="grid-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          <ActivityIndicator size="large" color={GREEN} />
+          <Text style={{ fontSize: 15, color: GREEN, fontWeight: '600' }}>Carregando profissionais...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -176,7 +279,7 @@ export default function AdminPatientsScreen() {
 
         <View style={styles.headerTextBox}>
           <Text style={styles.headerEyebrow}>Area administrativa</Text>
-          <Text style={styles.headerTitle}>Pacientes</Text>
+          <Text style={styles.headerTitle}>Psicologos cadastrados</Text>
         </View>
 
         <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(admin)')}>
@@ -191,25 +294,20 @@ export default function AdminPatientsScreen() {
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <View style={styles.heroCard}>
-            <Text style={styles.heroEyebrow}>Gerenciamento</Text>
-            <Text style={styles.heroTitle}>Acompanhamento de pacientes</Text>
+            <Text style={styles.heroEyebrow}>Usuarios</Text>
+            <Text style={styles.heroTitle}>Equipe clinica registrada</Text>
             <Text style={styles.heroSubtitle}>
-              Use essa tela para localizar pacientes, acompanhar status e visualizar o vinculo com
-              cada psicologo.
+              Visualize os psicologos cadastrados, especialidades e disponibilidade operacional.
             </Text>
 
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStatCard}>
                 <Text style={styles.heroStatValue}>{summary.total}</Text>
-                <Text style={styles.heroStatLabel}>Total</Text>
+                <Text style={styles.heroStatLabel}>Psicologos</Text>
               </View>
               <View style={styles.heroStatCard}>
                 <Text style={styles.heroStatValue}>{summary.active}</Text>
                 <Text style={styles.heroStatLabel}>Ativos</Text>
-              </View>
-              <View style={styles.heroStatCard}>
-                <Text style={styles.heroStatValue}>{summary.pending}</Text>
-                <Text style={styles.heroStatLabel}>Pendentes</Text>
               </View>
             </View>
           </View>
@@ -223,7 +321,7 @@ export default function AdminPatientsScreen() {
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Buscar por nome, e-mail ou psicologo"
+                placeholder="Buscar por nome, CRP ou especialidade"
                 placeholderTextColor="#8ba99d"
               />
             </View>
@@ -236,7 +334,6 @@ export default function AdminPatientsScreen() {
               {[
                 { key: 'todos', label: 'Todos' },
                 { key: 'ativo', label: 'Ativos' },
-                { key: 'pendente', label: 'Pendentes' },
                 { key: 'inativo', label: 'Inativos' },
               ].map((filter) => {
                 const isActive = activeFilter === filter.key;
@@ -245,7 +342,7 @@ export default function AdminPatientsScreen() {
                   <TouchableOpacity
                     key={filter.key}
                     style={[styles.filterChip, isActive && styles.filterChipActive]}
-                    onPress={() => setActiveFilter(filter.key as 'todos' | PatientStatus)}
+                    onPress={() => setActiveFilter(filter.key as 'todos' | ProfessionalStatus)}
                     activeOpacity={0.85}
                   >
                     <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
@@ -258,78 +355,211 @@ export default function AdminPatientsScreen() {
           </View>
 
           <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Lista de pacientes</Text>
-            <Text style={styles.resultCount}>{filteredPatients.length} encontrados</Text>
+            <Text style={styles.sectionTitle}>Lista de psicologos</Text>
+            <Text style={styles.resultCount}>{filteredProfessionals.length} encontrados</Text>
           </View>
 
-          {filteredPatients.map((patient) => {
-            const status = getStatusMeta(patient.status);
-            const initials = patient.name
-              .split(' ')
-              .slice(0, 2)
-              .map((part) => part[0])
-              .join('');
+          {filteredProfessionals.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="person-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyStateText}>Nenhum profissional encontrado</Text>
+            </View>
+          ) : (
+            filteredProfessionals.map((professional) => {
+              const status = getStatusMeta(professional.user.is_active);
+              const initials = professional.user.full_name
+                .split(' ')
+                .slice(0, 2)
+                .map((part) => part[0].toUpperCase())
+                .join('');
 
-            return (
-              <View key={patient.id} style={styles.patientCard}>
-                <View style={styles.patientTopRow}>
-                  <View style={styles.patientMainInfo}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{initials}</Text>
+              return (
+                <View key={professional.id} style={styles.userCard}>
+                  <View style={styles.userTopRow}>
+                    <View style={styles.userMainInfo}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{initials}</Text>
+                      </View>
+
+                      <View style={styles.nameBox}>
+                        <Text style={styles.userName}>{professional.user.full_name}</Text>
+                        <Text style={styles.userMeta}>
+                          {professional.crp || '—'} • {professional.specialty || '—'}
+                        </Text>
+                      </View>
                     </View>
 
-                    <View style={styles.nameBox}>
-                      <Text style={styles.patientName}>{patient.name}</Text>
-                      <Text style={styles.patientMeta}>
-                        {patient.age} anos • {patient.phone}
-                      </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                      <Ionicons name={status.icon as any} size={14} color={status.color} />
+                      <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
                     </View>
                   </View>
 
-                  <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                    <Ionicons name={status.icon as any} size={14} color={status.color} />
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                  <View style={styles.infoGrid}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>E-mail</Text>
+                      <Text style={styles.infoValue}>{professional.user.email}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Telefone</Text>
+                      <Text style={styles.infoValue}>{professional.user.phone || '—'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      activeOpacity={0.85}
+                      onPress={() => router.push({ pathname: '/(admin)/profissional/[id]', params: { id: professional.id } })}
+                    >
+                      <Ionicons name="document-text-outline" size={16} color={GREEN} />
+                      <Text style={styles.secondaryButtonText}>Ver perfil</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.primaryButton}
+                      activeOpacity={0.85}
+                      onPress={() => router.push({ pathname: '/(admin)/agendar', params: { professionalId: professional.id } })}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color="#fff" />
+                      <Text style={styles.primaryButtonText}>Agenda</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                <View style={styles.infoGrid}>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>E-mail</Text>
-                    <Text style={styles.infoValue}>{patient.email}</Text>
-                  </View>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>Psicologo responsavel</Text>
-                    <Text style={styles.infoValue}>{patient.psychologist}</Text>
-                  </View>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>Ultima consulta</Text>
-                    <Text style={styles.infoValue}>{patient.lastAppointment}</Text>
-                  </View>
-                  <View style={styles.infoItem}>
-                    <Text style={styles.infoLabel}>Proxima consulta</Text>
-                    <Text style={styles.infoValue}>{patient.nextAppointment}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.85}>
-                    <Ionicons name="document-text-outline" size={16} color={GREEN} />
-                    <Text style={styles.secondaryButtonText}>Ver cadastro</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85}>
-                    <Ionicons name="calendar-outline" size={16} color="#fff" />
-                    <Text style={styles.primaryButtonText}>Acompanhar agenda</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </Animated.View>
       </ScrollView>
+
+      {/* FAB para criar novo profissional */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setModalVisible(true)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="person-add-outline" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Modal para criar novo profissional */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !creatingProfessional && setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Novo profissional</Text>
+              <TouchableOpacity
+                onPress={() => !creatingProfessional && setModalVisible(false)}
+                disabled={creatingProfessional}
+              >
+                <Ionicons name="close-outline" size={24} color="#173d31" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalForm}>
+                <Text style={styles.modalFieldLabel}>Nome completo *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Digite o nome completo"
+                  placeholderTextColor="#94b3a6"
+                  value={newProfessional.fullName}
+                  onChangeText={(text) => setNewProfessional({ ...newProfessional, fullName: text })}
+                  editable={!creatingProfessional}
+                />
+
+                <Text style={styles.modalFieldLabel}>E-mail *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Digite o e-mail"
+                  placeholderTextColor="#94b3a6"
+                  value={newProfessional.email}
+                  onChangeText={(text) => setNewProfessional({ ...newProfessional, email: text })}
+                  keyboardType="email-address"
+                  editable={!creatingProfessional}
+                />
+
+                <Text style={styles.modalFieldLabel}>Telefone</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Digite o telefone"
+                  placeholderTextColor="#94b3a6"
+                  value={newProfessional.phone}
+                  onChangeText={(text) => setNewProfessional({ ...newProfessional, phone: text })}
+                  keyboardType="phone-pad"
+                  editable={!creatingProfessional}
+                />
+
+                <Text style={styles.modalFieldLabel}>CRP</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ex: CRP 06/12345"
+                  placeholderTextColor="#94b3a6"
+                  value={newProfessional.crp}
+                  onChangeText={(text) => setNewProfessional({ ...newProfessional, crp: text })}
+                  editable={!creatingProfessional}
+                />
+
+                <Text style={styles.modalFieldLabel}>Especialidade</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ex: Ansiedade e Depressão"
+                  placeholderTextColor="#94b3a6"
+                  value={newProfessional.specialty}
+                  onChangeText={(text) => setNewProfessional({ ...newProfessional, specialty: text })}
+                  editable={!creatingProfessional}
+                />
+
+                <Text style={styles.modalFieldLabel}>Senha provisória *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Digite uma senha provisória"
+                  placeholderTextColor="#94b3a6"
+                  value={newProfessional.password}
+                  onChangeText={(text) => setNewProfessional({ ...newProfessional, password: text })}
+                  secureTextEntry
+                  editable={!creatingProfessional}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.modalButtonCancel, creatingProfessional && styles.buttonDisabled]}
+                onPress={() => setModalVisible(false)}
+                disabled={creatingProfessional}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButtonCreate, creatingProfessional && styles.buttonDisabled]}
+                onPress={handleCreateProfessional}
+                disabled={creatingProfessional}
+                activeOpacity={0.85}
+              >
+                {creatingProfessional ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="person-add-outline" size={18} color="#fff" />
+                    <Text style={styles.modalButtonCreateText}>Cadastrar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   screen: {
@@ -402,7 +632,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 22,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   heroCard: {
     backgroundColor: WHITE,
@@ -459,6 +689,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#5f7e73',
+    textAlign: 'center',
   },
   filtersCard: {
     backgroundColor: WHITE,
@@ -526,7 +757,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#6a887d',
   },
-  patientCard: {
+  userCard: {
     backgroundColor: WHITE,
     borderRadius: 24,
     padding: 18,
@@ -537,13 +768,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
-  patientTopRow: {
+  userTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 12,
   },
-  patientMainInfo: {
+  userMainInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -565,12 +796,12 @@ const styles = StyleSheet.create({
   nameBox: {
     flex: 1,
   },
-  patientName: {
+  userName: {
     fontSize: 16,
     fontWeight: '800',
     color: '#183d32',
   },
-  patientMeta: {
+  userMeta: {
     marginTop: 4,
     fontSize: 13,
     color: '#6a877c',
@@ -649,5 +880,124 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: WHITE,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 999,
+    backgroundColor: GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#a0b5aa',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: WHITE,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 0,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#edf4f0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#163c31',
+  },
+  modalScroll: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  modalForm: {
+    paddingVertical: 20,
+    gap: 18,
+  },
+  modalFieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6a887d',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  modalInput: {
+    marginTop: 8,
+    borderRadius: 14,
+    backgroundColor: '#f8fcfa',
+    borderWidth: 1,
+    borderColor: '#e3efe8',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#1f4036',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#edf4f0',
+  },
+  modalButtonCancel: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: '#edf5f1',
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#5f7e73',
+  },
+  modalButtonCreate: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: GREEN,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modalButtonCreateText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: WHITE,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

@@ -1,35 +1,43 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { getMe } from "../../services/api";
+import { getClinicData, getClinicStats, getMe } from "../../services/api";
 
-type AppointmentStatus = "agendada" | "realizada" | "cancelada";
+// ─── Tipagens ────────────────────────────────────────────────────────────────
 
-interface ClinicInfo {
+interface ClinicData {
+  id: number;
   name: string;
-  cnpj: string;
+  cnpj?: string;
   phone: string;
   email: string;
-  city: string;
-  state: string;
-  activePatients: number;
-  activePsychologists: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  open_from?: string;
+  open_until?: string;
 }
 
-interface AppointmentRecord {
-  id: string;
-  status: AppointmentStatus;
+interface ClinicStats {
+  total_appointments: number;
+  completed_appointments: number;
+  cancelled_appointments: number;
+  total_patients: number;
+  total_professionals: number;
 }
+
+// ─── Constantes de tema ───────────────────────────────────────────────────────
 
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
@@ -39,31 +47,7 @@ const RED_LIGHT = "#fdeeee";
 const BG = "#f0faf5";
 const WHITE = "#ffffff";
 
-const MOCK_CLINIC: ClinicInfo = {
-  name: "Clinica Equilibrio Mental",
-  cnpj: "12.345.678/0001-90",
-  phone: "(11) 4002-8922",
-  email: "contato@equilibriomental.com.br",
-  city: "Sao Paulo",
-  state: "SP",
-  activePatients: 186,
-  activePsychologists: 14,
-};
-
-const MOCK_APPOINTMENTS: AppointmentRecord[] = [
-  { id: "1", status: "agendada" },
-  { id: "2", status: "agendada" },
-  { id: "3", status: "agendada" },
-  { id: "4", status: "agendada" },
-  { id: "5", status: "realizada" },
-  { id: "6", status: "realizada" },
-  { id: "7", status: "realizada" },
-  { id: "8", status: "realizada" },
-  { id: "9", status: "realizada" },
-  { id: "10", status: "realizada" },
-  { id: "11", status: "cancelada" },
-  { id: "12", status: "cancelada" },
-];
+// ─── Subcomponentes ───────────────────────────────────────────────────────────
 
 const DecorativeBackground = () => (
   <>
@@ -92,26 +76,18 @@ const InfoRow = ({
   </View>
 );
 
+// ─── Tela principal ───────────────────────────────────────────────────────────
+
 export default function AdminDashboardScreen() {
   const [adminName, setAdminName] = useState("Administrador");
+  const [clinicData, setClinicData] = useState<ClinicData | null>(null);
+  const [stats, setStats] = useState<ClinicStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      const result = await getMe();
-      if (result.ok && result.data) {
-        setAdminName(
-          result.data.full_name || result.data.name || "Administrador",
-        );
-      } else if (result.error) {
-        Alert.alert("Erro", result.error);
-      }
-    };
-
-    void loadProfile();
-  }, []);
-
+  // ── Animação de entrada ──────────────────────────────────────────────────
   React.useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -127,22 +103,99 @@ export default function AdminDashboardScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const stats = useMemo(() => {
-    const totalAppointments = MOCK_APPOINTMENTS.length;
-    const completedAppointments = MOCK_APPOINTMENTS.filter(
-      (item) => item.status === "realizada",
-    ).length;
-    const canceledAppointments = MOCK_APPOINTMENTS.filter(
-      (item) => item.status === "cancelada",
-    ).length;
+  // ── Carregamento de dados reais ──────────────────────────────────────────
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        setLoading(true);
 
-    return {
-      totalAppointments,
-      completedAppointments,
-      canceledAppointments,
+        // 1. Busca usuário logado
+        const meResult = await getMe();
+        if (!meResult.ok || !meResult.data) {
+          Alert.alert(
+            "Erro",
+            meResult.error ?? "Não foi possível carregar o perfil.",
+          );
+          return;
+        }
+
+        const me = meResult.data;
+        setAdminName(me.full_name || me.name || "Administrador");
+
+        const clinicId = me.clinic;
+        if (!clinicId) {
+          Alert.alert("Erro", "Nenhuma clínica associada ao usuário.");
+          return;
+        }
+
+        // 2. Busca estatísticas e dados da clínica em paralelo
+        const [statsResult, clinicResult] = await Promise.all([
+          getClinicStats(clinicId),
+          getClinicData(clinicId),
+        ]);
+
+        if (!statsResult.ok) {
+          Alert.alert(
+            "Erro",
+            statsResult.error ??
+              "Não foi possível carregar os indicadores da clínica.",
+          );
+          return;
+        }
+        if (!clinicResult.ok) {
+          Alert.alert(
+            "Erro",
+            clinicResult.error ??
+              "Não foi possível carregar os dados da clínica.",
+          );
+          return;
+        }
+
+        setStats(statsResult.data as ClinicStats);
+        setClinicData(clinicResult.data as ClinicData);
+      } catch (err: any) {
+        Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
+      } finally {
+        setLoading(false);
+      }
     };
+
+    void loadDashboard();
   }, []);
 
+  // ── Loading state ────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <View style={styles.screen}>
+        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <DecorativeBackground />
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerEyebrow}>Area administrativa</Text>
+            <Text style={styles.headerTitle}>Dashboard da clinica</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.homeBtn}
+            onPress={() => router.replace("/(admin)")}
+          >
+            <Ionicons name="grid-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={GREEN} />
+          <Text style={styles.loadingText}>Carregando dados...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
@@ -174,6 +227,7 @@ export default function AdminDashboardScreen() {
         <Animated.View
           style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
         >
+          {/* ── Hero card ── */}
           <View style={styles.heroCard}>
             <Text style={styles.heroEyebrow}>Visao geral</Text>
             <Text style={styles.heroTitle}>{adminName}</Text>
@@ -186,18 +240,19 @@ export default function AdminDashboardScreen() {
               <View style={styles.heroBadge}>
                 <Ionicons name="people-outline" size={14} color={GREEN} />
                 <Text style={styles.heroBadgeText}>
-                  {MOCK_CLINIC.activePatients} pacientes ativos
+                  {stats?.total_patients ?? 0} pacientes ativos
                 </Text>
               </View>
               <View style={styles.heroBadge}>
                 <Ionicons name="medkit-outline" size={14} color={GREEN} />
                 <Text style={styles.heroBadgeText}>
-                  {MOCK_CLINIC.activePsychologists} psicologos ativos
+                  {stats?.total_professionals ?? 0} psicologos ativos
                 </Text>
               </View>
             </View>
           </View>
 
+          {/* ── Indicadores principais ── */}
           <Text style={styles.sectionTitle}>Indicadores principais</Text>
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
@@ -206,7 +261,9 @@ export default function AdminDashboardScreen() {
               >
                 <Ionicons name="calendar-outline" size={20} color={GREEN} />
               </View>
-              <Text style={styles.metricValue}>{stats.totalAppointments}</Text>
+              <Text style={styles.metricValue}>
+                {stats?.total_appointments ?? 0}
+              </Text>
               <Text style={styles.metricLabel}>Total de consultas</Text>
             </View>
 
@@ -221,7 +278,7 @@ export default function AdminDashboardScreen() {
                 />
               </View>
               <Text style={styles.metricValue}>
-                {stats.completedAppointments}
+                {stats?.completed_appointments ?? 0}
               </Text>
               <Text style={styles.metricLabel}>Concluidas</Text>
             </View>
@@ -237,7 +294,7 @@ export default function AdminDashboardScreen() {
                 />
               </View>
               <Text style={styles.metricValue}>
-                {stats.canceledAppointments}
+                {stats?.cancelled_appointments ?? 0}
               </Text>
               <Text style={styles.metricLabel}>Canceladas</Text>
             </View>
@@ -249,7 +306,7 @@ export default function AdminDashboardScreen() {
                 <Ionicons name="people-outline" size={20} color={GREEN} />
               </View>
               <Text style={styles.metricValue}>
-                {MOCK_CLINIC.activePatients}
+                {stats?.total_patients ?? 0}
               </Text>
               <Text style={styles.metricLabel}>Pacientes ativos</Text>
             </View>
@@ -261,57 +318,99 @@ export default function AdminDashboardScreen() {
                 <Ionicons name="person-outline" size={20} color={GREEN} />
               </View>
               <Text style={styles.metricValue}>
-                {MOCK_CLINIC.activePsychologists}
+                {stats?.total_professionals ?? 0}
               </Text>
               <Text style={styles.metricLabel}>Psicologos ativos</Text>
             </View>
           </View>
 
+          {/* ── Dados da clínica ── */}
           <Text style={styles.sectionTitle}>Dados da clinica</Text>
           <View style={styles.clinicCard}>
             <InfoRow
               icon="business-outline"
               label="Nome da clinica"
-              value={MOCK_CLINIC.name}
+              value={clinicData?.name ?? "—"}
             />
-            <View style={styles.divider} />
-            <InfoRow
-              icon="document-text-outline"
-              label="CNPJ"
-              value={MOCK_CLINIC.cnpj}
-            />
+            {clinicData?.cnpj ? (
+              <>
+                <View style={styles.divider} />
+                <InfoRow
+                  icon="document-text-outline"
+                  label="CNPJ"
+                  value={clinicData.cnpj}
+                />
+              </>
+            ) : null}
             <View style={styles.divider} />
             <InfoRow
               icon="call-outline"
               label="Telefone"
-              value={MOCK_CLINIC.phone}
+              value={clinicData?.phone ?? "—"}
             />
             <View style={styles.divider} />
             <InfoRow
               icon="mail-outline"
               label="E-mail"
-              value={MOCK_CLINIC.email}
+              value={clinicData?.email ?? "—"}
             />
-            <View style={styles.divider} />
-            <InfoRow
-              icon="location-outline"
-              label="Localizacao"
-              value={`${MOCK_CLINIC.city} - ${MOCK_CLINIC.state}`}
-            />
+            {clinicData?.city || clinicData?.state ? (
+              <>
+                <View style={styles.divider} />
+                <InfoRow
+                  icon="location-outline"
+                  label="Localizacao"
+                  value={[clinicData.city, clinicData.state]
+                    .filter(Boolean)
+                    .join(" - ")}
+                />
+              </>
+            ) : null}
+            {clinicData?.open_from && clinicData?.open_until ? (
+              <>
+                <View style={styles.divider} />
+                <InfoRow
+                  icon="time-outline"
+                  label="Horario de funcionamento"
+                  value={`${clinicData.open_from} — ${clinicData.open_until}`}
+                />
+              </>
+            ) : null}
           </View>
 
+          {/* ── Atalho para consultas ── */}
+          <TouchableOpacity
+            style={styles.consultasButton}
+            onPress={() => router.push("/consultas")}
+            activeOpacity={0.85}
+          >
+            <View style={styles.consultasButtonLeft}>
+              <View style={styles.consultasButtonIcon}>
+                <Ionicons name="calendar-outline" size={20} color={GREEN} />
+              </View>
+              <View>
+                <Text style={styles.consultasButtonTitle}>Ver consultas agendadas</Text>
+                <Text style={styles.consultasButtonSub}>
+                  {stats?.total_appointments ?? 0} consultas no total
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward-outline" size={20} color={GREEN} />
+          </TouchableOpacity>
+
+          {/* ── Resumo operacional ── */}
           <Text style={styles.sectionTitle}>Resumo operacional</Text>
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Consultas concluidas</Text>
               <Text style={styles.summaryValue}>
-                {stats.completedAppointments}
+                {stats?.completed_appointments ?? 0}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Consultas canceladas</Text>
               <Text style={styles.summaryValue}>
-                {stats.canceledAppointments}
+                {stats?.cancelled_appointments ?? 0}
               </Text>
             </View>
             <View style={styles.summaryRow}>
@@ -319,13 +418,13 @@ export default function AdminDashboardScreen() {
                 Pacientes em acompanhamento
               </Text>
               <Text style={styles.summaryValue}>
-                {MOCK_CLINIC.activePatients}
+                {stats?.total_patients ?? 0}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Psicologos disponiveis</Text>
               <Text style={styles.summaryValue}>
-                {MOCK_CLINIC.activePsychologists}
+                {stats?.total_professionals ?? 0}
               </Text>
             </View>
           </View>
@@ -334,6 +433,8 @@ export default function AdminDashboardScreen() {
     </View>
   );
 }
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: {
@@ -400,6 +501,17 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 2,
     letterSpacing: -0.4,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: GREEN,
+    fontWeight: "600",
   },
   scroll: {
     flex: 1,
@@ -546,6 +658,47 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: "#edf4f0",
+  },
+  consultasButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: "#cfe7dc",
+    shadowColor: "#174c3e",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  consultasButtonLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  consultasButtonIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: "#e8f7f1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  consultasButtonTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#173d31",
+  },
+  consultasButtonSub: {
+    fontSize: 12,
+    color: "#7a9e90",
+    fontWeight: "600",
+    marginTop: 2,
   },
   summaryCard: {
     backgroundColor: WHITE,

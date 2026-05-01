@@ -52,7 +52,7 @@ const ADMIN_SECTIONS = [
     icon: 'calendar-outline',
     color: '#8a55d9',
     bg: '#f3ecff',
-    action: () => Alert.alert('Em breve', 'A tela de consultas administrativas sera criada aqui.'),
+    action: () => router.push('/agendar'),
   },
 ];
 

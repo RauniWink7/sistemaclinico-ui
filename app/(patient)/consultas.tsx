@@ -2,22 +2,24 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  Modal,
-  TextInput as RNTextInput,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated,
+    Modal,
+    TextInput as RNTextInput,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  AppointmentApiItem,
-  cancelAppointment,
-  getAppointments,
-  rateAppointment,
+    AppointmentApiItem,
+    cancelAppointment,
+    getAppointments,
+    getPsychologists,
+    rateAppointment,
 } from "../../services/api";
 
 // Alias para evitar conflitos
@@ -37,7 +39,10 @@ interface Appointment {
 
 // FIX 1: normalizeAppointment agora extrai data/hora pelo timezone local
 // e mapeia professional_detail para pegar o nome correto do psicólogo
-const normalizeAppointment = (item: AppointmentApiItem): Appointment => {
+const normalizeAppointment = (
+  item: AppointmentApiItem,
+  profMap?: Record<string, string>,
+): Appointment => {
   const scheduledAt = item.scheduled_at ?? "";
   const dt = scheduledAt ? new Date(scheduledAt) : null;
 
@@ -55,10 +60,11 @@ const normalizeAppointment = (item: AppointmentApiItem): Appointment => {
   const status = (statusMap[item.status ?? ""] ??
     "agendada") as AppointmentStatus;
 
-  // FIX 3: tenta pegar o nome pelo professional_detail antes de fallback
+  // BUG 2 FIX: Usar mapa de profissionais para resolver UUID → nome
+  const professionalId = item.professional ?? "";
   const psychologistName =
+    profMap?.[professionalId] ||
     (item as any).professional_detail?.user?.full_name ||
-    item.professional ||
     "Profissional";
 
   const specialty =
@@ -132,12 +138,16 @@ const getStatusMeta = (status: AppointmentStatus) => {
 export default function ConsultasScreen() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Estados do modal de avaliação
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [reviewAppointmentId, setReviewAppointmentId] = useState<string>("");
   const [reviewScore, setReviewScore] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+
+  // Filtro de status
+  const [activeFilter, setActiveFilter] = useState<AppointmentStatus | "todas">("todas");
 
   // FIX 1: Estados do modal de cancelamento (substitui Alert.prompt que não funciona no Android)
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
@@ -150,9 +160,27 @@ export default function ConsultasScreen() {
   useEffect(() => {
     const loadAppointments = async () => {
       setLoadingAppointments(true);
+
+      // ─── BUG 2 FIX: Load psychologists first to build profMap UUID→name
+      const profsResult = await getPsychologists();
+      const profMap: Record<string, string> = {};
+      if (profsResult.ok && Array.isArray(profsResult.data)) {
+        for (const prof of profsResult.data) {
+          const name =
+            prof.user?.full_name ||
+            prof.full_name ||
+            prof.name ||
+            prof.psychologistName ||
+            "Profissional";
+          profMap[prof.id] = name;
+        }
+      }
+
       const result = await getAppointments();
       if (result.ok && Array.isArray(result.data)) {
-        setAppointments(result.data.map(normalizeAppointment));
+        setAppointments(
+          result.data.map((item) => normalizeAppointment(item, profMap)),
+        );
       } else {
         if (result.error) {
           Alert.alert("Erro", result.error);
@@ -179,6 +207,44 @@ export default function ConsultasScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  // ─── FEATURE 2: Pull-to-refresh ───────────────────────────────────────────
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    try {
+      // Recarregar profissionais para atualizar mapa
+      const profsResult = await getPsychologists();
+      const profMap: Record<string, string> = {};
+      if (profsResult.ok && Array.isArray(profsResult.data)) {
+        for (const prof of profsResult.data) {
+          const name =
+            prof.user?.full_name ||
+            prof.full_name ||
+            prof.name ||
+            prof.psychologistName ||
+            "Profissional";
+          profMap[prof.id] = name;
+        }
+      }
+
+      // Recarregar appointments com mapa atualizado
+      const result = await getAppointments();
+      if (result.ok && Array.isArray(result.data)) {
+        setAppointments(
+          result.data.map((item) => normalizeAppointment(item, profMap)),
+        );
+      } else {
+        if (result.error) {
+          Alert.alert("Erro", result.error);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar consultas:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const sortedAppointments = useMemo(
     () =>
       [...appointments].sort((a, b) => {
@@ -187,6 +253,14 @@ export default function ConsultasScreen() {
         return dateB - dateA;
       }),
     [appointments],
+  );
+
+  const filteredAppointments = useMemo(
+    () =>
+      activeFilter === "todas"
+        ? sortedAppointments
+        : sortedAppointments.filter((a) => a.status === activeFilter),
+    [sortedAppointments, activeFilter],
   );
 
   const summary = useMemo(() => {
@@ -311,6 +385,14 @@ export default function ConsultasScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#2e8b6e"]}
+            tintColor="#2e8b6e"
+          />
+        }
       >
         <Animated.View
           style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
@@ -345,12 +427,38 @@ export default function ConsultasScreen() {
             subtitle="Cancelamento disponivel apenas quando faltarem mais de 24 horas."
           />
 
+          {/* Filtros de status */}
+          <View style={styles.filterRow}>
+            {(
+              [
+                { key: "todas", label: "Todas" },
+                { key: "agendada", label: "Agendadas" },
+                { key: "realizada", label: "Realizadas" },
+                { key: "cancelada", label: "Canceladas" },
+              ] as { key: AppointmentStatus | "todas"; label: string }[]
+            ).map(({ key, label }) => {
+              const isActive = activeFilter === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.filterChip, isActive && styles.filterChipActive]}
+                  onPress={() => setActiveFilter(key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {loadingAppointments ? (
             <Text style={styles.loadingText}>Carregando consultas...</Text>
-          ) : sortedAppointments.length === 0 ? (
+          ) : filteredAppointments.length === 0 ? (
             <Text style={styles.emptyText}>Nenhuma consulta encontrada.</Text>
           ) : (
-            sortedAppointments.map((appointment) => {
+            filteredAppointments.map((appointment) => {
               const status = getStatusMeta(appointment.status);
               const initials = appointment.psychologist
                 .split(" ")
@@ -713,6 +821,32 @@ const styles = StyleSheet.create({
     color: "#4f7667",
     fontSize: 14,
     fontWeight: "600",
+  },
+  filterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    backgroundColor: WHITE,
+    borderWidth: 1.5,
+    borderColor: "#d4e8de",
+  },
+  filterChipActive: {
+    backgroundColor: GREEN,
+    borderColor: GREEN,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#5a756a",
+  },
+  filterChipTextActive: {
+    color: WHITE,
   },
   emptyText: {
     marginTop: 24,

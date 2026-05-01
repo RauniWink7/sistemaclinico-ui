@@ -5,6 +5,7 @@ import {
     Alert,
     Animated,
     Dimensions,
+    RefreshControl,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -114,6 +115,7 @@ export default function HomeP() {
     useState<NextAppointment | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingAppointment, setLoadingAppointment] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -165,8 +167,7 @@ export default function HomeP() {
 
             // ── FIX BUG 1: resolver UUID → nome usando o mapa local
             const professionalId = item.professional ?? "";
-            const professionalName =
-              profMap[professionalId] || "Profissional";
+            const professionalName = profMap[professionalId] || "Profissional";
 
             // Iniciais geradas a partir do nome resolvido, não do UUID
             const avatar = professionalName
@@ -220,6 +221,87 @@ export default function HomeP() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  // ─── FEATURE 1: Pull-to-refresh ───────────────────────────────────────────
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const loadProfile = async () => {
+      const result = await getMe();
+      if (result.ok && result.data) {
+        const name =
+          result.data.full_name || result.data.name || DEFAULT_PATIENT_NAME;
+        setPatientName(name);
+      }
+    };
+
+    const loadAppointment = async () => {
+      const profsResult = await getPsychologists();
+      const profMap: Record<string, string> = {};
+      if (profsResult.ok && Array.isArray(profsResult.data)) {
+        for (const prof of profsResult.data) {
+          const name =
+            prof.user?.full_name ||
+            prof.full_name ||
+            prof.name ||
+            prof.psychologistName ||
+            "Profissional";
+          profMap[prof.id] = name;
+        }
+      }
+
+      const result = await getAppointments();
+      if (result.ok && Array.isArray(result.data)) {
+        const upcoming = result.data
+          .filter(
+            (item) => item.status === "scheduled" || item.status === "agendada",
+          )
+          .map((item) => {
+            const scheduledAt = item.scheduled_at ?? "";
+            const date = scheduledAt.split("T")[0] ?? "";
+            const time = scheduledAt.split("T")[1]?.slice(0, 5) ?? "";
+
+            const professionalId = item.professional ?? "";
+            const professionalName = profMap[professionalId] || "Profissional";
+
+            const avatar = professionalName
+              .split(" ")
+              .filter((part) => part.length > 0)
+              .map((part) => part[0].toUpperCase())
+              .slice(0, 2)
+              .join("");
+
+            return {
+              date,
+              time,
+              professional: professionalName,
+              specialty: item.specialty || "Psicologia",
+              avatar: avatar || "P",
+            };
+          })
+          .filter((item) => item.date && item.time)
+          .sort((a, b) => {
+            const dateA = new Date(`${a.date}T${a.time}:00`).getTime();
+            const dateB = new Date(`${b.date}T${b.time}:00`).getTime();
+            return dateA - dateB;
+          })
+          .find(
+            (item) => new Date(`${item.date}T${item.time}:00`) > new Date(),
+          );
+
+        if (upcoming) {
+          setNextAppointment(upcoming);
+        }
+      }
+    };
+
+    try {
+      await Promise.all([loadProfile(), loadAppointment()]);
+    } catch (error) {
+      console.error("Erro ao atualizar dados:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const getGreeting = (): string => {
     const hour = new Date().getHours();
     if (hour < 12) return "Bom dia";
@@ -258,6 +340,14 @@ export default function HomeP() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#2e8b6e"]}
+            tintColor="#2e8b6e"
+          />
+        }
       >
         {/* ── Próxima Consulta ── */}
         <Animated.View

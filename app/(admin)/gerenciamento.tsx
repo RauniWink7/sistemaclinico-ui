@@ -1,17 +1,24 @@
-import React, { useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+    ActivityIndicator,
+    Alert,
+    Animated,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { getClinicData, getMe, updateClinic } from "../../services/api";
+
+const GREEN = "#2e8b6e";
+const GREEN_DARK = "#1f684f";
+const BG = "#f0faf5";
+const WHITE = "#ffffff";
 
 interface ClinicForm {
   name: string;
@@ -21,20 +28,6 @@ interface ClinicForm {
   openingTime: string;
   closingTime: string;
 }
-
-const GREEN = '#2e8b6e';
-const GREEN_DARK = '#1f684f';
-const BG = '#f0faf5';
-const WHITE = '#ffffff';
-
-const INITIAL_FORM: ClinicForm = {
-  name: 'Clinica Equilibrio Mental',
-  address: 'Rua das Acacias, 145 - Vila Mariana, Sao Paulo - SP',
-  phone: '(11) 4002-8922',
-  email: 'contato@equilibriomental.com.br',
-  openingTime: '08:00',
-  closingTime: '19:00',
-};
 
 const DecorativeBackground = () => (
   <>
@@ -54,7 +47,7 @@ const InputField = ({
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  keyboardType?: "default" | "email-address" | "phone-pad";
 }) => (
   <View style={styles.inputGroup}>
     <Text style={styles.inputLabel}>{label}</Text>
@@ -64,39 +57,189 @@ const InputField = ({
       onChangeText={onChangeText}
       placeholder={placeholder}
       placeholderTextColor="#94b3a6"
-      keyboardType={keyboardType ?? 'default'}
+      keyboardType={keyboardType ?? "default"}
     />
   </View>
 );
 
 export default function AdminClinicManagementScreen() {
-  const [form, setForm] = useState<ClinicForm>(INITIAL_FORM);
+  const emptyForm: ClinicForm = {
+    name: "",
+    address: "",
+    phone: "",
+    email: "",
+    openingTime: "",
+    closingTime: "",
+  };
+
+  const [form, setForm] = useState<ClinicForm>(emptyForm);
   const [loading, setLoading] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [clinicId, setClinicId] = useState<string | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [fadeAnim, slideAnim]);
+
+  // Carregamento de dados da clínica ao montar a tela
+  useEffect(() => {
+    const loadClinicData = async () => {
+      try {
+        setLoadingInitial(true);
+
+        // 1. Busca usuário logado para obter clinic_id
+        const meResult = await getMe();
+        if (!meResult.ok || !meResult.data) {
+          Alert.alert(
+            "Erro",
+            meResult.error ?? "Não foi possível carregar o perfil.",
+          );
+          return;
+        }
+
+        const cId = meResult.data.clinic;
+        if (!cId) {
+          Alert.alert("Erro", "Nenhuma clínica associada ao usuário.");
+          return;
+        }
+
+        setClinicId(cId);
+
+        // 2. Busca dados da clínica
+        const clinicResult = await getClinicData(cId);
+        if (!clinicResult.ok || !clinicResult.data) {
+          Alert.alert(
+            "Erro",
+            clinicResult.error ??
+              "Não foi possível carregar os dados da clínica.",
+          );
+          return;
+        }
+
+        const clinicData = clinicResult.data;
+        setForm({
+          name: clinicData.name || "",
+          address: clinicData.address || "",
+          phone: clinicData.phone || "",
+          email: clinicData.email || "",
+          openingTime: clinicData.open_from || "",
+          closingTime: clinicData.open_until || "",
+        });
+      } catch (err: any) {
+        Alert.alert(
+          "Erro",
+          err?.message ?? "Ocorreu um erro inesperado ao carregar dados.",
+        );
+      } finally {
+        setLoadingInitial(false);
+      }
+    };
+
+    void loadClinicData();
+  }, []);
 
   const setField = (field: keyof ClinicForm) => (value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSave = async () => {
+    if (!clinicId) {
+      Alert.alert("Erro", "Clínica não identificada.");
+      return;
+    }
+
+    // Validação simples
+    if (form.openingTime >= form.closingTime) {
+      Alert.alert(
+        "Erro",
+        "O horário de abertura deve ser antes do fechamento.",
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      Alert.alert('Dados atualizados', 'As informacoes da clinica foram salvas com sucesso.');
+      const result = await updateClinic(clinicId, {
+        name: form.name,
+        address: form.address,
+        phone: form.phone,
+        email: form.email,
+        open_from: form.openingTime,
+        open_until: form.closingTime,
+      });
+
+      if (!result.ok) {
+        Alert.alert(
+          "Erro",
+          result.error ?? "Não foi possível salvar os dados.",
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Sucesso",
+        "As informações da clínica foram salvas com sucesso.",
+      );
+    } catch (err: any) {
+      Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
     } finally {
       setLoading(false);
     }
   };
+
+  if (loadingInitial) {
+    return (
+      <View style={styles.screen}>
+        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerEyebrow}>Area administrativa</Text>
+            <Text style={styles.headerTitle}>Gerenciamento da clinica</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.homeBtn}
+            onPress={() => router.replace("/(admin)")}
+          >
+            <Ionicons name="grid-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+          }}
+        >
+          <ActivityIndicator size="large" color={GREEN} />
+          <Text style={{ fontSize: 15, color: GREEN, fontWeight: "600" }}>
+            Carregando dados...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -113,7 +256,10 @@ export default function AdminClinicManagementScreen() {
           <Text style={styles.headerTitle}>Gerenciamento da clinica</Text>
         </View>
 
-        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(admin)')}>
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => router.replace("/(admin)")}
+        >
           <Ionicons name="grid-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -123,12 +269,15 @@ export default function AdminClinicManagementScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <View style={styles.heroCard}>
             <Text style={styles.heroEyebrow}>Edicao</Text>
             <Text style={styles.heroTitle}>Dados institucionais</Text>
             <Text style={styles.heroSubtitle}>
-              Atualize as informacoes principais da clinica e o horario de funcionamento do painel.
+              Atualize as informacoes principais da clinica e o horario de
+              funcionamento do painel.
             </Text>
           </View>
 
@@ -138,21 +287,21 @@ export default function AdminClinicManagementScreen() {
             <InputField
               label="Nome da clinica"
               value={form.name}
-              onChangeText={setField('name')}
+              onChangeText={setField("name")}
               placeholder="Digite o nome da clinica"
             />
 
             <InputField
               label="Endereco"
               value={form.address}
-              onChangeText={setField('address')}
+              onChangeText={setField("address")}
               placeholder="Digite o endereco"
             />
 
             <InputField
               label="Telefone"
               value={form.phone}
-              onChangeText={setField('phone')}
+              onChangeText={setField("phone")}
               placeholder="Digite o telefone"
               keyboardType="phone-pad"
             />
@@ -160,7 +309,7 @@ export default function AdminClinicManagementScreen() {
             <InputField
               label="E-mail"
               value={form.email}
-              onChangeText={setField('email')}
+              onChangeText={setField("email")}
               placeholder="Digite o e-mail"
               keyboardType="email-address"
             />
@@ -178,7 +327,7 @@ export default function AdminClinicManagementScreen() {
                 <TextInput
                   style={styles.input}
                   value={form.openingTime}
-                  onChangeText={setField('openingTime')}
+                  onChangeText={setField("openingTime")}
                   placeholder="08:00"
                   placeholderTextColor="#94b3a6"
                 />
@@ -189,7 +338,7 @@ export default function AdminClinicManagementScreen() {
                 <TextInput
                   style={styles.input}
                   value={form.closingTime}
-                  onChangeText={setField('closingTime')}
+                  onChangeText={setField("closingTime")}
                   placeholder="19:00"
                   placeholderTextColor="#94b3a6"
                 />
@@ -205,7 +354,7 @@ export default function AdminClinicManagementScreen() {
           >
             <Ionicons name="save-outline" size={18} color="#fff" />
             <Text style={styles.saveButtonText}>
-              {loading ? 'Salvando...' : 'Salvar alteracoes'}
+              {loading ? "Salvando..." : "Salvar alteracoes"}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -220,17 +369,17 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   circle1: {
-    position: 'absolute',
+    position: "absolute",
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: '#27795f',
+    backgroundColor: "#27795f",
     top: -110,
     right: -70,
     opacity: 0.45,
   },
   circle2: {
-    position: 'absolute',
+    position: "absolute",
     width: 180,
     height: 180,
     borderRadius: 90,
@@ -244,39 +393,39 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 24,
     backgroundColor: GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   homeBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTextBox: {
     flex: 1,
     marginHorizontal: 14,
   },
   headerEyebrow: {
-    color: '#bce3d5',
+    color: "#bce3d5",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   headerTitle: {
     color: WHITE,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: 2,
     letterSpacing: -0.4,
   },
@@ -293,7 +442,7 @@ const styles = StyleSheet.create({
     padding: 22,
     marginTop: -18,
     marginBottom: 20,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
@@ -301,30 +450,30 @@ const styles = StyleSheet.create({
   },
   heroEyebrow: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     color: GREEN,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
   },
   heroTitle: {
     marginTop: 8,
     fontSize: 24,
-    fontWeight: '800',
-    color: '#173d31',
+    fontWeight: "800",
+    color: "#173d31",
     letterSpacing: -0.5,
   },
   heroSubtitle: {
     marginTop: 8,
     fontSize: 14,
     lineHeight: 21,
-    color: '#5e7b70',
+    color: "#5e7b70",
   },
   formCard: {
     backgroundColor: WHITE,
     borderRadius: 26,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#174c3e',
+    shadowColor: "#174c3e",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -332,14 +481,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#173d31',
+    fontWeight: "800",
+    color: "#173d31",
     marginBottom: 12,
   },
   sectionSubtitle: {
     fontSize: 13,
     lineHeight: 19,
-    color: '#6c877c',
+    color: "#6c877c",
     marginBottom: 14,
   },
   inputGroup: {
@@ -347,25 +496,25 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#5f7d70',
+    fontWeight: "700",
+    color: "#5f7d70",
     marginBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   input: {
     minHeight: 52,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#d7ebe2',
-    backgroundColor: '#fbfefd',
+    borderColor: "#d7ebe2",
+    backgroundColor: "#fbfefd",
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#173d31',
-    fontWeight: '500',
+    color: "#173d31",
+    fontWeight: "500",
   },
   timeRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
   },
   timeCard: {
@@ -375,9 +524,9 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 16,
     backgroundColor: GREEN,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     shadowColor: GREEN,
     shadowOffset: { width: 0, height: 6 },
@@ -391,6 +540,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: WHITE,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

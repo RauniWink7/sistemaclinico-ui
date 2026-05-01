@@ -31,6 +31,7 @@ export interface RegisterPayload {
   password: string;
   phone?: string;
   clinic: string; // UUID obrigatório — sem fallback
+  role?: string;  // 'patient' | 'professional' — omitir para usar o default do backend
 }
 
 export interface ClinicApiItem {
@@ -321,6 +322,8 @@ export const register = async (
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => null);
+  console.log("📤 Register payload:", payload);
+  console.log("📥 Register response:", data);
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
@@ -442,6 +445,133 @@ export const getPsychologists = async (): Promise<
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
   const { response, data } = await fetchJson(
     `${API_BASE_URL}/auth/professionals/`,
+    { method: "GET", headers },
+  );
+  const results = extractList<ProfessionalApiItem>(data);
+  if (!response.ok)
+    return { ok: false, error: normalizeError(data), data: results };
+  return { ok: true, data: results };
+};
+
+// PATCH /api/auth/professionals/<id>/  — atualiza crp, specialty, bio do profissional
+export const updateProfessionalProfile = async (
+  professionalId: string,
+  payload: {
+    crp?: string;
+    specialty?: string;
+    bio?: string;
+    session_duration_minutes?: number;
+  },
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/professionals/${encodeURIComponent(professionalId)}/`,
+    { method: "PATCH", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// DELETE /api/appointments/availability/<id>/
+export const deleteAvailability = async (
+  availabilityId: string,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const token = await getAccessToken();
+  const url = `${API_BASE_URL}/appointments/availability/${encodeURIComponent(availabilityId)}/`;
+  console.log("🗑️ DELETE availability:", url);
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  console.log("📦 DELETE response status:", response.status);
+  // 204 No Content é sucesso — não tentar .json() numa resposta vazia
+  if (response.status === 204 || response.ok) {
+    console.log("✅ Deletado com sucesso");
+    return { ok: true };
+  }
+  const data = await response.json().catch(() => null);
+  console.log("❌ Erro ao deletar:", data);
+  return { ok: false, error: normalizeError(data), data };
+};
+
+// PATCH /api/appointments/availability/<id>/
+export const updateAvailability = async (
+  availabilityId: string,
+  payload: { weekday?: number; start_time?: string; end_time?: string },
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/availability/${encodeURIComponent(availabilityId)}/`,
+    { method: "PATCH", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// ─── Clínicas (Admin) ──────────────────────────────────────────────────────────
+
+// GET /api/clinics/{clinic_id}/stats/
+// Retorna estatísticas da clínica: total_appointments, completed_appointments, etc.
+export const getClinicStats = async (clinicId: string): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/stats/`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// GET /api/clinics/{clinic_id}/
+// Retorna dados da clínica: name, address, phone, email, open_from, open_until, etc.
+export const getClinicData = async (clinicId: string): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/clinics/{clinic_id}/
+// Atualiza dados da clínica: name, address, phone, email, open_from, open_until
+export const updateClinic = async (
+  clinicId: string,
+  payload: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    open_from?: string;
+    open_until?: string;
+  },
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/`,
+    { method: "PATCH", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// GET /api/auth/professionals/?clinic_id={clinic_id}
+// Retorna lista de profissionais de uma clínica específica
+export const getProfessionalsByClinic = async (
+  clinicId: string,
+): Promise<ApiResult<ProfessionalApiItem[]>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/professionals/?clinic_id=${encodeURIComponent(clinicId)}`,
     { method: "GET", headers },
   );
   const results = extractList<ProfessionalApiItem>(data);
@@ -590,7 +720,7 @@ export const updateAppointmentStatus = async (
   }
 
   console.log(`✅ Appointment updated successfully =---------`);
-  console.log(body)
+  console.log(body);
   return { ok: true, data };
 };
 

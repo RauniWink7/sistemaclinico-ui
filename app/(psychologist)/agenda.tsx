@@ -458,6 +458,22 @@ export default function PsychologistAgendaScreen() {
                 />
               </TouchableOpacity>
             </View>
+
+            {/* ─── FEATURE 3: Week interval label ─────────────────────────────────── */}
+            {weekDays.length > 0 && (
+              <View style={styles.weekLabelContainer}>
+                <View style={styles.weekLabelBadge}>
+                  <Text style={styles.weekLabelText}>
+                    {weekDays[0].fullLabel.split(" ")[0]}{" "}
+                    {weekDays[0].fullLabel.split(" ")[1]} –{" "}
+                    {weekDays[5].fullLabel.split(" ")[0]}{" "}
+                    {weekDays[5].fullLabel.split(" ")[1]}{" "}
+                    {new Date().getFullYear()}
+                  </Text>
+                </View>
+              </View>
+            )}
+
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -523,8 +539,18 @@ export default function PsychologistAgendaScreen() {
                 />
                 <Text style={styles.emptyTitle}>Sem consultas nesse dia</Text>
                 <Text style={styles.emptyText}>
-                  Selecione outro dia da semana.
+                  Nenhuma consulta agendada para este dia.
                 </Text>
+                <TouchableOpacity
+                  style={styles.emptyBtn}
+                  onPress={() => router.push("/(psychologist)/agenda")}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="time-outline" size={15} color="#2e8b6e" />
+                  <Text style={styles.emptyBtnText}>
+                    Ver minha disponibilidade
+                  </Text>
+                </TouchableOpacity>
               </View>
             ) : (
               selectedDayAppointments.map((appointment) => {
@@ -927,6 +953,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  weekLabelContainer: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  weekLabelBadge: {
+    backgroundColor: "#e8f7f1",
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  weekLabelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2e8b6e",
+    textAlign: "center",
+  },
   weekRow: {
     gap: 12,
     paddingBottom: 8,
@@ -1002,6 +1044,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: "#6d877d",
     textAlign: "center",
+  },
+  emptyBtn: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: "#2e8b6e",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  emptyBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2e8b6e",
   },
   appointmentCard: {
     backgroundColor: WHITE,

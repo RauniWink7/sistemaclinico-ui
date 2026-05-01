@@ -2,29 +2,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  TextInput as RNTextInput,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    TextInput as RNTextInput,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { getPsychologists, ProfessionalApiItem } from "../../services/api";
 
 // Alias para evitar conflitos
 const TextInput = RNTextInput;
-
-const SPECIALTIES = [
-  "Todos",
-  "Ansiedade",
-  "Relacionamentos",
-  "Trauma",
-  "Infância",
-];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Psychologist {
@@ -127,10 +119,29 @@ const PsychologistCard = ({
 
       {/* Stats */}
       <View style={styles.statsRow}>
-        <Stars rating={item.rating ?? 0} />
-        <View style={styles.statDivider} />
-        <Ionicons name="people-outline" size={13} color="#7aab96" />
-        <Text style={styles.statText}>{item.sessions ?? 0} sessões</Text>
+        {/* ─── UX 1: Show "Novo profissional" if no rating ──────────────────── */}
+        {item.rating && item.rating > 0 ? (
+          <>
+            <Stars rating={item.rating ?? 0} />
+            <View style={styles.statDivider} />
+          </>
+        ) : (
+          <>
+            <View style={styles.newProfessionalBadge}>
+              <Ionicons name="sparkles-outline" size={13} color="#c46a1a" />
+              <Text style={styles.newProfessionalText}>Novo profissional</Text>
+            </View>
+            <View style={styles.statDivider} />
+          </>
+        )}
+
+        {/* ─── UX 1: Only show sessions if > 0 ────────────────────────────── */}
+        {item.sessions && item.sessions > 0 && (
+          <>
+            <Ionicons name="people-outline" size={13} color="#7aab96" />
+            <Text style={styles.statText}>{item.sessions} sessões</Text>
+          </>
+        )}
       </View>
 
       {/* Bio */}
@@ -164,6 +175,7 @@ const PsychologistCard = ({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function ChoosePsychologistScreen() {
   const [psychologists, setPsychologists] = useState<ProfessionalApiItem[]>([]);
+  const [specialties, setSpecialties] = useState<string[]>(["Todos"]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("Todos");
@@ -176,6 +188,15 @@ export default function ChoosePsychologistScreen() {
       const result = await getPsychologists();
       if (result.ok && Array.isArray(result.data)) {
         setPsychologists(result.data);
+
+        // ─── FEATURE 4: Derive specialties dynamically from API data
+        const specialtiesSet = new Set<string>(["Todos"]);
+        for (const prof of result.data) {
+          if (prof.specialty && prof.specialty.trim()) {
+            specialtiesSet.add(prof.specialty);
+          }
+        }
+        setSpecialties(Array.from(specialtiesSet));
       } else {
         Alert.alert(
           "Erro",
@@ -263,7 +284,7 @@ export default function ChoosePsychologistScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filtersRow}
         >
-          {SPECIALTIES.map((s) => (
+          {specialties.map((s) => (
             <TouchableOpacity
               key={s}
               style={[
@@ -525,6 +546,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#7aab96",
     fontWeight: "500",
+  },
+  newProfessionalBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#fef3e8",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  newProfessionalText: {
+    fontSize: 12,
+    color: "#c46a1a",
+    fontWeight: "700",
   },
 
   // Bio

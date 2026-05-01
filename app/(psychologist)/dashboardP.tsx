@@ -2,20 +2,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  getMe,
-  getProfessionalSummary,
-  getPsychologists,
+    clearTokens,
+    getMe,
+    getProfessionalSummary,
+    getPsychologists,
 } from "../../services/api";
 
 interface ProfessionalInfo {
@@ -68,6 +69,24 @@ const QUICK_ACTIONS = [
     color: "#c46a1a",
     bg: ORANGE_LIGHT,
     route: "/(psychologist)/chat",
+  },
+  {
+    id: "profile",
+    title: "Meu Perfil",
+    description: "Edite seus dados, especialidade e disponibilidade semanal.",
+    icon: "person-circle-outline",
+    color: "#7c3aed",
+    bg: "#f3eeff",
+    route: "/(psychologist)/perfilP",
+  },
+  {
+    id: "disponibilidade",
+    title: "Disponibilidade",
+    description: "Veja suas disponibilidades semanais.",
+    icon: "calendar",
+    color: "#7c3aed",
+    bg: "#f3eeff",
+    route: "/(psychologist)/disponibilidade",
   },
 ];
 
@@ -155,16 +174,38 @@ export default function PsychologistDashboardScreen() {
     return "Boa noite";
   }, []);
 
+  const handleLogout = async () => {
+    Alert.alert(
+      "Deseja sair da sua conta?",
+      "Você será desconectado e precisará fazer login novamente.",
+      [
+        {
+          text: "Cancelar",
+          onPress: () => {},
+          style: "cancel",
+        },
+        {
+          text: "Sair",
+          onPress: async () => {
+            try {
+              await clearTokens();
+              router.replace("/login");
+            } catch {
+              Alert.alert("Erro", "Erro ao fazer logout. Tente novamente.");
+            }
+          },
+          style: "destructive",
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
       <DecorativeBackground />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-
         <View style={styles.headerTextBox}>
           <Text style={styles.headerEyebrow}>Area do psicologo</Text>
           <Text style={styles.headerTitle}>Dashboard profissional</Text>
@@ -172,9 +213,10 @@ export default function PsychologistDashboardScreen() {
 
         <TouchableOpacity
           style={styles.homeBtn}
-          onPress={() => router.replace("/(psychologist)")}
+          onPress={handleLogout}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="grid-outline" size={20} color="#fff" />
+          <Ionicons name="log-out-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -304,7 +346,9 @@ export default function PsychologistDashboardScreen() {
                       | "/(psychologist)/agenda"
                       | "/(psychologist)/lista"
                       | "/(psychologist)/dashboardP"
-                      | "/(psychologist)/chat",
+                      | "/(psychologist)/chat"
+                      | "/(psychologist)/disponibilidade",
+                    
                   )
                 }
               >
@@ -372,14 +416,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  backBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
   },
   homeBtn: {
     width: 42,

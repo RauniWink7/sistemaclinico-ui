@@ -405,6 +405,19 @@ export default function PsychologistPatientRecordScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
+  // ── Toast de salvamento ───────────────────────────────────────────────────
+  const [saved, setSaved] = useState(false);
+  const saveAnim = useRef(new Animated.Value(0)).current;
+
+  const showSavedToast = () => {
+    setSaved(true);
+    Animated.sequence([
+      Animated.timing(saveAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(2000),
+      Animated.timing(saveAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => setSaved(false));
+  };
+
   // ── Carrega documentos ────────────────────────────────────────────────────
   useEffect(() => {
     async function carregarDocumentos() {
@@ -631,10 +644,7 @@ export default function PsychologistPatientRecordScreen() {
         anamnesis,
       });
       if (result.ok) {
-        Alert.alert(
-          "Ficha atualizada",
-          "Informações clínicas salvas com sucesso.",
-        );
+        showSavedToast();
       } else {
         Alert.alert("Erro", result.error ?? "Não foi possível salvar.");
       }
@@ -903,6 +913,14 @@ export default function PsychologistPatientRecordScreen() {
                 {saving ? "Salvando..." : "Salvar ficha clinica"}
               </Text>
             </TouchableOpacity>
+
+            {/* Toast de sucesso */}
+            {saved && (
+              <Animated.View style={[styles.toastBox, { opacity: saveAnim }]}>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#2e8b6e" />
+                <Text style={styles.toastText}>Anotações salvas com sucesso</Text>
+              </Animated.View>
+            )}
           </Animated.View>
         ) : null}
       </ScrollView>
@@ -1434,4 +1452,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   confirmDeleteText: { fontSize: 15, fontWeight: "700", color: WHITE },
+  toastBox: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e8f7f1",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#b2dfcf",
+  },
+  toastText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2e8b6e",
+  },
 });

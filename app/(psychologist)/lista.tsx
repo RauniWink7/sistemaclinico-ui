@@ -13,7 +13,12 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { getAppointments, getClinicPatients, getMe } from "../../services/api";
+import {
+    getAppointments,
+    getClinicPatients,
+    getMe,
+    getPatientProfile,
+} from "../../services/api";
 
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
@@ -31,8 +36,12 @@ const DecorativeBackground = () => (
 
 export default function PsychologistPatientListScreen() {
   const [query, setQuery] = useState("");
-  const [patients, setPatients] = useState<any[]>([]);
+  const [allPatients, setAllPatients] = useState<any[]>([]); // All loaded patients
+  const [patients, setPatients] = useState<any[]>([]); // Paginated display
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -68,18 +77,33 @@ export default function PsychologistPatientListScreen() {
           ? appointmentsResult.data || []
           : [];
 
-        const patientsWithLastAppointment = (patientsResult.data || []).map(
-          (patient: any) => {
-            // PatientListSerializer retorna campos flat do User (sem objeto user aninhado):
-            // patient.id = User.id, patient.full_name, patient.phone, patient.email
-            // O PatientProfile.id será carregado em ficha.tsx via getPatientProfile()
+        // ─── FEATURE 5: Load PatientProfile.id for each patient in parallel
+        const patientsWithProfiles = await Promise.all(
+          (patientsResult.data || []).map(async (patient: any) => {
             const userId = patient.id;
-            const profileId = patient.id; // placeholder — será sobrescrito em ficha.tsx com patient?.id
+            let profileId = patient.id; // fallback to User.id
 
+            // Try to load the actual PatientProfile to get the correct profile.id
+            const profileResult = await getPatientProfile(userId);
+            if (profileResult.ok && profileResult.data?.id) {
+              profileId = profileResult.data.id;
+            } else if (profileResult.error) {
+              console.warn(
+                `[FEATURE 5] Failed to load PatientProfile for user ${userId}: ${profileResult.error}`,
+              );
+            }
+
+            return { ...patient, userId, profileId };
+          }),
+        );
+
+        const patientsWithLastAppointment = patientsWithProfiles.map(
+          (patient: any) => {
             const patientAppointments = appointments
               .filter(
                 (app: any) =>
-                  app.patient === profileId || app.patient === userId,
+                  app.patient === patient.profileId ||
+                  app.patient === patient.userId,
               )
               .sort(
                 (a: any, b: any) =>
@@ -91,8 +115,8 @@ export default function PsychologistPatientListScreen() {
 
             return {
               ...patient,
-              _userId: userId,
-              _profileId: profileId,
+              _userId: patient.userId,
+              _profileId: patient.profileId,
               // Serializer flat: full_name e phone já estão na raiz do objeto
               _displayName: patient.full_name ?? "Sem nome",
               _displayPhone: patient.phone ?? "Telefone não informado",
@@ -107,7 +131,13 @@ export default function PsychologistPatientListScreen() {
           },
         );
 
-        setPatients(patientsWithLastAppointment);
+        // ─── FEATURE 5: Pagination — show first 20 items and set hasMore flag
+        const pageSize = 20;
+        const initialPageItems = patientsWithLastAppointment.slice(0, pageSize);
+        setAllPatients(patientsWithLastAppointment);
+        setPatients(initialPageItems);
+        setHasMore(patientsWithLastAppointment.length > pageSize);
+        setPage(1);
       } catch {
         Alert.alert("Erro", "Erro inesperado ao carregar pacientes.");
       } finally {
@@ -143,6 +173,24 @@ export default function PsychologistPatientListScreen() {
       );
     });
   }, [query, patients]);
+
+  // ─── FEATURE 5: Handle load more ──────────────────────────────────────────
+  const handleLoadMore = async () => {
+    const pageSize = 20;
+    const newPage = page + 1;
+    const startIndex = (newPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+
+    setLoadingMore(true);
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const newPageItems = allPatients.slice(0, endIndex);
+    setPatients(newPageItems);
+    setPage(newPage);
+    setHasMore(endIndex < allPatients.length);
+    setLoadingMore(false);
+  };
 
   return (
     <View style={styles.screen}>
@@ -277,6 +325,31 @@ export default function PsychologistPatientListScreen() {
                 </TouchableOpacity>
               );
             })}
+
+            {/* ─── FEATURE 5: Load more button ────────────────────────────────── */}
+            {hasMore && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={handleLoadMore}
+                disabled={loadingMore}
+                activeOpacity={0.85}
+              >
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color={GREEN} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="cloud-download-outline"
+                      size={18}
+                      color={GREEN}
+                    />
+                    <Text style={styles.loadMoreText}>
+                      Carregar mais pacientes
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
           </Animated.View>
         )}
       </ScrollView>
@@ -508,5 +581,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#5d7c71",
     fontWeight: "600",
+  },
+  loadMoreBtn: {
+    backgroundColor: WHITE,
+    borderRadius: 24,
+    padding: 18,
+    marginTop: 8,
+    marginBottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: GREEN,
+    shadowColor: "#174c3e",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  loadMoreText: {
+    marginLeft: 12,
+    fontSize: 15,
+    fontWeight: "800",
+    color: GREEN,
   },
 });
