@@ -2,20 +2,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  KeyboardTypeOptions,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    KeyboardAvoidingView,
+    KeyboardTypeOptions,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { getClinics, register } from "../../services/api";
 
@@ -248,13 +248,15 @@ export default function RegisterScreen() {
     setLoading(true);
     setApiError("");
     try {
+      // ⚠️ IMPORTANTE: Este é um cadastro PÚBLICO para pacientes
+      // O backend valida que a clínica selecionada é válida
       const result = await register({
         full_name: form.nome.trim(),
         email: form.email.trim(),
         password: form.senha,
-        password_confirmation: form.confirmarSenha,
         phone: form.telefone.trim() || undefined,
-        clinic: selectedClinicId,
+        clinic: selectedClinicId, // UUID obrigatório
+        role: "patient", // Opcional — define a role como paciente
       });
 
       if (!result.ok) {

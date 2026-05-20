@@ -25,6 +25,8 @@ import {
 interface ProfilePayload {
   birth_date?: string;
   cpf?: string;
+  medical_history?: string;
+  anamnesis?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
 }
@@ -35,6 +37,8 @@ interface EditableFields {
   phone: string;
   birthDate: string;
   cpf: string;
+  medicalHistory: string;
+  anamnesis: string;
   emergencyName: string;
   emergencyPhone: string;
 }
@@ -104,6 +108,8 @@ export default function ProfileScreen() {
     phone: "",
     birthDate: "",
     cpf: "",
+    medicalHistory: "",
+    anamnesis: "",
     emergencyName: "",
     emergencyPhone: "",
   });
@@ -141,6 +147,8 @@ export default function ProfileScreen() {
         phone: profile.user.phone || "",
         birthDate: profile.birth_date || "",
         cpf: profile.cpf || "",
+        medicalHistory: profile.medical_history || "",
+        anamnesis: profile.anamnesis || "",
         emergencyName: profile.emergency_contact_name || "",
         emergencyPhone: profile.emergency_contact_phone || "",
       });
@@ -150,6 +158,8 @@ export default function ProfileScreen() {
         phone: profile.user.phone || "",
         birthDate: profile.birth_date || "",
         cpf: profile.cpf || "",
+        medicalHistory: profile.medical_history || "",
+        anamnesis: profile.anamnesis || "",
         emergencyName: profile.emergency_contact_name || "",
         emergencyPhone: profile.emergency_contact_phone || "",
       });
@@ -207,7 +217,11 @@ export default function ProfileScreen() {
         phone: fields.phone,
       });
       if (!meUpdateResult.ok) {
-        console.error("Erro ao salvar dados do usuário:", meUpdateResult.error, meUpdateResult.data);
+        console.error(
+          "Erro ao salvar dados do usuário:",
+          meUpdateResult.error,
+          meUpdateResult.data,
+        );
         Alert.alert(
           "Erro",
           meUpdateResult.error || "Não foi possível salvar nome/telefone.",
@@ -219,13 +233,19 @@ export default function ProfileScreen() {
       const profilePayload: ProfilePayload = {
         birth_date: fields.birthDate || undefined,
         cpf: fields.cpf || undefined,
+        medical_history: fields.medicalHistory || undefined,
+        anamnesis: fields.anamnesis || undefined,
         emergency_contact_name: fields.emergencyName || undefined,
         emergency_contact_phone: fields.emergencyPhone || undefined,
       };
 
       const profileResult = await updatePatientProfile(userId, profilePayload);
       if (!profileResult.ok) {
-        console.error("Erro ao salvar perfil:", profileResult.error, profileResult.data);
+        console.error(
+          "Erro ao salvar perfil:",
+          profileResult.error,
+          profileResult.data,
+        );
         Alert.alert(
           "Erro",
           profileResult.error || "Não foi possível salvar as alterações.",
@@ -325,6 +345,29 @@ export default function ProfileScreen() {
               value={fields.cpf}
               onChangeText={set("cpf")}
               keyboardType="numeric"
+              editable={editing}
+            />
+          </View>
+
+          {/* ── Histórico Médico ── */}
+          <View style={styles.card}>
+            <SectionHeader
+              icon="document-text-outline"
+              title="Histórico Médico"
+            />
+
+            <EditableRow
+              label="Histórico Médico"
+              value={fields.medicalHistory}
+              onChangeText={set("medicalHistory")}
+              editable={editing}
+            />
+            <View style={styles.rowDivider} />
+
+            <EditableRow
+              label="Anamnese"
+              value={fields.anamnesis}
+              onChangeText={set("anamnesis")}
               editable={editing}
             />
           </View>

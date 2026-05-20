@@ -54,6 +54,15 @@ const ADMIN_SECTIONS = [
     bg: '#f3ecff',
     action: () => router.push('/agendar'),
   },
+  {
+    id: 'chat',
+    title: 'Chat',
+    description: 'Espaco ideal para conversar sobre duvidas.',
+    icon: 'chatbubble',
+    color: '#1055d9',
+    bg: '#f3ecff',
+    action: () => router.push('/(shared)/chat'),
+  },
 ];
 
 const DecorativeBackground = () => (

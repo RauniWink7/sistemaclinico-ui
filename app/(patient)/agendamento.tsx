@@ -2,24 +2,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import {
-  AppointmentAvailabilityApiItem,
-  createAppointment,
-  getPsychologistAvailability,
-  getPsychologists,
-  getMe,
-  ProfessionalApiItem,
+    AppointmentAvailabilityApiItem,
+    createAppointment,
+    getPsychologistAvailability,
+    getPsychologists,
+    ProfessionalApiItem
 } from "../../services/api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -153,7 +152,6 @@ export default function ScheduleScreen() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [availability, setAvailability] = useState<AvailabilityItem[]>([]);
   const [availableWeekdays, setAvailableWeekdays] = useState<string[]>([]);
-  const [clinicId, setClinicId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(true);
 
@@ -174,17 +172,6 @@ export default function ScheduleScreen() {
       }),
     ]).start();
   }, [fadeAnim, slideAnim]);
-
-  React.useEffect(() => {
-    const loadClinic = async () => {
-      const result = await getMe();
-      if (result.ok && result.data) {
-        setClinicId(result.data.clinic || result.data.clinic_id || null);
-      }
-    };
-
-    void loadClinic();
-  }, []);
 
   React.useEffect(() => {
     const loadProfessionals = async () => {
@@ -323,20 +310,19 @@ export default function ScheduleScreen() {
 
   // ── Confirm ─────────────────────────────────────────────────────────────────
   const handleConfirm = async () => {
-    if (!selectedDate || !selectedTime || !activePsychologist || !clinicId) {
+    if (!selectedDate || !selectedTime || !activePsychologist) {
       Alert.alert("Erro", "Preencha todos os campos antes de confirmar.");
       return;
     }
     setLoading(true);
     try {
-      const localDate = new Date(`${selectedDate}T${selectedTime}:00`);
-      const utcISO = localDate.toISOString();
+      // Cria ISO 8601 com timezone de Brasília (-03:00)
+      // Exemplo: 2025-06-15T10:00:00-03:00
+      const scheduledAt = `${selectedDate}T${selectedTime}:00-03:00`;
 
       const result = await createAppointment(
-        "",
         activePsychologist.id,
-        clinicId,
-        utcISO,
+        scheduledAt,
         activePsychologist.sessionDuration,
       );
 

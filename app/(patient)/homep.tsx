@@ -53,16 +53,16 @@ const SHORTCUTS = [
     bg: "#f0ebff",
     route: "Chat",
   },
+  // {
+  //   id: "4",
+  //   label: "Documentos",
+  //   icon: "document-text-outline",
+  //   color: "#e67e22",
+  //   bg: "#fef3e8",
+  //   route: "Documents",
+  // },
   {
     id: "4",
-    label: "Documentos",
-    icon: "document-text-outline",
-    color: "#e67e22",
-    bg: "#fef3e8",
-    route: "Documents",
-  },
-  {
-    id: "5",
     label: "Perfil",
     icon: "person-outline",
     color: "#e05c7a",
@@ -433,13 +433,13 @@ export default function HomeP() {
                     string,
                     | "/agendamento"
                     | "/consultas"
-                    | "/chat"
+                    | "/(shared)/chat"
                     | "/documento"
                     | "/perfil"
                   > = {
                     Schedule: "/agendamento",
                     MyAppointments: "/consultas",
-                    Chat: "/chat",
+                    Chat: "/(shared)/chat",
                     Documents: "/documento",
                     Profile: "/perfil",
                   };

@@ -31,7 +31,7 @@ export interface RegisterPayload {
   password: string;
   phone?: string;
   clinic: string; // UUID obrigatório — sem fallback
-  role?: string;  // 'patient' | 'professional' — omitir para usar o default do backend
+  role?: string; // 'patient' | 'professional' — omitir para usar o default do backend
 }
 
 export interface ClinicApiItem {
@@ -328,6 +328,35 @@ export const register = async (
   return { ok: true, data };
 };
 
+// POST /api/auth/admin/users/patients/ — criar paciente via admin (requer autenticação)
+export const createPatientAsAdmin = async (payload: {
+  email: string;
+  full_name: string;
+  phone?: string;
+  birth_date?: string;
+  cpf?: string;
+  medical_history?: string;
+  anamnesis?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  send_invite?: boolean;
+}): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/patients/`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 export const getMe = async (): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
@@ -620,42 +649,44 @@ export const getProfessionalSummary = async (): Promise<
 };
 
 export const createAppointment = async (
-  patientId: string,
-  professionalId: string, // item.id do ProfessionalProfile
-  clinicId: string, // me.data.clinic
-  scheduledAt: string, // ex: "2025-05-05T09:00:00" — timezone adicionado aqui
+  professionalId: string, // item.id do ProfessionalProfile — UUID obrigatório
+  scheduledAt: string, // ex: "2025-06-15T10:00:00-03:00" — formato ISO 8601 com timezone obrigatório
   durationMinutes = 50,
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
 
-  // Garante timezone UTC — backend rejeita sem timezone
+  // Garante formato ISO 8601 com timezone — backend rejeita sem timezone
   const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(scheduledAt);
   const scheduledAtUtc = hasTimezone ? scheduledAt : `${scheduledAt}Z`;
 
-  console.log(
-    JSON.stringify({
-      patient: patientId,
-      professional: professionalId,
-      clinic: clinicId,
-      scheduled_at: scheduledAtUtc,
-      duration_minutes: durationMinutes,
-    }),
-  );
-  // "patient" é enviado explicitamente pois o backend espera o campo no body
+  const clinicId = await getClinicId();
+
+  const payload: Record<string, any> = {
+    professional: professionalId,
+    scheduled_at: scheduledAtUtc,
+    duration_minutes: durationMinutes,
+  };
+
+  if (clinicId) {
+    payload.clinic = clinicId;
+  }
+
+  console.log("📤 POST /api/appointments/", payload);
+
   const { response, data } = await fetchJson(`${API_BASE_URL}/appointments/`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      patient: patientId,
-      professional: professionalId,
-      clinic: clinicId,
-      scheduled_at: scheduledAtUtc,
-      duration_minutes: durationMinutes,
-    }),
+    body: JSON.stringify(payload),
   });
-  if (!response.ok) return { ok: false, error: normalizeError(data), data };
 
+  if (!response.ok) {
+    console.error("❌ Erro ao criar agendamento:", normalizeError(data));
+    console.error("❌ Body completo:", JSON.stringify(data));
+    return { ok: false, error: normalizeError(data), data };
+  }
+
+  console.log("✅ Agendamento criado com sucesso");
   return { ok: true, data };
 };
 
@@ -740,6 +771,13 @@ export const getPsychologistAvailability = async (
   return { ok: true, data: availability };
 };
 
+// GET /api/appointments/availability/?professional=<uuid> — alias para getPsychologistAvailability
+export const getAvailability = async (
+  professionalId: string,
+): Promise<ApiResult<AppointmentAvailabilityApiItem[]>> => {
+  return getPsychologistAvailability(professionalId);
+};
+
 // POST /api/appointments/availability/  { weekday, start_time, end_time, blocked: true }
 export const createAvailabilityBlock = async (payload: {
   professional: string;
@@ -811,6 +849,44 @@ export const sendChatMessage = async (
       ...(appointmentId ? { appointment: appointmentId } : {}),
     }),
   });
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// GET /api/chat/contacts/ — listar contatos disponíveis para nova conversa
+export const getChatContacts = async (): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(`${API_BASE_URL}/chat/contacts/`, {
+    method: "GET",
+    headers,
+  });
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/chat/messages/read/?with=<user_id> — marcar mensagens como lidas
+export const markMessagesRead = async (userId: string): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/chat/messages/read/?with=${encodeURIComponent(userId)}`,
+    { method: "PATCH", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// GET /api/notifications/unread/ — obter contagem de notificações não lidas
+export const getUnreadNotifications = async (): Promise<
+  ApiResult<{ unread_count: number }>
+> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/notifications/unread/`,
+    { method: "GET", headers },
+  );
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
@@ -974,6 +1050,61 @@ export const deleteDocument = async (id: string) => {
 };
 
 // ─── JWT Utils ────────────────────────────────────────────────────────────────
+
+// POST /api/auth/password/reset/ — solicitar recuperação de senha (rota pública)
+export const requestPasswordReset = async (
+  email: string,
+): Promise<ApiResult> => {
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/password/reset/`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    },
+  );
+
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// POST /api/auth/password/reset/confirm/ — confirmar nova senha (rota pública)
+export const confirmPasswordReset = async (payload: {
+  uid: string;
+  token: string;
+  password: string;
+}): Promise<ApiResult> => {
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/password/reset/confirm/`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// POST /api/auth/password/invite/confirm/ — primeiro acesso via convite (rota pública)
+export const confirmInvite = async (payload: {
+  uid: string;
+  token: string;
+  password: string;
+}): Promise<ApiResult> => {
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/password/invite/confirm/`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
 
 export const getRoleFromToken = (token: string): string => {
   const payload = parseJwt(token);

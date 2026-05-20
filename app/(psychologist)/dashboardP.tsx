@@ -68,7 +68,7 @@ const QUICK_ACTIONS = [
     icon: "chatbubble-ellipses-outline",
     color: "#c46a1a",
     bg: ORANGE_LIGHT,
-    route: "/(psychologist)/chat",
+    route: "/(shared)/chat",
   },
   {
     id: "profile",
@@ -346,7 +346,7 @@ export default function PsychologistDashboardScreen() {
                       | "/(psychologist)/agenda"
                       | "/(psychologist)/lista"
                       | "/(psychologist)/dashboardP"
-                      | "/(psychologist)/chat"
+                      | "/(shared)/chat"
                       | "/(psychologist)/disponibilidade",
                     
                   )
