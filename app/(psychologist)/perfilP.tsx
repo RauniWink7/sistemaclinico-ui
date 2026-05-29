@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { getMe, getPsychologists, updateMe, updateProfessionalProfile } from "../../services/api";
+import { useSavedToast } from "../../components/saved-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface EditableFields {
@@ -85,6 +86,7 @@ export default function PsychologistProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { showToast, toast } = useSavedToast();
   const [email, setEmail] = useState("");
   const [professionalId, setProfessionalId] = useState("");
   const [fields, setFields] = useState<EditableFields>({
@@ -177,7 +179,7 @@ export default function PsychologistProfileScreen() {
 
       setOriginal({ ...fields });
       setEditing(false);
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
+      showToast("Perfil atualizado com sucesso!");
     } catch {
       Alert.alert("Erro", "Não foi possível salvar as alterações.");
     } finally {
@@ -283,6 +285,7 @@ export default function PsychologistProfileScreen() {
 
         </Animated.View>
       </ScrollView>
+      {toast}
     </View>
   );
 }
@@ -338,7 +341,7 @@ const styles = StyleSheet.create({
   crpBadgeText: { fontSize: 12, fontWeight: "700", color: WHITE },
 
   scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 48 },
+  scrollContent: { padding: 20, paddingBottom: 48, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
 
   card: {
     backgroundColor: WHITE, borderRadius: 20, padding: 18, marginBottom: 16,

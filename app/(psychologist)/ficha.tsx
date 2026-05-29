@@ -24,6 +24,7 @@ import {
   getPatientProfile,
   updatePatientProfile,
 } from "../../services/api";
+import { useSavedToast } from "../../components/saved-toast";
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const GREEN = "#2e8b6e";
@@ -406,17 +407,7 @@ export default function PsychologistPatientRecordScreen() {
   const slideAnim = useRef(new Animated.Value(24)).current;
 
   // ── Toast de salvamento ───────────────────────────────────────────────────
-  const [saved, setSaved] = useState(false);
-  const saveAnim = useRef(new Animated.Value(0)).current;
-
-  const showSavedToast = () => {
-    setSaved(true);
-    Animated.sequence([
-      Animated.timing(saveAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.delay(2000),
-      Animated.timing(saveAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]).start(() => setSaved(false));
-  };
+  const { showToast, toast } = useSavedToast();
 
   // ── Carrega documentos ────────────────────────────────────────────────────
   useEffect(() => {
@@ -621,7 +612,7 @@ export default function PsychologistPatientRecordScreen() {
         ...prev,
       ]);
       setModalVisible(false);
-      Alert.alert("Sucesso", "Documento enviado com sucesso.");
+      showToast("Documento enviado com sucesso.");
     } catch {
       Alert.alert("Erro", "Erro inesperado ao enviar o documento.");
     }
@@ -644,7 +635,7 @@ export default function PsychologistPatientRecordScreen() {
         anamnesis,
       });
       if (result.ok) {
-        showSavedToast();
+        showToast("Ficha clínica salva com sucesso.");
       } else {
         Alert.alert("Erro", result.error ?? "Não foi possível salvar.");
       }
@@ -913,14 +904,6 @@ export default function PsychologistPatientRecordScreen() {
                 {saving ? "Salvando..." : "Salvar ficha clinica"}
               </Text>
             </TouchableOpacity>
-
-            {/* Toast de sucesso */}
-            {saved && (
-              <Animated.View style={[styles.toastBox, { opacity: saveAnim }]}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#2e8b6e" />
-                <Text style={styles.toastText}>Anotações salvas com sucesso</Text>
-              </Animated.View>
-            )}
           </Animated.View>
         ) : null}
       </ScrollView>
@@ -974,6 +957,7 @@ export default function PsychologistPatientRecordScreen() {
           </View>
         </View>
       </Modal>
+      {toast}
     </View>
   );
 }
@@ -1036,7 +1020,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40 },
+  scrollContent: { padding: 22, paddingBottom: 40, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
   heroCard: {
     backgroundColor: WHITE,
     borderRadius: 26,

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const GREEN = '#2e8b6e';
@@ -38,12 +38,21 @@ const ADMIN_SECTIONS = [
   },
   {
     id: 'psychologists',
-    title: 'Usuarios',
+    title: 'Profissionais',
     description: 'Cadastro administrativo de psicologos e orientacao do fluxo interno.',
     icon: 'medkit-outline',
     color: '#c46a1a',
     bg: '#fef3e8',
     action: () => router.push('/usuario'),
+  },
+  {
+    id: 'user-management',
+    title: 'Gestao de usuarios',
+    description: 'Gerenciamento completo de usuarios: ativar, desativar, alterar papeis e criar contas.',
+    icon: 'people-circle-outline',
+    color: '#8a55d9',
+    bg: '#f3ecff',
+    action: () => router.push('/gestao-usuarios' as any),
   },
   {
     id: 'appointments',
@@ -52,7 +61,7 @@ const ADMIN_SECTIONS = [
     icon: 'calendar-outline',
     color: '#8a55d9',
     bg: '#f3ecff',
-    action: () => router.push('/agendar'),
+    action: () => router.push('/(admin)/consultas'),
   },
   {
     id: 'chat',
@@ -62,6 +71,15 @@ const ADMIN_SECTIONS = [
     color: '#1055d9',
     bg: '#f3ecff',
     action: () => router.push('/(shared)/chat'),
+  },
+  {
+    id: 'reports',
+    title: 'Relatorios',
+    description: 'Indicadores de consultas, profissionais e exportacoes gerenciais.',
+    icon: 'analytics-outline',
+    color: '#2d6cdf',
+    bg: '#eaf1ff',
+    action: () => router.push('/(admin)/relatorios' as any),
   },
 ];
 
@@ -97,22 +115,7 @@ export default function AdminHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.highlightCard}>
-          <Text style={styles.highlightTitle}>Primeira tela pronta</Text>
-          <Text style={styles.highlightText}>
-            O dashboard administrativo ja esta criado e pode servir como ponto de partida para o
-            restante do painel.
-          </Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => router.push('/dashboard')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="arrow-forward-outline" size={18} color="#fff" />
-            <Text style={styles.primaryButtonText}>Abrir dashboard</Text>
-          </TouchableOpacity>
-        </View>
-
+    
         <Text style={styles.sectionTitle}>Modulos administrativos</Text>
 
         {ADMIN_SECTIONS.map((section) => (
@@ -217,6 +220,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   highlightCard: {
     backgroundColor: WHITE,

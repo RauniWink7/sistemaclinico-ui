@@ -19,6 +19,7 @@ import {
     updateMe,
     updatePatientProfile,
 } from "../../services/api";
+import { useSavedToast } from "../../components/saved-toast";
 
 // Campos enviados no PATCH /api/auth/patients/{id}/profile/
 // phone e full_name NÃO ficam aqui — pertencem ao User, salvos via updateMe
@@ -103,6 +104,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
+  const { showToast, toast } = useSavedToast();
   const [fields, setFields] = useState<EditableFields>({
     name: "",
     phone: "",
@@ -255,7 +257,7 @@ export default function ProfileScreen() {
 
       setOriginal({ ...fields });
       setEditing(false);
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
+      showToast("Perfil atualizado com sucesso!");
     } catch {
       Alert.alert("Erro", "Não foi possível salvar as alterações.");
     } finally {
@@ -413,6 +415,7 @@ export default function ProfileScreen() {
           )}
         </Animated.View>
       </ScrollView>
+      {toast}
     </View>
   );
 }
@@ -518,6 +521,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 48,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
 
   // Card

@@ -14,11 +14,20 @@ import {
     View,
 } from "react-native";
 import { getClinicData, getMe, updateClinic } from "../../services/api";
+import { useSavedToast } from "../../components/saved-toast";
 
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
+const GREEN_LIGHT = "#e8f7f1";
 const BG = "#f0faf5";
 const WHITE = "#ffffff";
+
+// Todos os horários do dia em intervalos de 30 minutos (00:00 → 23:30)
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
+  const min = i % 2 === 0 ? "00" : "30";
+  return `${String(hour).padStart(2, "0")}:${min}`;
+});
 
 interface ClinicForm {
   name: string;
@@ -28,6 +37,63 @@ interface ClinicForm {
   openingTime: string;
   closingTime: string;
 }
+
+const TimeSelect = ({
+  label,
+  value,
+  open,
+  onToggle,
+  onSelect,
+}: {
+  label: string;
+  value: string;
+  open: boolean;
+  onToggle: () => void;
+  onSelect: (value: string) => void;
+}) => (
+  <View style={styles.timeCard}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TouchableOpacity
+      style={styles.timeSelectBtn}
+      onPress={onToggle}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="time-outline" size={16} color={GREEN} />
+      <Text style={[styles.timeSelectText, !value && { color: "#94b3a6" }]}>
+        {value || "Selecione"}
+      </Text>
+      <Ionicons
+        name={open ? "chevron-up-outline" : "chevron-down-outline"}
+        size={16}
+        color={GREEN}
+      />
+    </TouchableOpacity>
+    {open && (
+      <ScrollView
+        style={styles.timeDropdown}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+      >
+        {TIME_OPTIONS.map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.timeOption, value === t && styles.timeOptionActive]}
+            onPress={() => onSelect(t)}
+          >
+            <Text
+              style={[
+                styles.timeOptionText,
+                value === t && styles.timeOptionTextActive,
+              ]}
+            >
+              {t}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    )}
+  </View>
+);
 
 const DecorativeBackground = () => (
   <>
@@ -72,10 +138,12 @@ export default function AdminClinicManagementScreen() {
     closingTime: "",
   };
 
+  const { showToast, toast } = useSavedToast();
   const [form, setForm] = useState<ClinicForm>(emptyForm);
   const [loading, setLoading] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [clinicId, setClinicId] = useState<string | null>(null);
+  const [openPicker, setOpenPicker] = useState<null | "open" | "close">(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -136,8 +204,8 @@ export default function AdminClinicManagementScreen() {
           address: clinicData.address || "",
           phone: clinicData.phone || "",
           email: clinicData.email || "",
-          openingTime: clinicData.open_from || "",
-          closingTime: clinicData.open_until || "",
+          openingTime: (clinicData.open_from || "").slice(0, 5),
+          closingTime: (clinicData.open_until || "").slice(0, 5),
         });
       } catch (err: any) {
         Alert.alert(
@@ -163,6 +231,14 @@ export default function AdminClinicManagementScreen() {
     }
 
     // Validação simples
+    if (!form.openingTime || !form.closingTime) {
+      Alert.alert(
+        "Erro",
+        "Selecione os horários de abertura e fechamento.",
+      );
+      return;
+    }
+
     if (form.openingTime >= form.closingTime) {
       Alert.alert(
         "Erro",
@@ -191,10 +267,7 @@ export default function AdminClinicManagementScreen() {
         return;
       }
 
-      Alert.alert(
-        "Sucesso",
-        "As informações da clínica foram salvas com sucesso.",
-      );
+      showToast("Informações da clínica salvas");
     } catch (err: any) {
       Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
     } finally {
@@ -322,27 +395,31 @@ export default function AdminClinicManagementScreen() {
             </Text>
 
             <View style={styles.timeRow}>
-              <View style={styles.timeCard}>
-                <Text style={styles.inputLabel}>Abertura</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.openingTime}
-                  onChangeText={setField("openingTime")}
-                  placeholder="08:00"
-                  placeholderTextColor="#94b3a6"
-                />
-              </View>
+              <TimeSelect
+                label="Abertura"
+                value={form.openingTime}
+                open={openPicker === "open"}
+                onToggle={() =>
+                  setOpenPicker((prev) => (prev === "open" ? null : "open"))
+                }
+                onSelect={(t) => {
+                  setField("openingTime")(t);
+                  setOpenPicker(null);
+                }}
+              />
 
-              <View style={styles.timeCard}>
-                <Text style={styles.inputLabel}>Fechamento</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.closingTime}
-                  onChangeText={setField("closingTime")}
-                  placeholder="19:00"
-                  placeholderTextColor="#94b3a6"
-                />
-              </View>
+              <TimeSelect
+                label="Fechamento"
+                value={form.closingTime}
+                open={openPicker === "close"}
+                onToggle={() =>
+                  setOpenPicker((prev) => (prev === "close" ? null : "close"))
+                }
+                onSelect={(t) => {
+                  setField("closingTime")(t);
+                  setOpenPicker(null);
+                }}
+              />
             </View>
           </View>
 
@@ -359,6 +436,7 @@ export default function AdminClinicManagementScreen() {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+      {toast}
     </View>
   );
 }
@@ -435,6 +513,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   heroCard: {
     backgroundColor: WHITE,
@@ -516,9 +597,51 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: "row",
     gap: 12,
+    alignItems: "flex-start",
   },
   timeCard: {
     flex: 1,
+  },
+  timeSelectBtn: {
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#d7ebe2",
+    backgroundColor: GREEN_LIGHT,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  timeSelectText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#173d31",
+  },
+  timeDropdown: {
+    maxHeight: 200,
+    marginTop: 6,
+    borderWidth: 1.5,
+    borderColor: "#d7ebe2",
+    borderRadius: 16,
+    backgroundColor: WHITE,
+  },
+  timeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  timeOptionActive: {
+    backgroundColor: GREEN_LIGHT,
+  },
+  timeOptionText: {
+    fontSize: 14,
+    color: "#3a6054",
+    fontWeight: "500",
+  },
+  timeOptionTextActive: {
+    color: GREEN,
+    fontWeight: "700",
   },
   saveButton: {
     height: 54,

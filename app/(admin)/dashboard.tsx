@@ -381,7 +381,7 @@ export default function AdminDashboardScreen() {
           {/* ── Atalho para consultas ── */}
           <TouchableOpacity
             style={styles.consultasButton}
-            onPress={() => router.push("/consultas")}
+            onPress={() => router.push("/(admin)/consultas")}
             activeOpacity={0.85}
           >
             <View style={styles.consultasButtonLeft}>
@@ -519,6 +519,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   heroCard: {
     backgroundColor: WHITE,

@@ -429,6 +429,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   heroCard: {
     backgroundColor: WHITE,

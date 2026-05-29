@@ -13,13 +13,19 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { getAppointments, getMe, getPsychologists } from "../../services/api";
+import {
+  getAppointments,
+  getMe,
+  getPsychologists,
+  getUnreadNotifications,
+} from "../../services/api";
 
 const { width } = Dimensions.get("window");
 
 const DEFAULT_PATIENT_NAME = "Paciente";
 
 interface NextAppointment {
+  id: string;
   date: string;
   time: string;
   professional: string;
@@ -53,16 +59,24 @@ const SHORTCUTS = [
     bg: "#f0ebff",
     route: "Chat",
   },
-  // {
-  //   id: "4",
-  //   label: "Documentos",
-  //   icon: "document-text-outline",
-  //   color: "#e67e22",
-  //   bg: "#fef3e8",
-  //   route: "Documents",
-  // },
   {
     id: "4",
+    label: "Documentos",
+    icon: "document-text-outline",
+    color: "#e67e22",
+    bg: "#fef3e8",
+    route: "Documents",
+  },
+  {
+    id: "5",
+    label: "Relatorios",
+    icon: "analytics-outline",
+    color: "#c46a1a",
+    bg: "#fef3e8",
+    route: "Reports",
+  },
+  {
+    id: "6",
     label: "Perfil",
     icon: "person-outline",
     color: "#e05c7a",
@@ -115,6 +129,7 @@ export default function HomeP() {
     useState<NextAppointment | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingAppointment, setLoadingAppointment] = useState(true);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -178,6 +193,7 @@ export default function HomeP() {
               .join("");
 
             return {
+              id: item.id,
               date,
               time,
               professional: professionalName,
@@ -202,8 +218,16 @@ export default function HomeP() {
       setLoadingAppointment(false);
     };
 
+    const loadUnreadNotifications = async () => {
+      const result = await getUnreadNotifications();
+      if (result.ok && result.data) {
+        setUnreadNotifications(result.data.unread_count ?? 0);
+      }
+    };
+
     void loadProfile();
     void loadAppointment();
+    void loadUnreadNotifications();
   }, []);
 
   React.useEffect(() => {
@@ -270,6 +294,7 @@ export default function HomeP() {
               .join("");
 
             return {
+              id: item.id,
               date,
               time,
               professional: professionalName,
@@ -293,8 +318,19 @@ export default function HomeP() {
       }
     };
 
+    const loadUnreadNotifications = async () => {
+      const result = await getUnreadNotifications();
+      if (result.ok && result.data) {
+        setUnreadNotifications(result.data.unread_count ?? 0);
+      }
+    };
+
     try {
-      await Promise.all([loadProfile(), loadAppointment()]);
+      await Promise.all([
+        loadProfile(),
+        loadAppointment(),
+        loadUnreadNotifications(),
+      ]);
     } catch (error) {
       console.error("Erro ao atualizar dados:", error);
     } finally {
@@ -327,12 +363,16 @@ export default function HomeP() {
 
         <TouchableOpacity
           style={styles.notifBtn}
-          onPress={() =>
-            Alert.alert("Avisos", "Central de notificacoes em breve.")
-          }
+          onPress={() => router.push("/(patient)/notificacoes" as any)}
         >
           <Ionicons name="notifications-outline" size={22} color="#fff" />
-          <View style={styles.notifDot} />
+          {unreadNotifications > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>
+                {unreadNotifications > 9 ? "9+" : unreadNotifications}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -397,7 +437,16 @@ export default function HomeP() {
                 </View>
 
                 {/* Botão */}
-                <TouchableOpacity style={styles.detailsBtn} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={styles.detailsBtn}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(shared)/consulta-detalhe",
+                      params: { id: nextAppointment.id },
+                    } as any)
+                  }
+                >
                   <Text style={styles.detailsBtnText}>Ver detalhes</Text>
                   <Ionicons
                     name="arrow-forward-outline"
@@ -431,17 +480,19 @@ export default function HomeP() {
                 onPress={() => {
                   const routes: Record<
                     string,
-                    | "/agendamento"
-                    | "/consultas"
+                    | "/(patient)/agendamento"
+                    | "/(patient)/consultas"
                     | "/(shared)/chat"
-                    | "/documento"
-                    | "/perfil"
+                    | "/(patient)/documento"
+                    | "/(patient)/relatorios"
+                    | "/(patient)/perfil"
                   > = {
-                    Schedule: "/agendamento",
-                    MyAppointments: "/consultas",
+                    Schedule: "/(patient)/agendamento",
+                    MyAppointments: "/(patient)/consultas",
                     Chat: "/(shared)/chat",
-                    Documents: "/documento",
-                    Profile: "/perfil",
+                    Documents: "/(patient)/documento",
+                    Reports: "/(patient)/relatorios",
+                    Profile: "/(patient)/perfil",
                   };
 
                   const targetRoute = routes[item.route];
@@ -539,16 +590,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  notifDot: {
+  notifBadge: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 5,
+    right: 5,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
     backgroundColor: "#f87171",
     borderWidth: 1.5,
     borderColor: GREEN,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: {
+    color: WHITE,
+    fontSize: 9,
+    fontWeight: "800",
   },
 
   // Scroll
@@ -557,6 +616,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
 
   // Section title

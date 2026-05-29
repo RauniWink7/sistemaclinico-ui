@@ -19,15 +19,6 @@ import {
     getPsychologists,
 } from "../../services/api";
 
-interface ProfessionalInfo {
-  name: string;
-  crp: string;
-  todayAppointments: number;
-  nextAppointmentTime: string;
-  nextPatientName: string;
-  totalPatients: number;
-}
-
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
@@ -88,6 +79,15 @@ const QUICK_ACTIONS = [
     bg: "#f3eeff",
     route: "/(psychologist)/disponibilidade",
   },
+  {
+    id: "reports",
+    title: "Relatorios",
+    description: "Acompanhe indicadores, pacientes e exportacoes.",
+    icon: "analytics-outline",
+    color: "#2d6cdf",
+    bg: BLUE_LIGHT,
+    route: "/(psychologist)/relatorios",
+  },
 ];
 
 const DecorativeBackground = () => (
@@ -142,7 +142,7 @@ export default function PsychologistDashboardScreen() {
             summaryResult.error || "Erro ao carregar resumo.",
           );
         }
-      } catch (error) {
+      } catch {
         Alert.alert("Erro", "Erro inesperado ao carregar dados.");
       } finally {
         setLoading(false);
@@ -332,6 +332,22 @@ export default function PsychologistDashboardScreen() {
                   Prepare-se para o proximo atendimento.
                 </Text>
               </View>
+
+              {summary?.proxima_consulta?.id && (
+                <TouchableOpacity
+                  style={styles.nextDetailBtn}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(shared)/consulta-detalhe",
+                      params: { id: summary.proxima_consulta.id },
+                    } as any)
+                  }
+                >
+                  <Ionicons name="eye-outline" size={14} color={GREEN} />
+                  <Text style={styles.nextDetailBtnText}>Ver detalhes</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>Atalhos</Text>
@@ -447,6 +463,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   heroCard: {
     backgroundColor: WHITE,
@@ -618,6 +637,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: "#647f74",
+  },
+  nextDetailBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#e8f7f1",
+  },
+  nextDetailBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2e8b6e",
   },
   actionCard: {
     backgroundColor: WHITE,

@@ -194,27 +194,38 @@ const AppointmentCard = ({
         ) : null}
       </View>
 
-      {canModify && (
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => onChangeStatus(item)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="create-outline" size={14} color={GREEN} />
-            <Text style={styles.actionBtnText}>Alterar status</Text>
-          </TouchableOpacity>
+      <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => router.push({ pathname: '/(shared)/consulta-detalhe', params: { id: item.id } } as any)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="eye-outline" size={14} color={GREEN} />
+          <Text style={styles.actionBtnText}>Detalhes</Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnRed]}
-            onPress={() => onCancel(item)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close-outline" size={14} color="#d95c5c" />
-            <Text style={[styles.actionBtnText, { color: "#d95c5c" }]}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        {canModify && (
+          <>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => onChangeStatus(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={14} color={GREEN} />
+              <Text style={styles.actionBtnText}>Status</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnRed]}
+              onPress={() => onCancel(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close-outline" size={14} color="#d95c5c" />
+              <Text style={[styles.actionBtnText, { color: "#d95c5c" }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
     </View>
   );
 };
@@ -247,7 +258,7 @@ export default function AdminAppointmentsScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   // ── Carregamento ────────────────────────────────────────────────────────────
   const loadData = useCallback(async (silent = false) => {
@@ -652,7 +663,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40 },
+  scrollContent: { padding: 22, paddingBottom: 40, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
   heroCard: {
     backgroundColor: WHITE, borderRadius: 28, padding: 22, marginTop: -18, marginBottom: 18,
     shadowColor: "#174c3e", shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 3,

@@ -539,6 +539,26 @@ export default function ConsultasScreen() {
                       </View>
 
                       <View style={styles.actionsRow}>
+                        <TouchableOpacity
+                          style={styles.secondaryAction}
+                          activeOpacity={0.85}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(shared)/consulta-detalhe",
+                              params: { id: appointment.id },
+                            } as any)
+                          }
+                        >
+                          <Ionicons
+                            name="eye-outline"
+                            size={14}
+                            color={GREEN}
+                          />
+                          <Text style={styles.secondaryActionText}>
+                            Detalhes
+                          </Text>
+                        </TouchableOpacity>
+
                         {canReview(appointment) && (
                           <TouchableOpacity
                             style={styles.secondaryAction}
@@ -751,6 +771,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   heroCard: {
     backgroundColor: WHITE,

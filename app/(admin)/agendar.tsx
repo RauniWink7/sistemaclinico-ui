@@ -11,14 +11,18 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
+  AppointmentAvailabilityApiItem,
   createAppointment,
   getClinicPatients,
   getMe,
   getProfessionalsByClinic,
+  getPsychologistAvailability,
 } from "../../services/api";
+import { useSavedToast } from "../../components/saved-toast";
 
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
@@ -26,9 +30,63 @@ const GREEN_LIGHT = "#e8f7f1";
 const BG = "#f0faf5";
 const WHITE = "#ffffff";
 
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTHS = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+// JS weekday (0=Dom ... 6=Sáb) → Django (0=Seg ... 6=Dom)
+const jsToDjangoWeekday = (jsWeekday: number): number =>
+  jsWeekday === 0 ? 6 : jsWeekday - 1;
+
+const DJANGO_TO_LABEL: Record<number, string> = {
+  0: "Seg",
+  1: "Ter",
+  2: "Qua",
+  3: "Qui",
+  4: "Sex",
+  5: "Sáb",
+  6: "Dom",
+};
+
+// Gera slots dentro de um bloco de disponibilidade.
+// Ex: 09:00–17:00, 50min → ["09:00", "09:50", "10:40", ...]
+const generateSlots = (
+  startTime: string,
+  endTime: string,
+  durationMinutes = 50,
+): string[] => {
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  const startTotal = startH * 60 + startM;
+  const endTotal = endH * 60 + endM;
+  const slots: string[] = [];
+
+  for (let t = startTotal; t + durationMinutes <= endTotal; t += durationMinutes) {
+    const h = String(Math.floor(t / 60)).padStart(2, "0");
+    const m = String(t % 60).padStart(2, "0");
+    slots.push(`${h}:${m}`);
+  }
+  return slots;
+};
+
+type AvailabilityItem = AppointmentAvailabilityApiItem;
+
 interface SimpleUser {
   id: string;
   label: string;
+  sessionDuration?: number;
 }
 
 const DecorativeBackground = () => (
@@ -118,10 +176,15 @@ export default function AdminAgendarScreen() {
     professionalId?: string;
   }>();
 
+  const { showToast, toast } = useSavedToast();
+  const { width: screenWidth } = useWindowDimensions();
+  const cellSize = Math.min(46, Math.max(34, (screenWidth - 80) / 7));
+
+  const today = new Date();
+
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [saving, setSaving] = useState(false);
   const [clinicId, setClinicId] = useState<string | null>(null);
-  const [patientUserId, setPatientUserId] = useState<string | null>(null);
 
   const [patients, setPatients] = useState<SimpleUser[]>([]);
   const [professionals, setProfessionals] = useState<SimpleUser[]>([]);
@@ -133,9 +196,15 @@ export default function AdminAgendarScreen() {
     string | null
   >(params.professionalId ?? null);
 
-  // Data e hora como strings simples (ex: "2026-05-10", "14:30")
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  // Calendário
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityItem[]>([]);
+  const [availableWeekdays, setAvailableWeekdays] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
   const [duration, setDuration] = useState("50");
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -168,25 +237,17 @@ export default function AdminAgendarScreen() {
         }
 
         const cId = meResult.data.clinic;
-        const uId = meResult.data.id;
         setClinicId(cId);
-        setPatientUserId(uId);
-
         const [patientsRes, professionalsRes] = await Promise.all([
           getClinicPatients(cId),
           getProfessionalsByClinic(cId),
         ]);
 
-        // LOG TEMPORÁRIO — remover depois
-        console.log(
-          "patients raw:",
-          JSON.stringify(patientsRes.data?.slice(0, 2)),
-        );
         if (patientsRes.ok) {
           setPatients(
             (patientsRes.data ?? []).map((p: any) => ({
               id: p.id,
-              label: p.user?.full_name ?? p.user?.email ?? p.id, // PatientProfile: nome em p.user.full_name
+              label: p.user?.full_name ?? p.user?.email ?? p.id,
             })),
           );
         }
@@ -196,6 +257,7 @@ export default function AdminAgendarScreen() {
             (professionalsRes.data ?? []).map((p: any) => ({
               id: p.id,
               label: p.user?.full_name ?? p.user?.email ?? p.id,
+              sessionDuration: p.session_duration_minutes ?? 50,
             })),
           );
         }
@@ -209,6 +271,115 @@ export default function AdminAgendarScreen() {
     void init();
   }, []);
 
+  // Carrega a disponibilidade do profissional selecionado
+  useEffect(() => {
+    const loadAvailability = async () => {
+      if (!selectedProfessional) {
+        setAvailability([]);
+        setAvailableWeekdays([]);
+        return;
+      }
+
+      const pro = professionals.find((p) => p.id === selectedProfessional);
+      if (pro?.sessionDuration) setDuration(String(pro.sessionDuration));
+
+      setLoadingSlots(true);
+      setSelectedDate(null);
+      setSelectedTime(null);
+
+      const result = await getPsychologistAvailability(selectedProfessional);
+      const rawList: AvailabilityItem[] = result.data ?? [];
+
+      if (result.ok) {
+        const availableItems = rawList.filter((item) => item.blocked !== true);
+        setAvailability(availableItems);
+        setAvailableWeekdays([
+          ...new Set(
+            availableItems
+              .map(
+                (item) =>
+                  DJANGO_TO_LABEL[item.weekday] ?? item.weekday_display ?? "",
+              )
+              .filter(Boolean),
+          ),
+        ]);
+      } else {
+        setAvailability([]);
+        setAvailableWeekdays([]);
+      }
+      setLoadingSlots(false);
+    };
+
+    void loadAvailability();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProfessional, professionals]);
+
+  // ── Calendar logic ──────────────────────────────────────────────────────────
+  const getDaysInMonth = (year: number, month: number) =>
+    new Date(year, month + 1, 0).getDate();
+
+  const getFirstDayOfMonth = (year: number, month: number) =>
+    new Date(year, month, 1).getDay();
+
+  const toKey = (year: number, month: number, day: number) => {
+    const mm = String(month + 1).padStart(2, "0");
+    const dd = String(day).padStart(2, "0");
+    return `${year}-${mm}-${dd}`;
+  };
+
+  const isPast = (year: number, month: number, day: number) => {
+    const d = new Date(year, month, day);
+    const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return d < t;
+  };
+
+  const isAvailable = (year: number, month: number, day: number) => {
+    const jsWeekday = new Date(year, month, day).getDay();
+    const djangoWeekday = jsToDjangoWeekday(jsWeekday);
+    return availability.some(
+      (item) => !item.blocked && item.weekday === djangoWeekday,
+    );
+  };
+
+  const prevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear((y) => y - 1);
+    } else {
+      setCurrentMonth((m) => m - 1);
+    }
+    setSelectedDate(null);
+    setSelectedTime(null);
+  };
+
+  const nextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear((y) => y + 1);
+    } else {
+      setCurrentMonth((m) => m + 1);
+    }
+    setSelectedDate(null);
+    setSelectedTime(null);
+  };
+
+  const handleDayPress = (key: string) => {
+    setSelectedDate(key);
+    setSelectedTime(null);
+  };
+
+  // ── Formatters ────────────────────────────────────────────────────────────────
+  const formatDate = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    return `${WEEKDAYS[date.getDay()]}, ${d} de ${MONTHS[m - 1]}`;
+  };
+
+  const selectedProfessionalLabel =
+    professionals.find((p) => p.id === selectedProfessional)?.label ?? "";
+  const selectedPatientLabel =
+    patients.find((p) => p.id === selectedPatient)?.label ?? "";
+
   const handleSave = async () => {
     if (!selectedPatient) {
       Alert.alert("Campo obrigatório", "Selecione o paciente.");
@@ -218,30 +389,15 @@ export default function AdminAgendarScreen() {
       Alert.alert("Campo obrigatório", "Selecione o psicólogo.");
       return;
     }
-    if (!date || !time) {
+    if (!selectedDate || !selectedTime) {
       Alert.alert(
         "Campo obrigatório",
-        "Informe a data e o horário da consulta.",
+        "Selecione a data e o horário no calendário.",
       );
       return;
     }
     if (!clinicId) {
       Alert.alert("Erro", "Clínica não identificada.");
-      return;
-    }
-
-    // Valida formato de data e hora
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    const timeRegex = /^\d{2}:\d{2}$/;
-    if (!dateRegex.test(date)) {
-      Alert.alert(
-        "Data inválida",
-        "Use o formato AAAA-MM-DD (ex: 2026-05-10).",
-      );
-      return;
-    }
-    if (!timeRegex.test(time)) {
-      Alert.alert("Hora inválida", "Use o formato HH:MM (ex: 14:30).");
       return;
     }
 
@@ -256,13 +412,15 @@ export default function AdminAgendarScreen() {
 
     setSaving(true);
     try {
-      const scheduledAt = `${date}T${time}:00Z`; // UTC — backend rejeita sem timezone
+      // ISO 8601 com timezone de Brasília (-03:00) — o backend converte com
+      // timezone.localtime para validar a disponibilidade. Enviar "Z" (UTC)
+      // deslocava o horário em 3h e quebrava o agendamento.
+      const scheduledAt = `${selectedDate}T${selectedTime}:00-03:00`;
       const result = await createAppointment(
-        selectedPatient,
         selectedProfessional,
-        clinicId,
         scheduledAt,
         durationMin,
+        { patientId: selectedPatient, clinicId },
       );
 
       if (!result.ok) {
@@ -273,15 +431,46 @@ export default function AdminAgendarScreen() {
         return;
       }
 
-      Alert.alert("Consulta agendada", "A consulta foi criada com sucesso.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      showToast("Consulta agendada com sucesso");
+      setTimeout(() => router.back(), 1200);
     } catch (err: any) {
       Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
     } finally {
       setSaving(false);
     }
   };
+
+  // ── Build calendar grid ──────────────────────────────────────────────────────
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+  const calendarCells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
+
+  // ── Slots do dia selecionado ─────────────────────────────────────────────────
+  const selectedDjangoWeekday = selectedDate
+    ? (() => {
+        const [y, m, d] = selectedDate.split("-").map(Number);
+        const jsWeekday = new Date(y, m - 1, d).getDay();
+        return jsToDjangoWeekday(jsWeekday);
+      })()
+    : null;
+
+  const slotDuration = parseInt(duration, 10) || 50;
+  const slots =
+    selectedDjangoWeekday !== null
+      ? [
+          ...new Set(
+            availability
+              .filter((item) => item.weekday === selectedDjangoWeekday)
+              .flatMap((item) =>
+                generateSlots(item.start_time, item.end_time, slotDuration),
+              ),
+          ),
+        ].sort()
+      : [];
 
   if (loadingInitial) {
     return (
@@ -341,8 +530,8 @@ export default function AdminAgendarScreen() {
             <Text style={styles.heroEyebrow}>Agendamento</Text>
             <Text style={styles.heroTitle}>Nova consulta</Text>
             <Text style={styles.heroSubtitle}>
-              Selecione o paciente, o psicólogo e defina a data e horário do
-              atendimento.
+              Selecione o paciente, o psicólogo e escolha a data e o horário no
+              calendário.
             </Text>
           </View>
 
@@ -364,50 +553,243 @@ export default function AdminAgendarScreen() {
             />
           </View>
 
-          <View style={styles.formCard}>
-            <Text style={styles.sectionTitle}>Data e horario</Text>
+          {/* ── Calendário ── */}
+          {!selectedProfessional ? (
+            <View style={styles.formCard}>
+              <Text style={styles.noSlots}>
+                Selecione um psicólogo para ver os dias disponíveis.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.formCard}>
+              <Text style={styles.sectionTitle}>Data e horário</Text>
 
-            <Text style={styles.fieldLabel}>Data e Hora</Text>
-
-            {/* Campos reais */}
-            <View style={styles.rowFields}>
-              <View style={styles.halfField}>
-                <Text style={styles.fieldLabel}>Data * (AAAA-MM-DD)</Text>
-                <TextInput
-                  style={styles.textRealInput}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="2026-05-10"
-                  placeholderTextColor="#94b3a6"
-                />
+              <View style={styles.availabilityRow}>
+                <Ionicons name="calendar-outline" size={14} color={GREEN} />
+                <Text style={styles.availabilityText}>
+                  {availableWeekdays.length > 0
+                    ? `Atende: ${availableWeekdays.join(", ")}`
+                    : "Nenhum dia disponível para este profissional"}
+                </Text>
               </View>
-              <View style={styles.halfField}>
-                <Text style={styles.fieldLabel}>Hora * (HH:MM)</Text>
-                <TextInput
-                  style={styles.textRealInput}
-                  value={time}
-                  onChangeText={setTime}
-                  placeholder="14:30"
-                  placeholderTextColor="#94b3a6"
-                />
+
+              {/* Month nav */}
+              <View style={styles.monthNav}>
+                <TouchableOpacity style={styles.navBtn} onPress={prevMonth}>
+                  <Ionicons
+                    name="chevron-back-outline"
+                    size={18}
+                    color={GREEN}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.monthLabel}>
+                  {MONTHS[currentMonth]} {currentYear}
+                </Text>
+                <TouchableOpacity style={styles.navBtn} onPress={nextMonth}>
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={18}
+                    color={GREEN}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Weekday headers */}
+              <View style={styles.weekdaysRow}>
+                {WEEKDAYS.map((w) => (
+                  <Text key={w} style={[styles.weekdayText, { width: cellSize }]}>
+                    {w}
+                  </Text>
+                ))}
+              </View>
+
+              {/* Days grid */}
+              {loadingSlots ? (
+                <ActivityIndicator color={GREEN} style={{ paddingVertical: 24 }} />
+              ) : (
+                <View style={styles.daysGrid}>
+                  {calendarCells.map((day, idx) => {
+                    if (!day)
+                      return (
+                        <View
+                          key={`empty-${idx}`}
+                          style={[
+                            styles.dayCell,
+                            {
+                              width: cellSize,
+                              height: cellSize,
+                              borderRadius: cellSize / 2,
+                            },
+                          ]}
+                        />
+                      );
+                    const key = toKey(currentYear, currentMonth, day);
+                    const past = isPast(currentYear, currentMonth, day);
+                    const available =
+                      !past && isAvailable(currentYear, currentMonth, day);
+                    const selected = selectedDate === key;
+
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.dayCell,
+                          {
+                            width: cellSize,
+                            height: cellSize,
+                            borderRadius: cellSize / 2,
+                          },
+                          available && styles.dayCellAvailable,
+                          selected && styles.dayCellSelected,
+                          past && styles.dayCellPast,
+                        ]}
+                        onPress={() => available && handleDayPress(key)}
+                        disabled={!available}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.dayText,
+                            available && styles.dayTextAvailable,
+                            selected && styles.dayTextSelected,
+                            past && styles.dayTextPast,
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                        {available && !selected && (
+                          <View style={styles.availDot} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Legend */}
+              <View style={styles.legend}>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[
+                      styles.legendDot,
+                      {
+                        backgroundColor: GREEN_LIGHT,
+                        borderWidth: 1,
+                        borderColor: GREEN,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.legendText}>Disponível</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: GREEN }]} />
+                  <Text style={styles.legendText}>Selecionado</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#f0f0f0" }]}
+                  />
+                  <Text style={styles.legendText}>Indisponível</Text>
+                </View>
               </View>
             </View>
+          )}
 
-            <Text style={styles.fieldLabel}>Duração (minutos)</Text>
-            <TextInput
-              style={styles.textRealInput}
-              value={duration}
-              onChangeText={setDuration}
-              placeholder="50"
-              placeholderTextColor="#94b3a6"
-              keyboardType="numeric"
-            />
-          </View>
+          {/* ── Time slots ── */}
+          {selectedDate && (
+            <View style={styles.formCard}>
+              <View style={styles.slotHeader}>
+                <Ionicons name="time-outline" size={16} color={GREEN} />
+                <Text style={styles.slotTitle}>
+                  Horários — {formatDate(selectedDate)}
+                </Text>
+              </View>
+
+              {slots.length === 0 ? (
+                <Text style={styles.noSlots}>
+                  Nenhum horário disponível para este dia.
+                </Text>
+              ) : (
+                <View style={styles.slotsGrid}>
+                  {slots.map((time) => (
+                    <TouchableOpacity
+                      key={time}
+                      style={[
+                        styles.slotBtn,
+                        selectedTime === time && styles.slotBtnSelected,
+                      ]}
+                      onPress={() => setSelectedTime(time)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.slotText,
+                          selectedTime === time && styles.slotTextSelected,
+                        ]}
+                      >
+                        {time}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ── Duração ── */}
+          {selectedProfessional && (
+            <View style={styles.formCard}>
+              <Text style={styles.fieldLabel}>Duração (minutos)</Text>
+              <TextInput
+                style={styles.textRealInput}
+                value={duration}
+                onChangeText={setDuration}
+                placeholder="50"
+                placeholderTextColor="#94b3a6"
+                keyboardType="numeric"
+              />
+            </View>
+          )}
+
+          {/* ── Resumo ── */}
+          {selectedDate && selectedTime && (
+            <View style={styles.formCard}>
+              <View style={styles.summaryRow}>
+                <Ionicons name="person-outline" size={15} color={GREEN} />
+                <Text style={styles.summaryText}>{selectedPatientLabel}</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <Ionicons name="medkit-outline" size={15} color={GREEN} />
+                <Text style={styles.summaryText}>
+                  {selectedProfessionalLabel}
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                <Text style={styles.summaryText}>
+                  {formatDate(selectedDate)}
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <Ionicons name="time-outline" size={15} color={GREEN} />
+                <Text style={styles.summaryText}>
+                  {selectedTime} · {slotDuration} min
+                </Text>
+              </View>
+            </View>
+          )}
 
           <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            style={[
+              styles.saveButton,
+              (!selectedDate || !selectedTime || saving) &&
+                styles.saveButtonDisabled,
+            ]}
             onPress={handleSave}
-            disabled={saving}
+            disabled={!selectedDate || !selectedTime || saving}
             activeOpacity={0.85}
           >
             {saving ? (
@@ -425,6 +807,7 @@ export default function AdminAgendarScreen() {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+      {toast}
     </View>
   );
 }
@@ -493,7 +876,13 @@ const styles = StyleSheet.create({
   },
   loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40 },
+  scrollContent: {
+    padding: 22,
+    paddingBottom: 40,
+    maxWidth: 960,
+    alignSelf: "center" as const,
+    width: "100%" as const,
+  },
   heroCard: {
     backgroundColor: WHITE,
     borderRadius: 28,
@@ -593,16 +982,134 @@ const styles = StyleSheet.create({
   dropdownItemActive: { backgroundColor: GREEN_LIGHT },
   dropdownItemText: { fontSize: 15, color: "#173d31", fontWeight: "500" },
   dropdownItemTextActive: { color: GREEN, fontWeight: "700" },
-  rowFields: { flexDirection: "row", gap: 12, marginBottom: 0 },
-  halfField: { flex: 1 },
-  inputBox: { display: "none" },
-  inputTextWrapper: {},
-  inputText: {},
-  inputPlaceholder: {},
-  inputIcon: {},
-  textInputBox: { display: "none" },
-  textInputLabel: {},
-  textInputValue: {},
+
+  // Disponibilidade
+  availabilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 14,
+    flexWrap: "wrap",
+  },
+  availabilityText: {
+    fontSize: 13,
+    color: "#4c7f6d",
+    fontWeight: "600",
+    flexShrink: 1,
+  },
+
+  // Month navigation
+  monthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  navBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: GREEN_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthLabel: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1a3d31",
+  },
+
+  // Weekdays
+  weekdaysRow: { flexDirection: "row", marginBottom: 8 },
+  weekdayText: {
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#7aab96",
+    textTransform: "uppercase",
+  },
+
+  // Days grid
+  daysGrid: { flexDirection: "row", flexWrap: "wrap" },
+  dayCell: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+    position: "relative",
+  },
+  dayCellAvailable: {
+    backgroundColor: GREEN_LIGHT,
+    borderWidth: 1,
+    borderColor: "#b2dfcf",
+  },
+  dayCellSelected: { backgroundColor: GREEN, borderColor: GREEN },
+  dayCellPast: { opacity: 0.3 },
+  dayText: { fontSize: 13, color: "#9bbfb0", fontWeight: "500" },
+  dayTextAvailable: { color: "#1a3d31", fontWeight: "700" },
+  dayTextSelected: { color: WHITE, fontWeight: "800" },
+  dayTextPast: { color: "#c0c0c0" },
+  availDot: {
+    position: "absolute",
+    bottom: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: GREEN,
+  },
+
+  // Legend
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 12,
+  },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 12, height: 12, borderRadius: 6 },
+  legendText: { fontSize: 11, color: "#7aab96", fontWeight: "500" },
+
+  // Time slots
+  slotHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 14,
+  },
+  slotTitle: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
+  noSlots: {
+    fontSize: 13,
+    color: "#7aab96",
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+  slotsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  slotBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: GREEN_LIGHT,
+    borderWidth: 1.5,
+    borderColor: "#b2dfcf",
+  },
+  slotBtnSelected: { backgroundColor: GREEN, borderColor: GREEN },
+  slotText: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
+  slotTextSelected: { color: WHITE },
+
+  // Resumo
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: "#1a3d31",
+    fontWeight: "500",
+    flex: 1,
+  },
+  summaryDivider: { height: 1, backgroundColor: "#f0f8f4" },
+
   saveButton: {
     height: 54,
     borderRadius: 16,
@@ -617,7 +1124,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
-  saveButtonDisabled: { opacity: 0.75 },
+  saveButtonDisabled: { backgroundColor: "#cdddd5", shadowOpacity: 0 },
   saveButtonText: { color: WHITE, fontSize: 16, fontWeight: "700" },
   textRealInput: {
     minHeight: 52,
@@ -629,6 +1136,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#173d31",
     fontWeight: "500",
-    marginBottom: 14,
   },
 });

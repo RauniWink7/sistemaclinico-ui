@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getPatientProfile, updatePatientProfile, updateUser, PatientProfileApiItem } from '../../../services/api';
+import { getPatientProfile, updateUser, PatientProfileApiItem } from '../../../services/api';
 
 const GREEN = '#2e8b6e';
 const GREEN_DARK = '#1f684f';
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { fontSize: 15, color: GREEN, fontWeight: '600' },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40 },
+  scrollContent: { padding: 22, paddingBottom: 40, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
 
   profileCard: {
     backgroundColor: WHITE,

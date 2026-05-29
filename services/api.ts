@@ -99,6 +99,80 @@ export interface DocumentApi {
   download_url?: string;
 }
 
+export interface NotificationApiItem {
+  id: string;
+  type: string;
+  channel: string;
+  status: string;
+  title: string;
+  body: string;
+  metadata?: Record<string, any>;
+  is_read: boolean;
+  read_at?: string | null;
+  sent_at?: string | null;
+  created_at: string;
+}
+
+export interface ReportPeriodQuery {
+  start_date?: string;
+  end_date?: string;
+  professional_id?: string;
+  clinic_id?: string;
+}
+
+export interface ReportSummary {
+  total_appointments?: number;
+  unique_patients?: number;
+  patients_attended?: number;
+  scheduled?: number;
+  completed?: number;
+  cancelled?: number;
+  rescheduled?: number;
+  no_show?: number;
+  attendance_rate_percent?: number;
+  cancellation_rate_percent?: number;
+  first_appointment_at?: string | null;
+  last_appointment_at?: string | null;
+}
+
+export interface ReportRow {
+  [key: string]: any;
+}
+
+export interface PatientReportApi {
+  report: "patient" | "professional_patient";
+  period: { start_date?: string | null; end_date?: string | null };
+  patient?: ReportRow;
+  professional?: ReportRow;
+  summary: ReportSummary;
+  status_counts: ReportRow[];
+  frequency_by_month: ReportRow[];
+  appointment_history: ReportRow[];
+}
+
+export interface ProfessionalSummaryReportApi {
+  report: "professional_summary";
+  period: { start_date?: string | null; end_date?: string | null };
+  professional: ReportRow;
+  summary: ReportSummary;
+  status_counts: ReportRow[];
+  volume_by_month: ReportRow[];
+  patients: ReportRow[];
+  appointments: ReportRow[];
+}
+
+export interface AdminAppointmentsReportApi {
+  report: "admin_appointments";
+  period: { start_date?: string | null; end_date?: string | null };
+  clinic_id?: string | null;
+  filters?: ReportRow;
+  summary: ReportSummary;
+  status_counts: ReportRow[];
+  consultations_by_period: ReportRow[];
+  consultations_by_professional: ReportRow[];
+  appointments: ReportRow[];
+}
+
 // Tipagem fiel ao retorno real de GET /api/auth/professionals/
 export interface ProfessionalApiItem {
   id: string; // UUID do ProfessionalProfile — usado no POST /appointments/
@@ -181,7 +255,7 @@ export interface ApiResult<T = any> {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const fetchJson = async (url: string, options: RequestInit = {}) => {
-  const response = await fetch(url, options);
+  const response = await fetchWithRefresh(url, options);
   const data = await response.json().catch(() => null);
   return { response, data };
 };
@@ -194,8 +268,11 @@ const base64UrlDecode = (input: string): string => {
   const pad = base64.length % 4;
   const padded =
     base64 + (pad === 2 ? "==" : pad === 3 ? "=" : pad === 1 ? "===" : "");
+  // '=' fica fora da tabela de propósito: é padding e deve ser ignorado no loop
+  // (indexOf retorna -1 e o caractere é pulado). Incluí-lo corrompia o último
+  // byte decodificado, quebrando o JSON.parse do token e zerando o role no login.
   const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const bytes = [] as number[];
   let buffer = 0;
   let bits = 0;
@@ -287,6 +364,72 @@ const createAuthHeaders = async (): Promise<Record<string, string> | null> => {
   };
 };
 
+// ─── Token Refresh ──────────────────────────────────────────────────────────
+
+// Single-flight: várias requisições que tomam 401 ao mesmo tempo compartilham
+// um único refresh. Com ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION, o
+// primeiro refresh invalida o refresh token antigo, então refreshes concorrentes
+// com o token antigo falhariam.
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshAccessToken = async (): Promise<string | null> => {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) return null;
+
+      const response = await fetch(`${API_BASE_URL}/auth/refresh/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+      const data = await response.json().catch(() => null);
+      const newAccess = data?.access;
+
+      if (!response.ok || !newAccess) {
+        // Refresh expirado/inválido — limpa a sessão para forçar novo login.
+        await clearTokens();
+        return null;
+      }
+
+      // ROTATE_REFRESH_TOKENS=True: o backend devolve um novo refresh a cada uso.
+      await saveTokens(newAccess, data?.refresh ?? refreshToken);
+      return newAccess;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+};
+
+// Faz o fetch e, ao receber 401 numa requisição autenticada, renova o token uma
+// vez e refaz a chamada. Requisições públicas (sem Authorization) passam direto.
+const fetchWithRefresh = async (
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> => {
+  const headers = {
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  const hadAuth = "Authorization" in headers;
+
+  const response = await fetch(url, { ...options, headers });
+  if (response.status !== 401 || !hadAuth) return response;
+
+  const newToken = await refreshAccessToken();
+  if (!newToken) return response;
+
+  return fetch(url, {
+    ...options,
+    headers: { ...headers, Authorization: `Bearer ${newToken}` },
+  });
+};
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const login = async (
@@ -328,6 +471,98 @@ export const register = async (
   return { ok: true, data };
 };
 
+// ─── Admin User Management ───────────────────────────────────────────────────
+
+// GET /api/auth/admin/users/ — listar todos os usuários da clínica
+export const getAdminUsers = async (): Promise<ApiResult<any[]>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/`,
+    { method: "GET", headers },
+  );
+  const results = extractList<any>(data);
+  if (!response.ok)
+    return { ok: false, error: normalizeError(data), data: results };
+  return { ok: true, data: results };
+};
+
+// GET /api/auth/admin/users/<id>/ — detalhes de um usuário
+export const getAdminUser = async (userId: string): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/${encodeURIComponent(userId)}/`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/auth/admin/users/<id>/ — editar dados básicos do usuário
+export const updateAdminUser = async (
+  userId: string,
+  payload: { full_name?: string; phone?: string; email?: string },
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/${encodeURIComponent(userId)}/`,
+    { method: "PATCH", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/auth/admin/users/<id>/status/ — ativar/desativar usuário
+export const toggleUserStatus = async (
+  userId: string,
+  isActive: boolean,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/${encodeURIComponent(userId)}/status/`,
+    { method: "PATCH", headers, body: JSON.stringify({ is_active: isActive }) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/auth/admin/users/<id>/role/ — alterar papel do usuário
+export const changeUserRole = async (
+  userId: string,
+  role: string,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/${encodeURIComponent(userId)}/role/`,
+    { method: "PATCH", headers, body: JSON.stringify({ role }) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// POST /api/auth/admin/users/professionals/ — criar profissional via admin
+export const createProfessionalAsAdmin = async (payload: {
+  email: string;
+  full_name: string;
+  phone?: string;
+  crp?: string;
+  specialty?: string;
+  send_invite?: boolean;
+}): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/professionals/`,
+    { method: "POST", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 // POST /api/auth/admin/users/patients/ — criar paciente via admin (requer autenticação)
 export const createPatientAsAdmin = async (payload: {
   email: string;
@@ -360,7 +595,7 @@ export const createPatientAsAdmin = async (payload: {
 export const getMe = async (): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
-  const response = await fetch(`${API_BASE_URL}/auth/me/`, {
+  const response = await fetchWithRefresh(`${API_BASE_URL}/auth/me/`, {
     method: "GET",
     headers,
   });
@@ -511,7 +746,7 @@ export const deleteAvailability = async (
   const token = await getAccessToken();
   const url = `${API_BASE_URL}/appointments/availability/${encodeURIComponent(availabilityId)}/`;
   console.log("🗑️ DELETE availability:", url);
-  const response = await fetch(url, {
+  const response = await fetchWithRefresh(url, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -611,6 +846,20 @@ export const getProfessionalsByClinic = async (
 
 // ─── Agendamentos ─────────────────────────────────────────────────────────────
 
+// GET /api/appointments/<id>/ — detalhe completo de uma consulta
+export const getAppointmentDetail = async (
+  appointmentId: string,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 export const getAppointments = async (): Promise<
   ApiResult<AppointmentApiItem[]>
 > => {
@@ -652,6 +901,7 @@ export const createAppointment = async (
   professionalId: string, // item.id do ProfessionalProfile — UUID obrigatório
   scheduledAt: string, // ex: "2025-06-15T10:00:00-03:00" — formato ISO 8601 com timezone obrigatório
   durationMinutes = 50,
+  options: { patientId?: string; clinicId?: string } = {},
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "Usuário não autenticado." };
@@ -660,13 +910,17 @@ export const createAppointment = async (
   const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(scheduledAt);
   const scheduledAtUtc = hasTimezone ? scheduledAt : `${scheduledAt}Z`;
 
-  const clinicId = await getClinicId();
+  const clinicId = options.clinicId ?? (await getClinicId());
 
   const payload: Record<string, any> = {
     professional: professionalId,
     scheduled_at: scheduledAtUtc,
     duration_minutes: durationMinutes,
   };
+
+  if (options.patientId) {
+    payload.patient = options.patientId;
+  }
 
   if (clinicId) {
     payload.clinic = clinicId;
@@ -891,6 +1145,123 @@ export const getUnreadNotifications = async (): Promise<
   return { ok: true, data };
 };
 
+export const getNotifications = async (): Promise<
+  ApiResult<NotificationApiItem[]>
+> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(`${API_BASE_URL}/notifications/`, {
+    method: "GET",
+    headers,
+  });
+  const results = extractList<NotificationApiItem>(data);
+  if (!response.ok)
+    return { ok: false, error: normalizeError(data), data: results };
+  return { ok: true, data: results };
+};
+
+export const markNotificationRead = async (
+  notificationId: string,
+): Promise<ApiResult<NotificationApiItem>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/notifications/${encodeURIComponent(notificationId)}/read/`,
+    { method: "PATCH", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+const createQueryString = (params: ReportPeriodQuery = {}): string => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) query.append(key, value);
+  });
+  const serialized = query.toString();
+  return serialized ? `?${serialized}` : "";
+};
+
+const getReport = async <T>(
+  path: string,
+  params: ReportPeriodQuery = {},
+): Promise<ApiResult<T>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}${path}${createQueryString(params)}`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+export const getPatientReport = async (
+  patientId: string,
+  params: ReportPeriodQuery = {},
+): Promise<ApiResult<PatientReportApi>> =>
+  getReport<PatientReportApi>(
+    `/reports/patients/${encodeURIComponent(patientId)}/`,
+    params,
+  );
+
+export const getProfessionalSummaryReport = async (
+  params: ReportPeriodQuery = {},
+): Promise<ApiResult<ProfessionalSummaryReportApi>> =>
+  getReport<ProfessionalSummaryReportApi>(
+    "/reports/professionals/summary/",
+    params,
+  );
+
+export const getProfessionalPatientReport = async (
+  patientId: string,
+  params: ReportPeriodQuery = {},
+): Promise<ApiResult<PatientReportApi>> =>
+  getReport<PatientReportApi>(
+    `/reports/professionals/patients/${encodeURIComponent(patientId)}/`,
+    params,
+  );
+
+export const getAdminAppointmentsReport = async (
+  params: ReportPeriodQuery = {},
+): Promise<ApiResult<AdminAppointmentsReportApi>> =>
+  getReport<AdminAppointmentsReportApi>("/reports/admin/appointments/", params);
+
+export const downloadReportFile = async (
+  path: string,
+  params: ReportPeriodQuery = {},
+  filename: string,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  if (Platform.OS !== "web") {
+    return {
+      ok: false,
+      error: "Exportação de arquivos disponível no navegador.",
+    };
+  }
+
+  const response = await fetchWithRefresh(
+    `${API_BASE_URL}${path}${createQueryString(params)}`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    return { ok: false, error: normalizeError(data), data };
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  return { ok: true };
+};
+
 export const markMessageRead = async (
   messageId: string,
 ): Promise<ApiResult> => {
@@ -923,7 +1294,7 @@ export const getDocuments = async () => {
   try {
     const token = await getAccessToken();
 
-    const res = await fetch(`${API_BASE_URL}/records/documents/`, {
+    const res = await fetchWithRefresh(`${API_BASE_URL}/records/documents/`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -945,7 +1316,7 @@ export const getDocumentsByPatient = async (patientUserId: string) => {
   try {
     const token = await getAccessToken();
 
-    const res = await fetch(
+    const res = await fetchWithRefresh(
       `${API_BASE_URL}/records/documents/?patient=${encodeURIComponent(patientUserId)}`,
       {
         headers: {
@@ -1005,7 +1376,7 @@ export const uploadDocument = async (
       formData.append("file", file as any);
     }
 
-    const res = await fetch(`${API_BASE_URL}/records/documents/`, {
+    const res = await fetchWithRefresh(`${API_BASE_URL}/records/documents/`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -1031,7 +1402,7 @@ export const deleteDocument = async (id: string) => {
   try {
     const token = await getAccessToken();
 
-    const res = await fetch(`${API_BASE_URL}/records/documents/${id}/`, {
+    const res = await fetchWithRefresh(`${API_BASE_URL}/records/documents/${id}/`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,

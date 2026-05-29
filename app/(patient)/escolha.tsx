@@ -19,20 +19,6 @@ import { getPsychologists, ProfessionalApiItem } from "../../services/api";
 const TextInput = RNTextInput;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Psychologist {
-  id: string;
-  name: string;
-  crp: string;
-  specialty: string;
-  bio: string;
-  initials: string;
-  color: string;
-  bg: string;
-  rating: number;
-  sessions: number;
-  available: boolean;
-}
-
 // ─── Stars ────────────────────────────────────────────────────────────────────
 const Stars = ({ rating }: { rating: number }) => (
   <View style={styles.starsRow}>
@@ -442,6 +428,9 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
     gap: 16,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
 
   // Card

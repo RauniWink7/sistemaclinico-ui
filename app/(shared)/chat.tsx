@@ -321,9 +321,10 @@ export default function ChatScreen() {
       };
 
       ws.onclose = (e) => {
+        // 4401 = token do WebSocket rejeitado. Não desloga o usuário: o chat
+        // continua funcional via REST (histórico e envio com fallback). Apenas
+        // não reconecta em loop com um token inválido.
         if (e.code === 4401) {
-          Alert.alert("Sessão expirada", "Faça login novamente.");
-          router.replace("/login");
           return;
         }
         // Reconecta após 3s se o contato ativo não mudou

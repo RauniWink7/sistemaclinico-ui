@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { getMe, getProfessionalsByClinic, register, updateProfessionalProfile } from '../../services/api';
+import { getMe, getProfessionalsByClinic, createProfessionalAsAdmin } from '../../services/api';
 
 type ProfessionalStatus = 'ativo' | 'inativo';
 
@@ -200,14 +200,14 @@ export default function AdminUserManagementScreen() {
     setCreatingProfessional(true);
 
     try {
-      // Primeiro, cria o usuário profissional
-      const registerResult = await register({
+      // Cria o profissional via endpoint admin (register() não permite role=professional)
+      const registerResult = await createProfessionalAsAdmin({
         full_name: newProfessional.fullName,
         email: newProfessional.email,
         phone: newProfessional.phone || undefined,
-        password: newProfessional.password,
-        clinic: clinicId,
-        role: 'professional',
+        crp: newProfessional.crp || undefined,
+        specialty: newProfessional.specialty || undefined,
+        send_invite: true,
       });
 
       if (!registerResult.ok) {
@@ -633,6 +633,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 22,
     paddingBottom: 100,
+    maxWidth: 960,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
   },
   heroCard: {
     backgroundColor: WHITE,

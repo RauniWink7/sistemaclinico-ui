@@ -21,6 +21,7 @@ import {
     getPsychologists,
     updateAvailability,
 } from "../../services/api";
+import { useSavedToast } from "../../components/saved-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AvailabilitySlot {
@@ -79,6 +80,7 @@ const WHITE = "#ffffff";
 export default function AvailabilityScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { showToast, toast } = useSavedToast();
   const [professionalId, setProfessionalId] = useState("");
   const [availability, setAvailability] = useState<AvailabilitySlot[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -191,7 +193,7 @@ export default function AvailabilityScreen() {
           setAvailability(availResult.data as AvailabilitySlot[]);
         }
         setShowModal(false);
-        Alert.alert("Sucesso", "Horário atualizado!");
+        showToast("Horário atualizado!");
       } else {
         Alert.alert(
           "Erro",
@@ -218,7 +220,7 @@ export default function AvailabilityScreen() {
           setAvailability(availResult.data as AvailabilitySlot[]);
         }
         setShowModal(false);
-        Alert.alert("Sucesso", "Horário adicionado!");
+        showToast("Horário adicionado!");
       } else {
         Alert.alert(
           "Erro",
@@ -707,6 +709,7 @@ export default function AvailabilityScreen() {
           </View>
         </View>
       </Modal>
+      {toast}
     </View>
   );
 }
@@ -773,7 +776,7 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14, color: "#7aab96" },
 
   scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 48 },
+  scrollContent: { padding: 20, paddingBottom: 48, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
 
   overviewRow: {
     flexDirection: "row",

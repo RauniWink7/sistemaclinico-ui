@@ -263,11 +263,7 @@ export default function LoginScreen() {
             {/* Esqueci minha senha */}
             <TouchableOpacity
               style={styles.forgotBtn}
-              onPress={() =>
-                alert(
-                  "Fluxo de recuperacao de senha ainda nao foi implementado.",
-                )
-              }
+              onPress={() => router.push("/esqueci-senha" as any)}
             >
               <Text style={styles.forgotText}>Esqueci minha senha</Text>
             </TouchableOpacity>
@@ -453,6 +449,9 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderRadius: 24,
     padding: 24,
+    maxWidth: 480,
+    alignSelf: 'center' as const,
+    width: '100%' as const,
     shadowColor: "#2e8b6e",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
