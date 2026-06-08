@@ -2,22 +2,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Modal,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  AppointmentApiItem,
-  getAppointments,
-  getMe,
-  updateAppointmentStatus,
+    AppointmentApiItem,
+    getAppointments,
+    getMe,
+    updateAppointmentStatus,
 } from "../../services/api";
 
 type AppointmentStatus =
@@ -252,18 +252,24 @@ export default function PsychologistAgendaScreen() {
     // Captura o id ANTES de qualquer setState para evitar closure stale
     const updatedId = selectedAppointment.id;
 
-    console.log(
-      `🔄 Enviando atualização: appointmentId=${updatedId}, newStatus=${newStatus}`,
-    );
+    if (__DEV__) {
+      console.log(
+        `🔄 Enviando atualização: appointmentId=${updatedId}, newStatus=${newStatus}`,
+      );
+    }
 
     const result = await updateAppointmentStatus(updatedId, newStatus);
 
-    console.log("📡 Resposta da API:", result);
+    if (__DEV__) {
+      console.log("📡 Resposta da API:", result);
+    }
 
     setUpdatingStatus(false);
 
     if (result.ok) {
-      console.log("✅ Atualização bem-sucedida no backend");
+      if (__DEV__) {
+        console.log("✅ Atualização bem-sucedida no backend");
+      }
 
       // Atualiza estado local imediatamente para feedback instantâneo
       setAppointments((current) =>
@@ -281,9 +287,13 @@ export default function PsychologistAgendaScreen() {
       // Isso evita que uma resposta lenta do backend reverta o status local
       setTimeout(() => {
         const reloadData = async () => {
-          console.log("🔄 Recarregando consultas do backend...");
+          if (__DEV__) {
+            console.log("🔄 Recarregando consultas do backend...");
+          }
           const appointmentsResult = await getAppointments();
-          console.log("📝 Consultas recarregadas:", appointmentsResult);
+          if (__DEV__) {
+            console.log("📝 Consultas recarregadas:", appointmentsResult);
+          }
 
           if (appointmentsResult.ok && appointmentsResult.data) {
             const freshAppointments = appointmentsResult.data
@@ -298,9 +308,11 @@ export default function PsychologistAgendaScreen() {
                 if (fetched.id === updatedId) {
                   const backendReflected = fetched.status === newStatus;
                   if (!backendReflected) {
-                    console.warn(
-                      `⚠️ Backend ainda retornou status antigo (${fetched.status}) para ${updatedId}. Mantendo ${newStatus}.`,
-                    );
+                    if (__DEV__) {
+                      console.warn(
+                        `⚠️ Backend ainda retornou status antigo (${fetched.status}) para ${updatedId}. Mantendo ${newStatus}.`,
+                      );
+                    }
                   }
                   return backendReflected
                     ? fetched
@@ -320,7 +332,9 @@ export default function PsychologistAgendaScreen() {
         reloadData();
       }, 1500);
     } else {
-      console.error("❌ Erro ao atualizar:", result.error);
+      if (__DEV__) {
+        console.error("❌ Erro ao atualizar:", result.error);
+      }
       const detail = result.data ? JSON.stringify(result.data) : "";
       Alert.alert(
         "Erro ao atualizar",
@@ -378,7 +392,7 @@ export default function PsychologistAgendaScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Area do psicologo</Text>
+          <Text style={styles.headerEyebrow}>Área do psicólogo</Text>
           <Text style={styles.headerTitle}>Agenda profissional</Text>
         </View>
 

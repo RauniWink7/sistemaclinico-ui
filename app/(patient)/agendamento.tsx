@@ -2,25 +2,40 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+  Platform,
 } from "react-native";
 import {
-    AppointmentAvailabilityApiItem,
-    createAppointment,
-    getPsychologistAvailability,
-    getPsychologists,
-    ProfessionalApiItem
+  AppointmentAvailabilityApiItem,
+  createAppointment,
+  getCurrentPatientProfileId,
+  getPsychologistAvailability,
+  getPsychologists,
+  ProfessionalApiItem,
 } from "../../services/api";
 
+// Logo após os imports
+const showAlert = (title: string, message: string, onOk?: () => void) => {
+  if (Platform.OS === "web") {
+    window.alert(`${title}\n\n${message}`);
+    onOk?.();
+  } else {
+    Alert.alert(
+      title,
+      message,
+      onOk ? [{ text: "OK", onPress: onOk }] : undefined,
+    );
+  }
+};
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS = [
@@ -152,6 +167,7 @@ export default function ScheduleScreen() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [availability, setAvailability] = useState<AvailabilityItem[]>([]);
   const [availableWeekdays, setAvailableWeekdays] = useState<string[]>([]);
+  const [patientProfileId, setPatientProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(true);
 
@@ -172,6 +188,17 @@ export default function ScheduleScreen() {
       }),
     ]).start();
   }, [fadeAnim, slideAnim]);
+
+  React.useEffect(() => {
+    const loadPatientProfile = async () => {
+      const result = await getCurrentPatientProfileId();
+      if (__DEV__) {
+        console.log("👤 patientProfileId result:", JSON.stringify(result));
+      }
+      setPatientProfileId(result.ok && result.data ? result.data : null);
+    };
+    void loadPatientProfile();
+  }, []);
 
   React.useEffect(() => {
     const loadProfessionals = async () => {
@@ -311,9 +338,18 @@ export default function ScheduleScreen() {
   // ── Confirm ─────────────────────────────────────────────────────────────────
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime || !activePsychologist) {
-      Alert.alert("Erro", "Preencha todos os campos antes de confirmar.");
+      showAlert("Erro", "Preencha todos os campos antes de confirmar.");
       return;
     }
+    if (!patientProfileId) {
+      showAlert(
+        "Erro",
+        "Não foi possível identificar seu perfil de paciente. Tente sair e entrar novamente.",
+      );
+
+      return;
+    }
+
     setLoading(true);
     try {
       // Cria ISO 8601 com timezone de Brasília (-03:00)
@@ -324,23 +360,25 @@ export default function ScheduleScreen() {
         activePsychologist.id,
         scheduledAt,
         activePsychologist.sessionDuration,
+        { patientId: patientProfileId },
       );
 
       if (!result.ok) {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível confirmar o agendamento.",
         );
+
         return;
       }
 
-      Alert.alert(
+      showAlert(
         "Consulta agendada! 🎉",
-        `${activePsychologist?.name ?? ""}\n${formatDate(selectedDate)} às ${selectedTime}\n\nUm e-mail de confirmação foi enviado.`,
-        [{ text: "OK", onPress: () => router.back() }],
+        `${activePsychologist?.name ?? ""}\n${formatDate(selectedDate)}às ${selectedTime}\n\nUm e-mail de confirmação foi enviado.`,
+        () => router.back(),
       );
     } catch {
-      Alert.alert("Erro", "Não foi possível confirmar o agendamento.");
+      showAlert("Erro", "Não foi possível confirmar o agendamento.");
     } finally {
       setLoading(false);
     }

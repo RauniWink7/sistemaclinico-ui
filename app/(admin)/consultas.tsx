@@ -2,25 +2,25 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  AppointmentApiItem,
-  cancelAppointment,
-  getAppointments,
-  getPsychologists,
-  updateAppointmentStatus,
+    AppointmentApiItem,
+    cancelAppointment,
+    getAppointments,
+    getPsychologists,
+    updateAppointmentStatus,
 } from "../../services/api";
 
 // ─── Tema ─────────────────────────────────────────────────────────────────────
@@ -54,31 +54,56 @@ interface StatusConfig {
 }
 
 const STATUS_MAP: Record<string, StatusConfig> = {
-  scheduled:   { label: "Agendada",       color: "#2d6cdf", bg: "#eaf1ff", icon: "time-outline" },
-  completed:   { label: "Concluida",      color: "#2e8b6e", bg: "#e8f7f1", icon: "checkmark-circle-outline" },
-  cancelled:   { label: "Cancelada",      color: "#d95c5c", bg: "#fdeeee", icon: "close-circle-outline" },
-  no_show:     { label: "Nao compareceu", color: "#c46a1a", bg: "#fef3e8", icon: "alert-circle-outline" },
-  rescheduled: { label: "Remarcada",      color: "#8a55d9", bg: "#f3ecff", icon: "refresh-circle-outline" },
+  scheduled: {
+    label: "Agendada",
+    color: "#2d6cdf",
+    bg: "#eaf1ff",
+    icon: "time-outline",
+  },
+  completed: {
+    label: "Concluída",
+    color: "#2e8b6e",
+    bg: "#e8f7f1",
+    icon: "checkmark-circle-outline",
+  },
+  cancelled: {
+    label: "Cancelada",
+    color: "#d95c5c",
+    bg: "#fdeeee",
+    icon: "close-circle-outline",
+  },
+  no_show: {
+    label: "Não compareceu",
+    color: "#c46a1a",
+    bg: "#fef3e8",
+    icon: "alert-circle-outline",
+  },
+  rescheduled: {
+    label: "Remarcada",
+    color: "#8a55d9",
+    bg: "#f3ecff",
+    icon: "refresh-circle-outline",
+  },
 };
 
 const FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: "all",       label: "Todas" },
+  { key: "all", label: "Todas" },
   { key: "scheduled", label: "Agendadas" },
-  { key: "completed", label: "Concluidas" },
+  { key: "completed", label: "Concluídas" },
   { key: "cancelled", label: "Canceladas" },
-  { key: "no_show",   label: "Faltou" },
+  { key: "no_show", label: "Faltou" },
 ];
 
 const STATUS_OPTIONS: { label: string; value: AppointmentStatus }[] = [
-  { label: "Concluida",      value: "completed" },
-  { label: "Remarcada",      value: "rescheduled" },
-  { label: "Nao compareceu", value: "no_show" },
+  { label: "Concluída", value: "completed" },
+  { label: "Remarcada", value: "rescheduled" },
+  { label: "Não compareceu", value: "no_show" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatDateTime = (iso: string): string => {
-  if (!iso) return "Data nao informada";
+  if (!iso) return "Data não informada";
   try {
     const d = new Date(iso);
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -116,9 +141,7 @@ const normalize = (
     "Profissional desconhecido";
 
   const specialty =
-    (item as any).professional_detail?.specialty ??
-    item.specialty ??
-    "";
+    (item as any).professional_detail?.specialty ?? item.specialty ?? "";
 
   return {
     id: item.id,
@@ -142,7 +165,12 @@ const DecorativeBackground = () => (
 );
 
 const StatusBadge = ({ status }: { status: string }) => {
-  const cfg = STATUS_MAP[status] ?? { label: status, color: "#6c8c80", bg: "#edf4f0", icon: "ellipse-outline" };
+  const cfg = STATUS_MAP[status] ?? {
+    label: status,
+    color: "#6c8c80",
+    bg: "#edf4f0",
+    icon: "ellipse-outline",
+  };
   return (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
@@ -169,8 +197,12 @@ const AppointmentCard = ({
           <Text style={styles.avatarText}>{getInitials(item.patientName)}</Text>
         </View>
         <View style={styles.cardInfo}>
-          <Text style={styles.patientName} numberOfLines={1}>{item.patientName}</Text>
-          <Text style={styles.professionalName} numberOfLines={1}>{item.professionalName}</Text>
+          <Text style={styles.patientName} numberOfLines={1}>
+            {item.patientName}
+          </Text>
+          <Text style={styles.professionalName} numberOfLines={1}>
+            {item.professionalName}
+          </Text>
         </View>
         <StatusBadge status={item.status} />
       </View>
@@ -211,7 +243,9 @@ const AppointmentCard = ({
             activeOpacity={0.8}
           >
             <Ionicons name="close-outline" size={14} color="#d95c5c" />
-            <Text style={[styles.actionBtnText, { color: "#d95c5c" }]}>Cancelar</Text>
+            <Text style={[styles.actionBtnText, { color: "#d95c5c" }]}>
+              Cancelar
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -230,12 +264,14 @@ export default function AdminAppointmentsScreen() {
 
   // Modal alterar status
   const [statusModalVisible, setStatusModalVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<NormalizedAppointment | null>(null);
+  const [selectedItem, setSelectedItem] =
+    useState<NormalizedAppointment | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Modal cancelamento
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
-  const [cancelTarget, setCancelTarget] = useState<NormalizedAppointment | null>(null);
+  const [cancelTarget, setCancelTarget] =
+    useState<NormalizedAppointment | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
@@ -244,8 +280,16 @@ export default function AdminAppointmentsScreen() {
 
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, []);
 
@@ -273,13 +317,21 @@ export default function AdminAppointmentsScreen() {
       }
 
       if (!apptResult.ok) {
-        Alert.alert("Erro", apptResult.error ?? "Nao foi possivel carregar as consultas.");
+        Alert.alert(
+          "Erro",
+          apptResult.error ?? "Não foi possível carregar as consultas.",
+        );
         return;
       }
 
-      const normalized = (apptResult.data ?? []).map((item) => normalize(item, profMap));
+      const normalized = (apptResult.data ?? []).map((item) =>
+        normalize(item, profMap),
+      );
       // Mais recentes primeiro
-      normalized.sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+      normalized.sort(
+        (a, b) =>
+          new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime(),
+      );
       setAppointments(normalized);
     } catch (err: any) {
       Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
@@ -289,12 +341,18 @@ export default function AdminAppointmentsScreen() {
     }
   }, []);
 
-  useEffect(() => { void loadData(); }, [loadData]);
-  const onRefresh = () => { setRefreshing(true); void loadData(true); };
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+  const onRefresh = () => {
+    setRefreshing(true);
+    void loadData(true);
+  };
 
   // ── Filtros ─────────────────────────────────────────────────────────────────
   const filtered = appointments.filter((item) => {
-    const matchesFilter = activeFilter === "all" || item.status === activeFilter;
+    const matchesFilter =
+      activeFilter === "all" || item.status === activeFilter;
     const q = search.toLowerCase();
     const matchesSearch =
       !q ||
@@ -304,11 +362,11 @@ export default function AdminAppointmentsScreen() {
   });
 
   const counts = {
-    all:       appointments.length,
+    all: appointments.length,
     scheduled: appointments.filter((a) => a.status === "scheduled").length,
     completed: appointments.filter((a) => a.status === "completed").length,
     cancelled: appointments.filter((a) => a.status === "cancelled").length,
-    no_show:   appointments.filter((a) => a.status === "no_show").length,
+    no_show: appointments.filter((a) => a.status === "no_show").length,
   };
 
   // ── Acao: alterar status ────────────────────────────────────────────────────
@@ -323,11 +381,16 @@ export default function AdminAppointmentsScreen() {
     try {
       const result = await updateAppointmentStatus(selectedItem.id, newStatus);
       if (!result.ok) {
-        Alert.alert("Erro", result.error ?? "Nao foi possivel atualizar o status.");
+        Alert.alert(
+          "Erro",
+          result.error ?? "Não foi possível atualizar o status.",
+        );
         return;
       }
       setAppointments((prev) =>
-        prev.map((a) => (a.id === selectedItem.id ? { ...a, status: newStatus } : a))
+        prev.map((a) =>
+          a.id === selectedItem.id ? { ...a, status: newStatus } : a,
+        ),
       );
       setStatusModalVisible(false);
     } catch (err: any) {
@@ -351,11 +414,16 @@ export default function AdminAppointmentsScreen() {
       const reason = cancelReason.trim() || "Cancelado pelo administrador";
       const result = await cancelAppointment(cancelTarget.id, reason);
       if (!result.ok) {
-        Alert.alert("Erro", result.error ?? "Nao foi possivel cancelar a consulta.");
+        Alert.alert(
+          "Erro",
+          result.error ?? "Não foi possível cancelar a consulta.",
+        );
         return;
       }
       setAppointments((prev) =>
-        prev.map((a) => (a.id === cancelTarget.id ? { ...a, status: "cancelled" } : a))
+        prev.map((a) =>
+          a.id === cancelTarget.id ? { ...a, status: "cancelled" } : a,
+        ),
       );
       setCancelModalVisible(false);
     } catch (err: any) {
@@ -371,14 +439,20 @@ export default function AdminAppointmentsScreen() {
       <View style={styles.screen}>
         <StatusBar barStyle="light-content" backgroundColor={GREEN} />
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back-outline" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerTextBox}>
-            <Text style={styles.headerEyebrow}>Area administrativa</Text>
+            <Text style={styles.headerEyebrow}>Área administrativa</Text>
             <Text style={styles.headerTitle}>Consultas</Text>
           </View>
-          <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace("/(admin)")}>
+          <TouchableOpacity
+            style={styles.homeBtn}
+            onPress={() => router.replace("/(admin)")}
+          >
             <Ionicons name="grid-outline" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -401,10 +475,13 @@ export default function AdminAppointmentsScreen() {
           <Ionicons name="arrow-back-outline" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Area administrativa</Text>
+          <Text style={styles.headerEyebrow}>Área administrativa</Text>
           <Text style={styles.headerTitle}>Consultas</Text>
         </View>
-        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace("/(admin)")}>
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => router.replace("/(admin)")}
+        >
           <Ionicons name="grid-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -414,17 +491,23 @@ export default function AdminAppointmentsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GREEN]} tintColor={GREEN} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[GREEN]}
+            tintColor={GREEN}
+          />
         }
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           {/* Hero */}
           <View style={styles.heroCard}>
-            <Text style={styles.heroEyebrow}>Supervisao</Text>
+            <Text style={styles.heroEyebrow}>Supervisão</Text>
             <Text style={styles.heroTitle}>Agenda de consultas</Text>
             <Text style={styles.heroSubtitle}>
-              Visualize, filtre e atualize o status das consultas da clinica.
+              Visualize, filtre e atualize o status das consultas da clínica.
             </Text>
             <View style={styles.countersRow}>
               <View style={styles.counter}>
@@ -433,17 +516,23 @@ export default function AdminAppointmentsScreen() {
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counter}>
-                <Text style={[styles.counterValue, { color: "#2d6cdf" }]}>{counts.completed}</Text>
+                <Text style={[styles.counterValue, { color: "#2d6cdf" }]}>
+                  {counts.completed}
+                </Text>
                 <Text style={styles.counterLabel}>Concluidas</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counter}>
-                <Text style={[styles.counterValue, { color: "#d95c5c" }]}>{counts.cancelled}</Text>
+                <Text style={[styles.counterValue, { color: "#d95c5c" }]}>
+                  {counts.cancelled}
+                </Text>
                 <Text style={styles.counterLabel}>Canceladas</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counter}>
-                <Text style={[styles.counterValue, { color: "#c46a1a" }]}>{counts.no_show}</Text>
+                <Text style={[styles.counterValue, { color: "#c46a1a" }]}>
+                  {counts.no_show}
+                </Text>
                 <Text style={styles.counterLabel}>Faltou</Text>
               </View>
             </View>
@@ -467,19 +556,41 @@ export default function AdminAppointmentsScreen() {
           </View>
 
           {/* Filtros */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+          >
             {FILTERS.map((f) => (
               <TouchableOpacity
                 key={f.key}
-                style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
+                style={[
+                  styles.filterChip,
+                  activeFilter === f.key && styles.filterChipActive,
+                ]}
                 onPress={() => setActiveFilter(f.key)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    activeFilter === f.key && styles.filterChipTextActive,
+                  ]}
+                >
                   {f.label}
                 </Text>
-                <View style={[styles.filterCount, activeFilter === f.key && styles.filterCountActive]}>
-                  <Text style={[styles.filterCountText, activeFilter === f.key && styles.filterCountTextActive]}>
+                <View
+                  style={[
+                    styles.filterCount,
+                    activeFilter === f.key && styles.filterCountActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterCountText,
+                      activeFilter === f.key && styles.filterCountTextActive,
+                    ]}
+                  >
                     {counts[f.key]}
                   </Text>
                 </View>
@@ -495,13 +606,16 @@ export default function AdminAppointmentsScreen() {
               </View>
               <Text style={styles.emptyTitle}>Nenhuma consulta encontrada</Text>
               <Text style={styles.emptySubtitle}>
-                {search ? "Tente buscar por outro nome." : "Nao ha consultas para o filtro selecionado."}
+                {search
+                  ? "Tente buscar por outro nome."
+                  : "Não há consultas para o filtro selecionado."}
               </Text>
             </View>
           ) : (
             <>
               <Text style={styles.resultCount}>
-                {filtered.length} {filtered.length === 1 ? "consulta" : "consultas"}
+                {filtered.length}{" "}
+                {filtered.length === 1 ? "consulta" : "consultas"}
               </Text>
               {filtered.map((item) => (
                 <AppointmentCard
@@ -528,7 +642,9 @@ export default function AdminAppointmentsScreen() {
             <Text style={styles.modalTitle}>Alterar status</Text>
             {selectedItem && (
               <Text style={styles.modalSubtitle}>
-                {selectedItem.patientName}{"\n"}{selectedItem.dateFormatted}
+                {selectedItem.patientName}
+                {"\n"}
+                {selectedItem.dateFormatted}
               </Text>
             )}
 
@@ -538,17 +654,38 @@ export default function AdminAppointmentsScreen() {
                 return (
                   <TouchableOpacity
                     key={opt.value}
-                    style={[styles.statusOption, { borderColor: cfg.bg }, updatingStatus && styles.disabledBtn]}
+                    style={[
+                      styles.statusOption,
+                      { borderColor: cfg.bg },
+                      updatingStatus && styles.disabledBtn,
+                    ]}
                     onPress={() => confirmStatusChange(opt.value)}
                     activeOpacity={0.8}
                     disabled={updatingStatus}
                   >
-                    <View style={[styles.statusOptionIcon, { backgroundColor: cfg.bg }]}>
-                      <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
+                    <View
+                      style={[
+                        styles.statusOptionIcon,
+                        { backgroundColor: cfg.bg },
+                      ]}
+                    >
+                      <Ionicons
+                        name={cfg.icon as any}
+                        size={18}
+                        color={cfg.color}
+                      />
                     </View>
-                    <Text style={[styles.statusOptionText, { color: cfg.color }]}>{opt.label}</Text>
+                    <Text
+                      style={[styles.statusOptionText, { color: cfg.color }]}
+                    >
+                      {opt.label}
+                    </Text>
                     {updatingStatus && (
-                      <ActivityIndicator size="small" color={cfg.color} style={{ marginLeft: "auto" }} />
+                      <ActivityIndicator
+                        size="small"
+                        color={cfg.color}
+                        style={{ marginLeft: "auto" }}
+                      />
                     )}
                   </TouchableOpacity>
                 );
@@ -578,7 +715,9 @@ export default function AdminAppointmentsScreen() {
             <Text style={styles.modalTitle}>Cancelar consulta</Text>
             {cancelTarget && (
               <Text style={styles.modalSubtitle}>
-                {cancelTarget.patientName}{"\n"}{cancelTarget.dateFormatted}
+                {cancelTarget.patientName}
+                {"\n"}
+                {cancelTarget.dateFormatted}
               </Text>
             )}
 
@@ -605,14 +744,19 @@ export default function AdminAppointmentsScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalDangerBtn, cancelling && styles.disabledBtn]}
+                style={[
+                  styles.modalDangerBtn,
+                  cancelling && styles.disabledBtn,
+                ]}
                 onPress={confirmCancel}
                 activeOpacity={0.85}
                 disabled={cancelling}
               >
-                {cancelling
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.modalDangerText}>Confirmar</Text>}
+                {cancelling ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalDangerText}>Confirmar</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -627,140 +771,335 @@ export default function AdminAppointmentsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   circle1: {
-    position: "absolute", width: 280, height: 280, borderRadius: 140,
-    backgroundColor: "#27795f", top: -110, right: -70, opacity: 0.45,
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "#27795f",
+    top: -110,
+    right: -70,
+    opacity: 0.45,
   },
   circle2: {
-    position: "absolute", width: 180, height: 180, borderRadius: 90,
-    backgroundColor: GREEN_DARK, top: -55, left: -70, opacity: 0.28,
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: GREEN_DARK,
+    top: -55,
+    left: -70,
+    opacity: 0.28,
   },
   header: {
-    paddingTop: 56, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: GREEN,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingTop: 56,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    backgroundColor: GREEN,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: {
-    width: 42, height: 42, borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center",
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   homeBtn: {
-    width: 42, height: 42, borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center",
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTextBox: { flex: 1, marginHorizontal: 14 },
   headerEyebrow: { color: "#bce3d5", fontSize: 13, fontWeight: "600" },
-  headerTitle: { color: WHITE, fontSize: 24, fontWeight: "800", marginTop: 2, letterSpacing: -0.4 },
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
+  headerTitle: {
+    color: WHITE,
+    fontSize: 24,
+    fontWeight: "800",
+    marginTop: 2,
+    letterSpacing: -0.4,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+  },
   loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { padding: 22, paddingBottom: 40 },
   heroCard: {
-    backgroundColor: WHITE, borderRadius: 28, padding: 22, marginTop: -18, marginBottom: 18,
-    shadowColor: "#174c3e", shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 3,
+    backgroundColor: WHITE,
+    borderRadius: 28,
+    padding: 22,
+    marginTop: -18,
+    marginBottom: 18,
+    shadowColor: "#174c3e",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
-  heroEyebrow: { fontSize: 12, fontWeight: "700", color: GREEN, textTransform: "uppercase", letterSpacing: 1 },
-  heroTitle: { marginTop: 8, fontSize: 22, fontWeight: "800", color: "#173d31", letterSpacing: -0.5 },
-  heroSubtitle: { marginTop: 6, fontSize: 13, lineHeight: 19, color: "#5e7b70", marginBottom: 16 },
+  heroEyebrow: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: GREEN,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    marginTop: 8,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#173d31",
+    letterSpacing: -0.5,
+  },
+  heroSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#5e7b70",
+    marginBottom: 16,
+  },
   countersRow: {
-    flexDirection: "row", alignItems: "center",
-    borderTopWidth: 1, borderTopColor: "#edf4f0", paddingTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#edf4f0",
+    paddingTop: 14,
   },
   counter: { flex: 1, alignItems: "center" },
   counterValue: { fontSize: 20, fontWeight: "800", color: GREEN },
-  counterLabel: { fontSize: 11, color: "#7a9e90", fontWeight: "600", marginTop: 2 },
+  counterLabel: {
+    fontSize: 11,
+    color: "#7a9e90",
+    fontWeight: "600",
+    marginTop: 2,
+  },
   counterDivider: { width: 1, height: 32, backgroundColor: "#e0ede7" },
   searchBox: {
-    flexDirection: "row", alignItems: "center", backgroundColor: WHITE,
-    borderRadius: 16, borderWidth: 1.5, borderColor: "#d7ebe2",
-    paddingHorizontal: 14, height: 50, marginBottom: 14, gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#d7ebe2",
+    paddingHorizontal: 14,
+    height: 50,
+    marginBottom: 14,
+    gap: 8,
   },
   searchInput: { flex: 1, fontSize: 14, color: "#173d31", fontWeight: "500" },
   filtersRow: { gap: 8, paddingBottom: 16 },
   filterChip: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: WHITE, borderWidth: 1.5, borderColor: "#d7ebe2",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: WHITE,
+    borderWidth: 1.5,
+    borderColor: "#d7ebe2",
   },
   filterChipActive: { backgroundColor: GREEN, borderColor: GREEN },
   filterChipText: { fontSize: 13, fontWeight: "700", color: "#5e7b70" },
   filterChipTextActive: { color: WHITE },
   filterCount: {
-    minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#edf4f0",
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#edf4f0",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
   },
   filterCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
   filterCountText: { fontSize: 11, fontWeight: "700", color: "#5e7b70" },
   filterCountTextActive: { color: WHITE },
-  resultCount: { fontSize: 13, fontWeight: "700", color: "#7a9e90", marginBottom: 12 },
-  card: {
-    backgroundColor: WHITE, borderRadius: 22, padding: 16, marginBottom: 12,
-    shadowColor: "#174c3e", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2,
+  resultCount: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#7a9e90",
+    marginBottom: 12,
   },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
+  card: {
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#174c3e",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
   avatar: {
-    width: 46, height: 46, borderRadius: 15,
-    backgroundColor: "#e8f7f1", alignItems: "center", justifyContent: "center",
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: "#e8f7f1",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: { fontSize: 15, fontWeight: "800", color: GREEN },
   cardInfo: { flex: 1 },
   patientName: { fontSize: 15, fontWeight: "800", color: "#173d31" },
-  professionalName: { fontSize: 12, color: "#7a9e90", fontWeight: "600", marginTop: 2 },
-  badge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
+  professionalName: {
+    fontSize: 12,
+    color: "#7a9e90",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
   badgeText: { fontSize: 11, fontWeight: "700" },
   cardDetails: { gap: 6, marginBottom: 4 },
   detailItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   detailText: { fontSize: 12, color: "#6c8c80", fontWeight: "500" },
   cardActions: {
-    flexDirection: "row", gap: 8, marginTop: 14,
-    borderTopWidth: 1, borderTopColor: "#edf4f0", paddingTop: 12,
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#edf4f0",
+    paddingTop: 12,
   },
   actionBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 5, height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: "#cfe7dc", backgroundColor: "#f9fdfb",
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#cfe7dc",
+    backgroundColor: "#f9fdfb",
   },
   actionBtnRed: { borderColor: "#f5d0d0", backgroundColor: "#fff8f8" },
   actionBtnText: { fontSize: 12, fontWeight: "700", color: GREEN },
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyIcon: {
-    width: 72, height: 72, borderRadius: 24,
-    backgroundColor: "#e8f7f1", alignItems: "center", justifyContent: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: "#e8f7f1",
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyTitle: { fontSize: 17, fontWeight: "800", color: "#173d31" },
-  emptySubtitle: { fontSize: 13, color: "#7a9e90", textAlign: "center", lineHeight: 19 },
+  emptySubtitle: {
+    fontSize: 13,
+    color: "#7a9e90",
+    textAlign: "center",
+    lineHeight: 19,
+  },
 
   // Modais
   modalOverlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center", alignItems: "center", padding: 24,
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
-  modalBox: { backgroundColor: WHITE, borderRadius: 24, padding: 24, width: "100%", maxWidth: 400 },
-  modalTitle: { fontSize: 19, fontWeight: "800", color: "#173d31", textAlign: "center" },
-  modalSubtitle: { fontSize: 13, color: "#6c8c80", textAlign: "center", marginTop: 6, marginBottom: 20, lineHeight: 19 },
-  modalLabel: { fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
+  modalBox: {
+    backgroundColor: WHITE,
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#173d31",
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "#6c8c80",
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 20,
+    lineHeight: 19,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5f7d70",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
   modalInput: {
-    minHeight: 80, borderRadius: 14, borderWidth: 1.5, borderColor: "#d7ebe2",
-    backgroundColor: "#fbfefd", paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 14, color: "#173d31", marginBottom: 20,
+    minHeight: 80,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#d7ebe2",
+    backgroundColor: "#fbfefd",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#173d31",
+    marginBottom: 20,
   },
   modalRow: { flexDirection: "row", gap: 10 },
   modalCancelBtn: {
-    flex: 1, height: 46, borderRadius: 14,
-    borderWidth: 1.5, borderColor: "#cfe7dc", backgroundColor: "#f9fdfb",
-    alignItems: "center", justifyContent: "center",
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#cfe7dc",
+    backgroundColor: "#f9fdfb",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalCancelText: { fontSize: 14, fontWeight: "700", color: "#5e7b70" },
   modalDangerBtn: {
-    flex: 1, height: 46, borderRadius: 14,
-    backgroundColor: "#d95c5c", alignItems: "center", justifyContent: "center",
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#d95c5c",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalDangerText: { fontSize: 14, fontWeight: "700", color: WHITE },
   disabledBtn: { opacity: 0.6 },
   modalOptions: { gap: 10, marginBottom: 16 },
   statusOption: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    padding: 14, borderRadius: 14, borderWidth: 1.5, backgroundColor: "#fbfefd",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    backgroundColor: "#fbfefd",
   },
   statusOptionIcon: {
-    width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusOptionText: { fontSize: 15, fontWeight: "700" },
 });

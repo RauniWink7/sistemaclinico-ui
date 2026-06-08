@@ -256,13 +256,12 @@ export default function AdminAgendarScreen() {
 
     setSaving(true);
     try {
-      const scheduledAt = `${date}T${time}:00Z`; // UTC — backend rejeita sem timezone
+      const scheduledAt = `${date}T${time}:00-03:00`;
       const result = await createAppointment(
-        selectedPatient,
         selectedProfessional,
-        clinicId,
         scheduledAt,
         durationMin,
+        { patientId: selectedPatient, clinicId },
       );
 
       if (!result.ok) {

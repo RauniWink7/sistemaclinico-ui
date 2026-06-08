@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   KeyboardTypeOptions,
   Platform,
   ScrollView,
@@ -13,7 +12,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { getRouteForRole, login } from "../../services/api";
 
@@ -37,6 +36,9 @@ interface FloatingInputProps {
   error?: string;
   rightIcon?: string;
   onRightIconPress?: () => void;
+  returnKeyType?: "next" | "done" | "go" | "search" | "send";
+  onSubmitEditing?: () => void;
+  inputRef?: React.RefObject<TextInput | null>;
 }
 
 // ─── Floating Label Input ────────────────────────────────────────────────────
@@ -50,20 +52,16 @@ const FloatingInput = ({
   error,
   rightIcon,
   onRightIconPress,
+  returnKeyType = "next",
+  onSubmitEditing,
+  inputRef,
 }: FloatingInputProps) => {
   const [focused, setFocused] = useState(false);
   const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
 
-  const handleFocus = () => {
-    setFocused(true);
-    Animated.timing(animatedLabel, {
-      toValue: 1,
-      duration: 180,
-      useNativeDriver: false,
-    }).start();
-  };
 
-  const handleBlur = () => {
+
+  const handleBlur = useCallback(() => {
     setFocused(false);
     if (!value) {
       Animated.timing(animatedLabel, {
@@ -72,7 +70,7 @@ const FloatingInput = ({
         useNativeDriver: false,
       }).start();
     }
-  };
+  }, [animatedLabel, value]);
 
   const labelTop = animatedLabel.interpolate({
     inputRange: [0, 1],
@@ -100,6 +98,7 @@ const FloatingInput = ({
         ]}
       >
         <Animated.Text
+          pointerEvents="none"
           style={[
             styles.floatingLabel,
             { top: labelTop, fontSize: labelSize, color: labelColor },
@@ -108,15 +107,24 @@ const FloatingInput = ({
           {label}
         </Animated.Text>
         <TextInput
+          ref={inputRef}
           style={styles.textInput}
           value={value}
           onChangeText={onChangeText}
-          onFocus={handleFocus}
+
           onBlur={handleBlur}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType ?? "default"}
           autoCapitalize={autoCapitalize ?? "none"}
           placeholderTextColor="transparent"
+          blurOnSubmit={false} // false no Android permite digitar sem saltar
+          autoCorrect={false}
+          autoComplete={Platform.OS === "android" ? "off" : "off"}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          textContentType={Platform.OS === "android" ? "none" : "none"}
+          editable={true}
+          selectTextOnFocus={false} // evita seleção automática que pode interferir
         />
         {rightIcon && (
           <TouchableOpacity onPress={onRightIconPress} style={styles.eyeBtn}>
@@ -128,6 +136,9 @@ const FloatingInput = ({
     </View>
   );
 };
+
+// Memoize FloatingInput para evitar re-renderizações desnecessárias no Android
+const MemoizedFloatingInput = React.memo(FloatingInput);
 
 // ─── Props & Types ────────────────────────────────────────────────────────────
 interface FormState {
@@ -143,9 +154,13 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  // Ref mantido mas não usado para forçar foco (evita salto no Android)
+  const senhaRef = useRef<TextInput>(null);
 
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Comentado para Android - animações podem interferir com foco do input
   React.useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -161,13 +176,21 @@ export default function LoginScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const set = (field: keyof FormState) => (val: string) => {
-    setForm((prev) => ({ ...prev, [field]: val }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
-    setApiError("");
-  };
+  // Memoizar função set para evitar re-renderizações dos inputs
+  const set = useCallback(
+    (field: keyof FormState) => (val: string) => {
+      setForm((prev) => ({ ...prev, [field]: val }));
+      // Não limpar erro enquanto digita - evita re-renders
+    },
+    [],
+  );
 
-  const validate = (): boolean => {
+  // Memoizar toggle de mostrar senha
+  const toggleShowSenha = useCallback(() => {
+    setShowSenha((v) => !v);
+  }, []);
+
+  const validate = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
     if (!form.email.trim()) {
       newErrors.email = "E-mail é obrigatório.";
@@ -179,9 +202,9 @@ export default function LoginScreen() {
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [form.email, form.senha]);
 
-  const handleLogin = async (): Promise<void> => {
+  const handleLogin = useCallback(async (): Promise<void> => {
     if (!validate()) return;
     setLoading(true);
     setApiError("");
@@ -203,155 +226,155 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [validate, form.email, form.senha]);
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0faf5" />
       <DecorativeBackground />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      {/*
+        KeyboardAvoidingView REMOVIDO — no Android causa conflito com ScrollView
+        e provoca o salto entre inputs. O ScrollView com
+        keyboardShouldPersistTaps="handled" é suficiente.
+      */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps={
+          Platform.OS === "android" ? "never" : "handled"
+        }
+        scrollEventThrottle={16}
+        nestedScrollEnabled={false}
+        bounces={false}
       >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Header */}
-          <Animated.View
-            style={[
-              styles.header,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-            ]}
+        {/* Header */}
+        <View style={[styles.header]}>
+          <View style={styles.logoMark}>
+            <Ionicons name="leaf-outline" size={26} color="#fff" />
+          </View>
+          <Text style={styles.appName}>Uni3 Clinic Management</Text>
+          <Text style={styles.headerTitle}>Bem-vindo de volta</Text>
+          <Text style={styles.headerSubtitle}>
+            Entre com sua conta para continuar
+          </Text>
+        </View>
+
+        {/* Card */}
+        <View style={[styles.card]}>
+          <MemoizedFloatingInput
+            label="E-mail"
+            value={form.email}
+            onChangeText={set("email")}
+            keyboardType="email-address"
+            error={errors.email}
+            returnKeyType="next"
+            // onSubmitEditing removido — forçar foco via código causa salto no Android
+          />
+          <MemoizedFloatingInput
+            label="Senha"
+            value={form.senha}
+            onChangeText={set("senha")}
+            secureTextEntry={!showSenha}
+            error={errors.senha}
+            rightIcon={showSenha ? "eye-off-outline" : "eye-outline"}
+            onRightIconPress={toggleShowSenha}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            inputRef={senhaRef}
+          />
+
+          {/* Esqueci minha senha */}
+          <TouchableOpacity
+            style={styles.forgotBtn}
+            onPress={() => router.push("/esqueci-senha" as any)}
           >
-            <View style={styles.logoMark}>
-              <Ionicons name="leaf-outline" size={26} color="#fff" />
-            </View>
-            <Text style={styles.appName}>Uni3 Clinic Management</Text>
-            <Text style={styles.headerTitle}>Bem-vindo de volta</Text>
-            <Text style={styles.headerSubtitle}>
-              Entre com sua conta para continuar
-            </Text>
-          </Animated.View>
+            <Text style={styles.forgotText}>Esqueci minha senha</Text>
+          </TouchableOpacity>
 
-          {/* Card */}
-          <Animated.View
-            style={[
-              styles.card,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-            ]}
-          >
-            <FloatingInput
-              label="E-mail"
-              value={form.email}
-              onChangeText={set("email")}
-              keyboardType="email-address"
-              error={errors.email}
-            />
-            <FloatingInput
-              label="Senha"
-              value={form.senha}
-              onChangeText={set("senha")}
-              secureTextEntry={!showSenha}
-              error={errors.senha}
-              rightIcon={showSenha ? "eye-off-outline" : "eye-outline"}
-              onRightIconPress={() => setShowSenha((v) => !v)}
-            />
-
-            {/* Esqueci minha senha */}
-            <TouchableOpacity
-              style={styles.forgotBtn}
-              onPress={() =>
-                alert(
-                  "Fluxo de recuperacao de senha ainda nao foi implementado.",
-                )
-              }
-            >
-              <Text style={styles.forgotText}>Esqueci minha senha</Text>
-            </TouchableOpacity>
-
-            {/* API Error */}
-            {apiError ? (
-              <View style={styles.apiErrorBox}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={16}
-                  color="#c0392b"
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={styles.apiErrorText}>{apiError}</Text>
-              </View>
-            ) : null}
-
-            {/* Submit */}
-            <TouchableOpacity
-              style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Entrar</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.demoBtn}
-              onPress={() => router.replace("/homep")}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="flash-outline" size={18} color={GREEN} />
-              <Text style={styles.demoBtnText}>Entrar em modo demo</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.adminBtn}
-              onPress={() => router.replace("/(admin)")}
-              activeOpacity={0.85}
-            >
+          {/* API Error */}
+          {apiError ? (
+            <View style={styles.apiErrorBox}>
               <Ionicons
-                name="shield-checkmark-outline"
-                size={18}
-                color="#1f684f"
+                name="alert-circle-outline"
+                size={16}
+                color="#c0392b"
+                style={{ marginRight: 6 }}
               />
-              <Text style={styles.adminBtnText}>Entrar como admin</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.psychologistBtn}
-              onPress={() => router.replace("/dashboardP")}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="medkit-outline" size={18} color="#2d6cdf" />
-              <Text style={styles.psychologistBtnText}>
-                Entrar como psicologo
-              </Text>
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou</Text>
-              <View style={styles.dividerLine} />
+              <Text style={styles.apiErrorText}>{apiError}</Text>
             </View>
+          ) : null}
 
-            {/* Register link */}
-            <TouchableOpacity
-              style={styles.registerLink}
-              onPress={() => router.push("/cadastro")}
-            >
-              <Text style={styles.registerLinkText}>
-                Não tem uma conta?{" "}
-                <Text style={styles.registerLinkBold}>Cadastre-se</Text>
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          {/* Submit */}
+          <TouchableOpacity
+            style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryBtnText}>Entrar</Text>
+            )}
+          </TouchableOpacity>
+
+          {__DEV__ && (
+            <>
+              <TouchableOpacity
+                style={styles.demoBtn}
+                onPress={() => router.replace("/homep")}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="flash-outline" size={18} color={GREEN} />
+                <Text style={styles.demoBtnText}>Entrar em modo demo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.adminBtn}
+                onPress={() => router.replace("/(admin)")}
+                activeOpacity={0.85}
+              >
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={18}
+                  color="#1f684f"
+                />
+                <Text style={styles.adminBtnText}>Entrar como admin</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.psychologistBtn}
+                onPress={() => router.replace("/dashboardP")}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="medkit-outline" size={18} color="#2d6cdf" />
+                <Text style={styles.psychologistBtnText}>
+                  Entrar como psicólogo
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Register link */}
+          <TouchableOpacity
+            style={styles.registerLink}
+            onPress={() => router.push("/cadastro")}
+          >
+            <Text style={styles.registerLinkText}>
+              Não tem uma conta?{" "}
+              <Text style={styles.registerLinkBold}>Cadastre-se</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -494,10 +517,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   textInput: {
+    height: 24,
     fontSize: 15,
     color: "#1a3d31",
     fontWeight: "500",
     paddingRight: 36,
+    paddingVertical: 0,
   },
   eyeBtn: {
     position: "absolute",

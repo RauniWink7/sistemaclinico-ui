@@ -17,7 +17,7 @@ import {
     getAppointments,
     getClinicPatients,
     getMe,
-    getPatientProfile,
+
 } from "../../services/api";
 
 const GREEN = "#2e8b6e";
@@ -78,24 +78,11 @@ export default function PsychologistPatientListScreen() {
           : [];
 
         // ─── FEATURE 5: Load PatientProfile.id for each patient in parallel
-        const patientsWithProfiles = await Promise.all(
-          (patientsResult.data || []).map(async (patient: any) => {
-            const userId = patient.id;
-            let profileId = patient.id; // fallback to User.id
-
-            // Try to load the actual PatientProfile to get the correct profile.id
-            const profileResult = await getPatientProfile(userId);
-            if (profileResult.ok && profileResult.data?.id) {
-              profileId = profileResult.data.id;
-            } else if (profileResult.error) {
-              console.warn(
-                `[FEATURE 5] Failed to load PatientProfile for user ${userId}: ${profileResult.error}`,
-              );
-            }
-
-            return { ...patient, userId, profileId };
-          }),
-        );
+      const patientsWithProfiles = (patientsResult.data || []).map((patient: any) => ({
+  ...patient,
+  userId: patient.user?.id ?? patient.id,
+  profileId: patient.id, // PatientProfile.id — já correto
+}));
 
         const patientsWithLastAppointment = patientsWithProfiles.map(
           (patient: any) => {
@@ -118,8 +105,8 @@ export default function PsychologistPatientListScreen() {
               _userId: patient.userId,
               _profileId: patient.profileId,
               // Serializer flat: full_name e phone já estão na raiz do objeto
-              _displayName: patient.full_name ?? "Sem nome",
-              _displayPhone: patient.phone ?? "Telefone não informado",
+              _displayName: patient.user?.full_name ?? patient.full_name ?? "Sem nome",
+_displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado",
               lastAppointment: lastAppointment?.scheduled_at
                 ? new Date(lastAppointment.scheduled_at).toLocaleDateString(
                     "pt-BR",

@@ -147,7 +147,9 @@ export default function ConsultasScreen() {
   const [reviewComment, setReviewComment] = useState("");
 
   // Filtro de status
-  const [activeFilter, setActiveFilter] = useState<AppointmentStatus | "todas">("todas");
+  const [activeFilter, setActiveFilter] = useState<AppointmentStatus | "todas">(
+    "todas",
+  );
 
   // FIX 1: Estados do modal de cancelamento (substitui Alert.prompt que não funciona no Android)
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
@@ -239,7 +241,9 @@ export default function ConsultasScreen() {
         }
       }
     } catch (error) {
-      console.error("Erro ao atualizar consultas:", error);
+      if (__DEV__) {
+        console.error("Erro ao atualizar consultas:", error);
+      }
     } finally {
       setRefreshing(false);
     }
@@ -441,11 +445,19 @@ export default function ConsultasScreen() {
               return (
                 <TouchableOpacity
                   key={key}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
+                  style={[
+                    styles.filterChip,
+                    isActive && styles.filterChipActive,
+                  ]}
                   onPress={() => setActiveFilter(key)}
                   activeOpacity={0.75}
                 >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      isActive && styles.filterChipTextActive,
+                    ]}
+                  >
                     {label}
                   </Text>
                 </TouchableOpacity>

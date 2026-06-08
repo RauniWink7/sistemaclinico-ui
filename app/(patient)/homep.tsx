@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert,
     Animated,
@@ -119,9 +119,9 @@ export default function HomeP() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      setLoadingProfile(true);
+  const fetchProfile = useCallback(async () => {
+    setLoadingProfile(true);
+    try {
       const result = await getMe();
       if (result.ok && result.data) {
         const name =
@@ -133,12 +133,18 @@ export default function HomeP() {
           result.error || "Não foi possível carregar o perfil.",
         );
       }
+    } catch (error) {
+      if (__DEV__) {
+        console.error("Erro ao carregar perfil:", error);
+      }
+    } finally {
       setLoadingProfile(false);
-    };
+    }
+  }, []);
 
-    const loadAppointment = async () => {
-      setLoadingAppointment(true);
-
+  const fetchAppointments = useCallback(async () => {
+    setLoadingAppointment(true);
+    try {
       // ── FIX BUG 1: carregar profissionais primeiro para montar o mapa UUID→nome
       const profsResult = await getPsychologists();
       const profMap: Record<string, string> = {};
@@ -199,12 +205,19 @@ export default function HomeP() {
           setNextAppointment(upcoming);
         }
       }
+    } catch (error) {
+      if (__DEV__) {
+        console.error("Erro ao carregar consultas:", error);
+      }
+    } finally {
       setLoadingAppointment(false);
-    };
-
-    void loadProfile();
-    void loadAppointment();
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchProfile();
+    void fetchAppointments();
+  }, [fetchProfile, fetchAppointments]);
 
   React.useEffect(() => {
     Animated.parallel([
@@ -224,79 +237,12 @@ export default function HomeP() {
   // ─── FEATURE 1: Pull-to-refresh ───────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
-    const loadProfile = async () => {
-      const result = await getMe();
-      if (result.ok && result.data) {
-        const name =
-          result.data.full_name || result.data.name || DEFAULT_PATIENT_NAME;
-        setPatientName(name);
-      }
-    };
-
-    const loadAppointment = async () => {
-      const profsResult = await getPsychologists();
-      const profMap: Record<string, string> = {};
-      if (profsResult.ok && Array.isArray(profsResult.data)) {
-        for (const prof of profsResult.data) {
-          const name =
-            prof.user?.full_name ||
-            prof.full_name ||
-            prof.name ||
-            prof.psychologistName ||
-            "Profissional";
-          profMap[prof.id] = name;
-        }
-      }
-
-      const result = await getAppointments();
-      if (result.ok && Array.isArray(result.data)) {
-        const upcoming = result.data
-          .filter(
-            (item) => item.status === "scheduled" || item.status === "agendada",
-          )
-          .map((item) => {
-            const scheduledAt = item.scheduled_at ?? "";
-            const date = scheduledAt.split("T")[0] ?? "";
-            const time = scheduledAt.split("T")[1]?.slice(0, 5) ?? "";
-
-            const professionalId = item.professional ?? "";
-            const professionalName = profMap[professionalId] || "Profissional";
-
-            const avatar = professionalName
-              .split(" ")
-              .filter((part) => part.length > 0)
-              .map((part) => part[0].toUpperCase())
-              .slice(0, 2)
-              .join("");
-
-            return {
-              date,
-              time,
-              professional: professionalName,
-              specialty: item.specialty || "Psicologia",
-              avatar: avatar || "P",
-            };
-          })
-          .filter((item) => item.date && item.time)
-          .sort((a, b) => {
-            const dateA = new Date(`${a.date}T${a.time}:00`).getTime();
-            const dateB = new Date(`${b.date}T${b.time}:00`).getTime();
-            return dateA - dateB;
-          })
-          .find(
-            (item) => new Date(`${item.date}T${item.time}:00`) > new Date(),
-          );
-
-        if (upcoming) {
-          setNextAppointment(upcoming);
-        }
-      }
-    };
-
     try {
-      await Promise.all([loadProfile(), loadAppointment()]);
+      await Promise.all([fetchProfile(), fetchAppointments()]);
     } catch (error) {
-      console.error("Erro ao atualizar dados:", error);
+      if (__DEV__) {
+        console.error("Erro ao atualizar dados:", error);
+      }
     } finally {
       setRefreshing(false);
     }

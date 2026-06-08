@@ -69,6 +69,9 @@ interface EditableRowProps {
   keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
   editable: boolean;
   readOnly?: boolean;
+  multiline?: boolean;
+  numberOfLines?: number;
+  minHeight?: number;
 }
 
 const EditableRow = ({
@@ -78,17 +81,22 @@ const EditableRow = ({
   keyboardType,
   editable,
   readOnly,
+  multiline,
+  numberOfLines,
+  minHeight,
 }: EditableRowProps) => (
   <View style={styles.editableRow}>
     <Text style={styles.infoLabel}>{label}</Text>
     {editable && !readOnly ? (
       <TextInput
-        style={styles.editInput}
+        style={[styles.editInput, multiline && { minHeight: minHeight ?? 80 }]}
         value={value}
         onChangeText={onChangeText}
         keyboardType={keyboardType ?? "default"}
         autoCapitalize="none"
         placeholderTextColor="#9bbfb0"
+        multiline={multiline}
+        numberOfLines={numberOfLines}
       />
     ) : (
       <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
@@ -289,9 +297,11 @@ export default function ProfileScreen() {
       <View style={styles.avatarSection}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {fields.name
+            {(fields.name || "")
+              .trim()
               .split(" ")
-              .map((n) => n[0])
+              .filter(Boolean)
+              .map((n) => n[0] ?? "")
               .slice(0, 2)
               .join("")}
           </Text>
@@ -361,6 +371,9 @@ export default function ProfileScreen() {
               value={fields.medicalHistory}
               onChangeText={set("medicalHistory")}
               editable={editing}
+              multiline
+              numberOfLines={4}
+              minHeight={80}
             />
             <View style={styles.rowDivider} />
 
@@ -369,6 +382,9 @@ export default function ProfileScreen() {
               value={fields.anamnesis}
               onChangeText={set("anamnesis")}
               editable={editing}
+              multiline
+              numberOfLines={4}
+              minHeight={80}
             />
           </View>
 

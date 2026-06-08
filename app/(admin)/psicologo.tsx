@@ -13,31 +13,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { getMe, getProfessionalsByClinic, getPatientsByClinic } from '../../services/api';
+import { getMe, getProfessionalsByClinic } from '../../services/api';
+import type { ProfessionalApiItem } from '../../services/api';
 
 const GREEN = '#2e8b6e';
 const GREEN_DARK = '#1f684f';
 const GREEN_LIGHT = '#e8f7f1';
 const BLUE_LIGHT = '#eaf1ff';
-const ORANGE_LIGHT = '#fef3e8';
 const RED_LIGHT = '#fdeeee';
 const BG = '#f0faf5';
 const WHITE = '#ffffff';
-
-interface UserRow {
-  id: string;
-  full_name: string;
-  email: string;
-  phone?: string;
-  role: 'admin' | 'professional' | 'patient';
-  is_active: boolean;
-}
-
-const ROLE_META: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  admin: { label: 'Admin', color: '#c46a1a', bg: ORANGE_LIGHT, icon: 'shield-checkmark-outline' },
-  professional: { label: 'Psicólogo', color: '#2d6cdf', bg: BLUE_LIGHT, icon: 'medkit-outline' },
-  patient: { label: 'Paciente', color: GREEN, bg: GREEN_LIGHT, icon: 'person-outline' },
-};
 
 const DecorativeBackground = () => (
   <>
@@ -46,10 +31,15 @@ const DecorativeBackground = () => (
   </>
 );
 
-export default function AdminUsuariosScreen() {
+const getStatusMeta = (isActive: boolean) =>
+  isActive
+    ? { label: 'Ativo', color: GREEN, bg: GREEN_LIGHT, icon: 'checkmark-circle-outline' }
+    : { label: 'Inativo', color: '#d95c5c', bg: RED_LIGHT, icon: 'pause-circle-outline' };
+
+export default function AdminPsicologosScreen() {
   const [query, setQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'todos' | 'admin' | 'professional' | 'patient'>('todos');
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [activeFilter, setActiveFilter] = useState<'todos' | 'ativo' | 'inativo'>('todos');
+  const [professionals, setProfessionals] = useState<ProfessionalApiItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -71,46 +61,12 @@ export default function AdminUsuariosScreen() {
           Alert.alert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
           return;
         }
-        const clinicId = meResult.data.clinic;
-        if (!clinicId) {
-          Alert.alert('Erro', 'Nenhuma clínica associada.');
-          return;
-        }
+        const cId = meResult.data.clinic;
+        if (!cId) { Alert.alert('Erro', 'Nenhuma clínica associada.'); return; }
 
-        const [profsResult, patientsResult] = await Promise.all([
-          getProfessionalsByClinic(clinicId),
-          getPatientsByClinic(clinicId),
-        ]);
-
-        const profs: UserRow[] = (profsResult.data || []).map((p: any) => ({
-          id: p.user?.id ?? p.id,
-          full_name: p.user?.full_name ?? '',
-          email: p.user?.email ?? '',
-          phone: p.user?.phone,
-          role: 'professional',
-          is_active: p.user?.is_active ?? true,
-        }));
-
-        const patients: UserRow[] = (patientsResult.data || []).map((p: any) => ({
-          id: p.user?.id ?? p.id,
-          full_name: p.user?.full_name ?? '',
-          email: p.user?.email ?? '',
-          phone: p.user?.phone,
-          role: 'patient',
-          is_active: p.user?.is_active ?? true,
-        }));
-
-        // Admin logado
-        const adminRow: UserRow = {
-          id: meResult.data.id,
-          full_name: meResult.data.full_name ?? 'Admin',
-          email: meResult.data.email ?? '',
-          phone: meResult.data.phone,
-          role: 'admin',
-          is_active: true,
-        };
-
-        setUsers([adminRow, ...profs, ...patients]);
+        const result = await getProfessionalsByClinic(cId);
+        if (!result.ok) { Alert.alert('Erro', result.error ?? 'Erro ao carregar psicólogos.'); return; }
+        setProfessionals(result.data || []);
       } catch (err: any) {
         Alert.alert('Erro', err?.message ?? 'Erro inesperado.');
       } finally {
@@ -122,15 +78,22 @@ export default function AdminUsuariosScreen() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return users.filter((u) => {
-      const matchRole = roleFilter === 'todos' || u.role === roleFilter;
+    return professionals.filter((p) => {
+      const status = p.user.is_active ? 'ativo' : 'inativo';
+      const matchFilter = activeFilter === 'todos' || status === activeFilter;
       const matchQuery =
         !q ||
-        u.full_name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q);
-      return matchRole && matchQuery;
+        p.user.full_name.toLowerCase().includes(q) ||
+        (p.crp && p.crp.toLowerCase().includes(q)) ||
+        (p.specialty && p.specialty.toLowerCase().includes(q));
+      return matchFilter && matchQuery;
     });
-  }, [users, query, roleFilter]);
+  }, [professionals, query, activeFilter]);
+
+  const summary = useMemo(() => ({
+    total: professionals.length,
+    active: professionals.filter((p) => p.user.is_active).length,
+  }), [professionals]);
 
   if (loading) {
     return (
@@ -143,7 +106,7 @@ export default function AdminUsuariosScreen() {
           </TouchableOpacity>
           <View style={styles.headerTextBox}>
             <Text style={styles.headerEyebrow}>Área administrativa</Text>
-            <Text style={styles.headerTitle}>Usuários</Text>
+            <Text style={styles.headerTitle}>Psicólogos</Text>
           </View>
           <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(admin)')}>
             <Ionicons name="grid-outline" size={20} color="#fff" />
@@ -151,7 +114,7 @@ export default function AdminUsuariosScreen() {
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
           <ActivityIndicator size="large" color={GREEN} />
-          <Text style={{ fontSize: 15, color: GREEN, fontWeight: '600' }}>Carregando usuários...</Text>
+          <Text style={{ fontSize: 15, color: GREEN, fontWeight: '600' }}>Carregando psicólogos...</Text>
         </View>
       </View>
     );
@@ -168,7 +131,7 @@ export default function AdminUsuariosScreen() {
         </TouchableOpacity>
         <View style={styles.headerTextBox}>
           <Text style={styles.headerEyebrow}>Área administrativa</Text>
-          <Text style={styles.headerTitle}>Usuários</Text>
+          <Text style={styles.headerTitle}>Psicólogos</Text>
         </View>
         <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(admin)')}>
           <Ionicons name="grid-outline" size={20} color="#fff" />
@@ -178,40 +141,33 @@ export default function AdminUsuariosScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-          {/* Hero */}
           <View style={styles.heroCard}>
-            <Text style={styles.heroEyebrow}>Sistema</Text>
-            <Text style={styles.heroTitle}>Todos os usuários</Text>
+            <Text style={styles.heroEyebrow}>Equipe clínica</Text>
+            <Text style={styles.heroTitle}>Psicólogos cadastrados</Text>
             <Text style={styles.heroSubtitle}>
-              Visualize todos os usuários cadastrados na clínica, independente do perfil.
+              Visualize especialidades, CRP e disponibilidade operacional da equipe.
             </Text>
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStatCard}>
-                <Text style={styles.heroStatValue}>{users.length}</Text>
+                <Text style={styles.heroStatValue}>{summary.total}</Text>
                 <Text style={styles.heroStatLabel}>Total</Text>
               </View>
               <View style={styles.heroStatCard}>
-                <Text style={styles.heroStatValue}>{users.filter(u => u.role === 'professional').length}</Text>
-                <Text style={styles.heroStatLabel}>Psicólogos</Text>
-              </View>
-              <View style={styles.heroStatCard}>
-                <Text style={styles.heroStatValue}>{users.filter(u => u.role === 'patient').length}</Text>
-                <Text style={styles.heroStatLabel}>Pacientes</Text>
+                <Text style={styles.heroStatValue}>{summary.active}</Text>
+                <Text style={styles.heroStatLabel}>Ativos</Text>
               </View>
             </View>
           </View>
 
-          {/* Ação rápida */}
           <TouchableOpacity
             style={styles.newButton}
-            onPress={() => router.push('/(admin)/cadastrar-usuario')}
+            onPress={() => router.push('/(admin)/cadastrar-psicologo')}
             activeOpacity={0.85}
           >
             <Ionicons name="person-add-outline" size={20} color="#fff" />
-            <Text style={styles.newButtonText}>Cadastrar novo usuário</Text>
+            <Text style={styles.newButtonText}>Cadastrar novo psicólogo</Text>
           </TouchableOpacity>
 
-          {/* Filtros */}
           <View style={styles.filtersCard}>
             <Text style={styles.sectionTitle}>Busca e filtros</Text>
             <View style={styles.searchBox}>
@@ -220,24 +176,23 @@ export default function AdminUsuariosScreen() {
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Buscar por nome ou e-mail"
+                placeholder="Buscar por nome, CRP ou especialidade"
                 placeholderTextColor="#8ba99d"
               />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
               {[
                 { key: 'todos', label: 'Todos' },
-                { key: 'admin', label: 'Admins' },
-                { key: 'professional', label: 'Psicólogos' },
-                { key: 'patient', label: 'Pacientes' },
+                { key: 'ativo', label: 'Ativos' },
+                { key: 'inativo', label: 'Inativos' },
               ].map((f) => (
                 <TouchableOpacity
                   key={f.key}
-                  style={[styles.filterChip, roleFilter === f.key && styles.filterChipActive]}
-                  onPress={() => setRoleFilter(f.key as any)}
+                  style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
+                  onPress={() => setActiveFilter(f.key as any)}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.filterChipText, roleFilter === f.key && styles.filterChipTextActive]}>
+                  <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
                     {f.label}
                   </Text>
                 </TouchableOpacity>
@@ -245,49 +200,76 @@ export default function AdminUsuariosScreen() {
             </ScrollView>
           </View>
 
-          {/* Lista */}
           <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Lista de usuários</Text>
+            <Text style={styles.sectionTitle}>Lista de psicólogos</Text>
             <Text style={styles.resultCount}>{filtered.length} encontrados</Text>
           </View>
 
           {filtered.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyStateText}>Nenhum usuário encontrado</Text>
+              <Ionicons name="medkit-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyStateText}>Nenhum psicólogo encontrado</Text>
             </View>
           ) : (
-            filtered.map((u) => {
-              const roleMeta = ROLE_META[u.role] ?? ROLE_META.patient;
-              const initials = u.full_name.split(' ').slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('');
+            filtered.map((p) => {
+              const status = getStatusMeta(p.user.is_active ?? true);
+              const initials = p.user.full_name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
               return (
-                <View key={u.id} style={styles.userCard}>
+                <View key={p.id} style={styles.userCard}>
                   <View style={styles.userTopRow}>
                     <View style={styles.userMainInfo}>
-                      <View style={[styles.avatar, { backgroundColor: roleMeta.bg }]}>
-                        <Text style={[styles.avatarText, { color: roleMeta.color }]}>{initials}</Text>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{initials}</Text>
                       </View>
                       <View style={styles.nameBox}>
-                        <Text style={styles.userName}>{u.full_name}</Text>
-                        <Text style={styles.userMeta}>{u.email}</Text>
+                        <Text style={styles.userName}>{p.user.full_name}</Text>
+                        <Text style={styles.userMeta}>
+                          {p.crp || '—'} • {p.specialty || 'Sem especialidade'}
+                        </Text>
                       </View>
                     </View>
-                    <View style={[styles.roleBadge, { backgroundColor: roleMeta.bg }]}>
-                      <Ionicons name={roleMeta.icon as any} size={13} color={roleMeta.color} />
-                      <Text style={[styles.roleText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                      <Ionicons name={status.icon as any} size={14} color={status.color} />
+                      <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
                     </View>
                   </View>
-                  {u.phone ? (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="call-outline" size={14} color="#6a877c" />
-                      <Text style={styles.infoText}>{u.phone}</Text>
+
+                  <View style={styles.infoGrid}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>E-mail</Text>
+                      <Text style={styles.infoValue}>{p.user.email}</Text>
                     </View>
-                  ) : null}
-                  <View style={[styles.statusDot, { backgroundColor: u.is_active ? GREEN_LIGHT : RED_LIGHT }]}>
-                    <View style={[styles.dot, { backgroundColor: u.is_active ? GREEN : '#d95c5c' }]} />
-                    <Text style={[styles.statusText, { color: u.is_active ? GREEN : '#d95c5c' }]}>
-                      {u.is_active ? 'Ativo' : 'Inativo'}
-                    </Text>
+                    {p.user.phone ? (
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Telefone</Text>
+                        <Text style={styles.infoValue}>{p.user.phone}</Text>
+                      </View>
+                    ) : null}
+                    {p.session_duration_minutes ? (
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Duração da sessão</Text>
+                        <Text style={styles.infoValue}>{p.session_duration_minutes} minutos</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      activeOpacity={0.85}
+                      onPress={() => router.push({ pathname: '/(admin)/profissional/[id]', params: { id: p.id } })}
+                    >
+                      <Ionicons name="document-text-outline" size={16} color={GREEN} />
+                      <Text style={styles.secondaryButtonText}>Ver perfil</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.primaryButton}
+                      activeOpacity={0.85}
+                      onPress={() => router.push({ pathname: '/(admin)/agendar', params: { professionalId: p.id } })}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color="#fff" />
+                      <Text style={styles.primaryButtonText}>Agenda</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -332,21 +314,25 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: WHITE },
   listHeader: { marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   resultCount: { fontSize: 13, fontWeight: '700', color: '#6a887d' },
-  userCard: { backgroundColor: WHITE, borderRadius: 24, padding: 18, marginBottom: 14, shadowColor: '#174c3e', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  userCard: { backgroundColor: WHITE, borderRadius: 24, padding: 18, marginBottom: 16, shadowColor: '#174c3e', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
   userTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   userMainInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatarText: { fontSize: 17, fontWeight: '800' },
+  avatar: { width: 52, height: 52, borderRadius: 18, backgroundColor: BLUE_LIGHT, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  avatarText: { fontSize: 17, fontWeight: '800', color: '#2d6cdf' },
   nameBox: { flex: 1 },
   userName: { fontSize: 16, fontWeight: '800', color: '#183d32' },
   userMeta: { marginTop: 4, fontSize: 13, color: '#6a877c' },
-  roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 11 },
-  roleText: { fontSize: 12, fontWeight: '700' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  infoText: { fontSize: 13, color: '#6a877c' },
-  statusDot: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, alignSelf: 'flex-start' },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 12, fontWeight: '700' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12 },
+  statusText: { marginLeft: 6, fontSize: 13, fontWeight: '700' },
+  infoGrid: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#edf4f0', gap: 10 },
+  infoItem: { borderRadius: 14, backgroundColor: '#f8fcfa', padding: 12 },
+  infoLabel: { fontSize: 12, fontWeight: '700', color: '#789286', textTransform: 'uppercase', letterSpacing: 0.6 },
+  infoValue: { marginTop: 4, fontSize: 14, color: '#1f4036', fontWeight: '600' },
+  actionsRow: { marginTop: 16, flexDirection: 'row', gap: 10 },
+  secondaryButton: { flex: 1, borderRadius: 16, backgroundColor: GREEN_LIGHT, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { marginLeft: 8, fontSize: 13, fontWeight: '700', color: GREEN },
+  primaryButton: { flex: 1, borderRadius: 16, backgroundColor: GREEN, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  primaryButtonText: { marginLeft: 8, fontSize: 13, fontWeight: '700', color: WHITE },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyStateText: { marginTop: 16, fontSize: 16, fontWeight: '600', color: '#a0b5aa' },
 });

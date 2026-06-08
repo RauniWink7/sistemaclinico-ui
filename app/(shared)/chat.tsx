@@ -14,35 +14,35 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  getAccessToken,
-  getChatContacts,
-  getConversations,
-  getMe,
-  getMessagesWithPsychologist,
-  markMessagesRead,
-  sendChatMessage,
+    getAccessToken,
+    getChatContacts,
+    getConversations,
+    getMe,
+    getMessagesWithPsychologist,
+    markMessagesRead,
+    sendChatMessage,
 } from "../../services/api";
 
 // ─── Paleta ───────────────────────────────────────────────────────────────────
@@ -86,10 +86,13 @@ const dashboardForRole = (role: string): string => {
 };
 
 // ─── WS_BASE_URL ──────────────────────────────────────────────────────────────
-const WS_BASE_URL = Platform.select({
-  android: "ws://10.0.2.2:8000/ws/chat",
-  default: "ws://127.0.0.1:8000/ws/chat",
-}) as string;
+// TODO: definir EXPO_PUBLIC_WS_URL no .env de produção
+const WS_BASE_URL =
+  process.env.EXPO_PUBLIC_WS_URL ??
+  (Platform.select({
+    android: "ws://10.0.2.2:8000/ws/chat",
+    default: "ws://127.0.0.1:8000/ws/chat",
+  }) as string);
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Conversation {
@@ -182,21 +185,26 @@ export default function ChatScreen() {
           const mapped: Conversation[] = convResult.data.map((item: any) => {
             const contact = item.contact || {};
             // last_message é um objeto { content_encrypted, sent_at, ... }
-            const lastMsg = (typeof item.last_message === "object" && item.last_message !== null)
-              ? item.last_message
-              : {};
+            const lastMsg =
+              typeof item.last_message === "object" &&
+              item.last_message !== null
+                ? item.last_message
+                : {};
             return {
               contactUserId: contact.id || item.user_id || "",
               contactName: contact.full_name || item.user_name || "Contato",
               contactRole: contact.role || "",
-              initials: contact.initials || getInitials(contact.full_name || item.user_name || ""),
+              initials:
+                contact.initials ||
+                getInitials(contact.full_name || item.user_name || ""),
               unread: item.unread_count ?? item.unread ?? 0,
-              lastText: item.last_message_text || lastMsg.content_encrypted || "",
+              lastText:
+                item.last_message_text || lastMsg.content_encrypted || "",
               lastAt: item.last_message_at
                 ? String(item.last_message_at)
                 : lastMsg.sent_at
-                ? String(lastMsg.sent_at)
-                : "",
+                  ? String(lastMsg.sent_at)
+                  : "",
               online: false,
             };
           });
@@ -213,8 +221,16 @@ export default function ChatScreen() {
       } finally {
         setLoading(false);
         Animated.parallel([
-          Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
-          Animated.timing(slideAnim, { toValue: 0, duration: 450, useNativeDriver: true }),
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 450,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 450,
+            useNativeDriver: true,
+          }),
         ]).start();
       }
     };
@@ -224,7 +240,7 @@ export default function ChatScreen() {
     return () => {
       disconnectWs();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Carregar mensagens REST + abrir WS quando activeContactId muda ─────────
@@ -254,8 +270,8 @@ export default function ChatScreen() {
       await markMessagesRead(activeContactId).catch(() => null);
       setConversations((prev) =>
         prev.map((c) =>
-          c.contactUserId === activeContactId ? { ...c, unread: 0 } : c
-        )
+          c.contactUserId === activeContactId ? { ...c, unread: 0 } : c,
+        ),
       );
 
       // 3. Conecta WebSocket
@@ -263,7 +279,7 @@ export default function ChatScreen() {
     };
 
     void loadAndConnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeContactId, myUserId]);
 
   // ─── WebSocket ──────────────────────────────────────────────────────────────
@@ -336,7 +352,7 @@ export default function ChatScreen() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disconnectWs]
+    [disconnectWs],
   );
 
   const handleWsFrame = useCallback(
@@ -355,9 +371,11 @@ export default function ChatScreen() {
         setMessages((prev) => {
           // Substitui mensagem pendente se tiver o mesmo conteúdo enviado agora
           const replaced = prev.map((m) =>
-            m.pending && m.text === incoming.text && m.senderId === incoming.senderId
+            m.pending &&
+            m.text === incoming.text &&
+            m.senderId === incoming.senderId
               ? { ...incoming }
-              : m
+              : m,
           );
           // Se não substituiu, adiciona nova
           const alreadyExists = replaced.some((m) => m.id === incoming.id);
@@ -374,12 +392,10 @@ export default function ChatScreen() {
                   lastAt: incoming.createdAt,
                   // Se é mensagem do outro lado, incrementa unread (a menos que esteja ativo)
                   unread:
-                    incoming.senderId !== myUserId
-                      ? c.unread + 1
-                      : c.unread,
+                    incoming.senderId !== myUserId ? c.unread + 1 : c.unread,
                 }
-              : c
-          )
+              : c,
+          ),
         );
 
         // Marca como lida se a conversa está ativa
@@ -388,12 +404,12 @@ export default function ChatScreen() {
             JSON.stringify({
               type: "message.read",
               payload: { message_id: incoming.id },
-            })
+            }),
           );
           setConversations((prev) =>
             prev.map((c) =>
-              c.contactUserId === contactId ? { ...c, unread: 0 } : c
-            )
+              c.contactUserId === contactId ? { ...c, unread: 0 } : c,
+            ),
           );
         }
 
@@ -403,9 +419,7 @@ export default function ChatScreen() {
 
       if (type === "message.read") {
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === payload.id ? { ...m, read: true } : m
-          )
+          prev.map((m) => (m.id === payload.id ? { ...m, read: true } : m)),
         );
         return;
       }
@@ -426,14 +440,14 @@ export default function ChatScreen() {
             prev.map((c) =>
               c.contactUserId === contactId
                 ? { ...c, online: payload.online ?? false }
-                : c
-            )
+                : c,
+            ),
           );
         }
         return;
       }
     },
-    [myUserId]
+    [myUserId],
   );
 
   // ─── Enviar mensagem ────────────────────────────────────────────────────────
@@ -460,8 +474,8 @@ export default function ChatScreen() {
       prev.map((c) =>
         c.contactUserId === activeContactId
           ? { ...c, lastText: text, lastAt: now }
-          : c
-      )
+          : c,
+      ),
     );
     scrollToBottom(true);
 
@@ -473,7 +487,7 @@ export default function ChatScreen() {
           JSON.stringify({
             type: "message.new",
             payload: { content_encrypted: text, message_type: "text" },
-          })
+          }),
         );
         return true;
       })();
@@ -492,28 +506,25 @@ export default function ChatScreen() {
           prev.map((m) =>
             m.id === tempId
               ? { ...optimistic, id: result.data?.id || tempId, pending: false }
-              : m
-          )
+              : m,
+          ),
         );
       }
     }
   }, [draft, activeContactId, myUserId]);
 
   // ─── Enviar indicador de typing ─────────────────────────────────────────────
-  const handleDraftChange = useCallback(
-    (text: string) => {
-      setDraft(text);
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "typing",
-            payload: { is_typing: text.length > 0 },
-          })
-        );
-      }
-    },
-    []
-  );
+  const handleDraftChange = useCallback((text: string) => {
+    setDraft(text);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: "typing",
+          payload: { is_typing: text.length > 0 },
+        }),
+      );
+    }
+  }, []);
 
   // ─── Abrir modal de novo contato ────────────────────────────────────────────
   const handleOpenNewContact = useCallback(async () => {
@@ -525,7 +536,10 @@ export default function ChatScreen() {
       if (result.ok && Array.isArray(result.data)) {
         setContacts(result.data);
       } else {
-        Alert.alert("Erro", result.error || "Não foi possível carregar contatos.");
+        Alert.alert(
+          "Erro",
+          result.error || "Não foi possível carregar contatos.",
+        );
         setContactModalVisible(false);
       }
     } catch {
@@ -536,65 +550,66 @@ export default function ChatScreen() {
     }
   }, []);
   // ─── Selecionar conversa ────────────────────────────────────────────────────
-  const handleSelectConversation = useCallback((contactId: string) => {
-    if (contactId === activeContactId) return;
-    setMessages([]);
-    setIsTyping(false);
-    setContactOnline(false);
-    setActiveContactId(contactId);
-  }, [activeContactId]);
+  const handleSelectConversation = useCallback(
+    (contactId: string) => {
+      if (contactId === activeContactId) return;
+      setMessages([]);
+      setIsTyping(false);
+      setContactOnline(false);
+      setActiveContactId(contactId);
+    },
+    [activeContactId],
+  );
 
   // ─── Scroll automático ───────────────────────────────────────────────────────
   const scrollToBottom = (animated: boolean) => {
-    setTimeout(
-      () => scrollRef.current?.scrollToEnd({ animated }),
-      100
-    );
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated }), 100);
   };
   // ─── Iniciar conversa com contato selecionado ────────────────────────────────
-  const handleStartConversation = useCallback((contact: Contact) => {
-    setContactModalVisible(false);
-    setContactSearch("");
+  const handleStartConversation = useCallback(
+    (contact: Contact) => {
+      setContactModalVisible(false);
+      setContactSearch("");
 
-    // Se já existe conversa com esse contato, só seleciona
-    const existing = conversations.find(
-      (c) => c.contactUserId === contact.id
-    );
-    if (existing) {
-      handleSelectConversation(contact.id);
-      return;
-    }
+      // Se já existe conversa com esse contato, só seleciona
+      const existing = conversations.find(
+        (c) => c.contactUserId === contact.id,
+      );
+      if (existing) {
+        handleSelectConversation(contact.id);
+        return;
+      }
 
-    // Cria entrada local da conversa (sem mensagens ainda)
-    const newConv: Conversation = {
-      contactUserId: contact.id,
-      contactName: contact.full_name,
-      contactRole: contact.role,
-      initials: contact.initials || getInitials(contact.full_name),
-      unread: 0,
-      lastText: "",
-      lastAt: "",
-      online: false,
-    };
-    setConversations((prev) => [newConv, ...prev]);
-    setActiveContactId(contact.id);
-  }, [conversations, handleSelectConversation]);
-
-
+      // Cria entrada local da conversa (sem mensagens ainda)
+      const newConv: Conversation = {
+        contactUserId: contact.id,
+        contactName: contact.full_name,
+        contactRole: contact.role,
+        initials: contact.initials || getInitials(contact.full_name),
+        unread: 0,
+        lastText: "",
+        lastAt: "",
+        online: false,
+      };
+      setConversations((prev) => [newConv, ...prev]);
+      setActiveContactId(contact.id);
+    },
+    [conversations, handleSelectConversation],
+  );
 
   // ─── Derived state ───────────────────────────────────────────────────────────
   const activeConversation = useMemo(
     () => conversations.find((c) => c.contactUserId === activeContactId),
-    [conversations, activeContactId]
+    [conversations, activeContactId],
   );
 
   const activeMessages = useMemo(
     () =>
       [...messages].sort(
         (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       ),
-    [messages]
+    [messages],
   );
 
   const groupedMessages = useMemo(() => {
@@ -613,15 +628,13 @@ export default function ChatScreen() {
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unread, 0),
-    [conversations]
+    [conversations],
   );
 
   const filteredContacts = useMemo(() => {
     const q = contactSearch.trim().toLowerCase();
     if (!q) return contacts;
-    return contacts.filter((c) =>
-      c.full_name.toLowerCase().includes(q)
-    );
+    return contacts.filter((c) => c.full_name.toLowerCase().includes(q));
   }, [contacts, contactSearch]);
 
   const backRoute = dashboardForRole(myRole);
@@ -700,14 +713,8 @@ export default function ChatScreen() {
 
           {conversations.length === 0 ? (
             <View style={styles.emptyConvWrap}>
-              <Ionicons
-                name="chatbubbles-outline"
-                size={36}
-                color="#a8c5bb"
-              />
-              <Text style={styles.emptyConvText}>
-                Nenhuma conversa ainda.
-              </Text>
+              <Ionicons name="chatbubbles-outline" size={36} color="#a8c5bb" />
+              <Text style={styles.emptyConvText}>Nenhuma conversa ainda.</Text>
             </View>
           ) : (
             <ScrollView
@@ -720,13 +727,8 @@ export default function ChatScreen() {
                 return (
                   <TouchableOpacity
                     key={conv.contactUserId}
-                    style={[
-                      styles.convCard,
-                      isActive && styles.convCardActive,
-                    ]}
-                    onPress={() =>
-                      handleSelectConversation(conv.contactUserId)
-                    }
+                    style={[styles.convCard, isActive && styles.convCardActive]}
+                    onPress={() => handleSelectConversation(conv.contactUserId)}
                     activeOpacity={0.85}
                   >
                     <View style={styles.convTop}>
@@ -746,9 +748,7 @@ export default function ChatScreen() {
                             {conv.initials}
                           </Text>
                         </View>
-                        {conv.online && (
-                          <View style={styles.onlineDot} />
-                        )}
+                        {conv.online && <View style={styles.onlineDot} />}
                       </View>
 
                       {conv.unread > 0 && (
@@ -814,12 +814,12 @@ export default function ChatScreen() {
                     {isTyping
                       ? "digitando…"
                       : contactOnline
-                      ? "Online"
-                      : activeConversation.contactRole === "professional"
-                      ? "Profissional"
-                      : activeConversation.contactRole === "patient"
-                      ? "Paciente"
-                      : "Admin"}
+                        ? "Online"
+                        : activeConversation.contactRole === "professional"
+                          ? "Profissional"
+                          : activeConversation.contactRole === "patient"
+                            ? "Paciente"
+                            : "Admin"}
                   </Text>
                 </View>
               </View>
@@ -911,9 +911,7 @@ export default function ChatScreen() {
                               <Text
                                 style={[
                                   styles.msgTime,
-                                  isMine
-                                    ? styles.msgTimeOut
-                                    : styles.msgTimeIn,
+                                  isMine ? styles.msgTimeOut : styles.msgTimeIn,
                                 ]}
                               >
                                 {formatHour(msg.createdAt)}
@@ -924,16 +922,16 @@ export default function ChatScreen() {
                                     msg.pending
                                       ? "time-outline"
                                       : msg.read
-                                      ? "checkmark-done"
-                                      : "checkmark"
+                                        ? "checkmark-done"
+                                        : "checkmark"
                                   }
                                   size={13}
                                   color={
                                     msg.pending
                                       ? "#b0d8ca"
                                       : msg.read
-                                      ? "#a8e6cc"
-                                      : "#c9e8de"
+                                        ? "#a8e6cc"
+                                        : "#c9e8de"
                                   }
                                   style={{ marginLeft: 4 }}
                                 />
@@ -950,7 +948,13 @@ export default function ChatScreen() {
               {/* Indicador de "digitando" */}
               {isTyping && (
                 <View style={styles.msgRowIn}>
-                  <View style={[styles.bubble, styles.bubbleIn, styles.typingBubble]}>
+                  <View
+                    style={[
+                      styles.bubble,
+                      styles.bubbleIn,
+                      styles.typingBubble,
+                    ]}
+                  >
                     <View style={styles.typingDots}>
                       <View style={[styles.dot, styles.dot1]} />
                       <View style={[styles.dot, styles.dot2]} />
@@ -1068,12 +1072,12 @@ export default function ChatScreen() {
                     contact.role === "professional"
                       ? "Profissional"
                       : contact.role === "patient"
-                      ? "Paciente"
-                      : contact.role === "admin"
-                      ? "Admin"
-                      : contact.role;
+                        ? "Paciente"
+                        : contact.role === "admin"
+                          ? "Admin"
+                          : contact.role;
                   const alreadyHasConv = conversations.some(
-                    (c) => c.contactUserId === contact.id
+                    (c) => c.contactUserId === contact.id,
                   );
                   return (
                     <TouchableOpacity
