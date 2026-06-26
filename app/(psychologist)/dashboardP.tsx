@@ -13,11 +13,12 @@ import {
     View,
 } from "react-native";
 import {
-    clearTokens,
     getMe,
     getProfessionalSummary,
     getPsychologists,
+    logout,
 } from "../../services/api";
+import { confirmAction } from "../../services/confirm";
 
 interface ProfessionalInfo {
   name: string;
@@ -174,29 +175,18 @@ export default function PsychologistDashboardScreen() {
     return "Boa noite";
   }, []);
 
-  const handleLogout = async () => {
-    Alert.alert(
+  const handleLogout = () => {
+    confirmAction(
       "Deseja sair da sua conta?",
       "Você será desconectado e precisará fazer login novamente.",
-      [
-        {
-          text: "Cancelar",
-          onPress: () => {},
-          style: "cancel",
-        },
-        {
-          text: "Sair",
-          onPress: async () => {
-            try {
-              await clearTokens();
-              router.replace("/login");
-            } catch {
-              Alert.alert("Erro", "Erro ao fazer logout. Tente novamente.");
-            }
-          },
-          style: "destructive",
-        },
-      ],
+      async () => {
+        try {
+          await logout();
+        } finally {
+          router.replace("/login");
+        }
+      },
+      { confirmText: "Sair" },
     );
   };
 

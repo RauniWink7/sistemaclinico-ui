@@ -7,6 +7,8 @@ import {
     TouchableOpacity,
     View
 } from "react-native";
+import { logout } from "../../services/api";
+import { confirmAction } from "../../services/confirm";
 
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
@@ -92,6 +94,21 @@ const DecorativeBackground = () => (
 );
 
 export default function AdminHomeScreen() {
+  const handleLogout = () => {
+    confirmAction(
+      "Deseja sair da sua conta?",
+      "Você será desconectado e precisará fazer login novamente.",
+      async () => {
+        try {
+          await logout();
+        } finally {
+          router.replace("/login");
+        }
+      },
+      { confirmText: "Sair" },
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <DecorativeBackground />
@@ -152,11 +169,11 @@ export default function AdminHomeScreen() {
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          onPress={() => router.replace("/login")}
+          onPress={handleLogout}
           activeOpacity={0.85}
         >
           <Ionicons name="log-out-outline" size={18} color={GREEN} />
-          <Text style={styles.secondaryButtonText}>Voltar para login</Text>
+          <Text style={styles.secondaryButtonText}>Sair da conta</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

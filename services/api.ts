@@ -1,4 +1,4 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 const LOCAL_API_BASE_URL = Platform.select({
@@ -26,15 +26,6 @@ export interface JwtPayload {
 export interface LoginCredentials {
   email: string;
   password: string;
-}
-
-export interface RegisterPayload {
-  full_name: string;
-  email: string;
-  password: string;
-  phone?: string;
-  clinic: string; // UUID obrigatÃ³rio â€” sem fallback
-  role?: string; // 'patient' | 'professional' â€” omitir para usar o default do backend
 }
 
 export interface ClinicApiItem {
@@ -480,24 +471,30 @@ export const login = async (
   return { ok: true, data, accessToken, refreshToken, role };
 };
 
-export const register = async (
-  payload: RegisterPayload,
-): Promise<ApiResult> => {
-  // âš ï¸ clinic deve ser um UUID vÃ¡lido â€” nunca usar string fixa
-  const response = await fetch(`${API_BASE_URL}/auth/register/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await response.json().catch(() => null);
-  if (__DEV__) {
-    console.log("ðŸ“¤ Register payload:", payload);
+// POST /api/auth/logout/ - invalida o refresh token no backend (blacklist) e
+// limpa a sessao local. A falha de rede nao impede o logout local: os tokens
+// sao sempre removidos para garantir que o usuario realmente saia da conta.
+export const logout = async (): Promise<ApiResult> => {
+  const refreshToken = await getRefreshToken();
+  const accessToken = await getAccessToken();
+
+  try {
+    if (refreshToken && accessToken) {
+      await fetch(`${API_BASE_URL}/auth/logout/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+    }
+  } catch {
+    // Sem conexao: ainda assim limpamos os tokens localmente abaixo.
   }
-  if (__DEV__) {
-    console.log("ðŸ“¥ Register response:", data);
-  }
-  if (!response.ok) return { ok: false, error: normalizeError(data), data };
-  return { ok: true, data };
+
+  await clearTokens();
+  return { ok: true };
 };
 
 // â”€â”€â”€ Admin User Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

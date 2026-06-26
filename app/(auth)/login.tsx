@@ -319,7 +319,7 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          {__DEV__ && (
+          {/* {__DEV__ && (
             <>
               <TouchableOpacity
                 style={styles.demoBtn}
@@ -354,25 +354,8 @@ export default function LoginScreen() {
                 </Text>
               </TouchableOpacity>
             </>
-          )}
+          )} */}
 
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Register link */}
-          <TouchableOpacity
-            style={styles.registerLink}
-            onPress={() => router.push("/cadastro")}
-          >
-            <Text style={styles.registerLinkText}>
-              Não tem uma conta?{" "}
-              <Text style={styles.registerLinkBold}>Cadastre-se</Text>
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>

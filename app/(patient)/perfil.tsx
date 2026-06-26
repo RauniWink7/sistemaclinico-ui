@@ -16,9 +16,11 @@ import {
 import {
     getMe,
     getPatientProfile,
+    logout,
     updateMe,
     updatePatientProfile,
 } from "../../services/api";
+import { confirmAction } from "../../services/confirm";
 
 // Campos enviados no PATCH /api/auth/patients/{id}/profile/
 // phone e full_name NÃO ficam aqui — pertencem ao User, salvos via updateMe
@@ -204,6 +206,21 @@ export default function ProfileScreen() {
   const handleCancel = () => {
     setFields({ ...original });
     setEditing(false);
+  };
+
+  const handleLogout = () => {
+    confirmAction(
+      "Deseja sair da sua conta?",
+      "Você será desconectado e precisará fazer login novamente.",
+      async () => {
+        try {
+          await logout();
+        } finally {
+          router.replace("/login");
+        }
+      },
+      { confirmText: "Sair" },
+    );
   };
 
   const handleSave = async () => {
@@ -425,6 +442,18 @@ export default function ProfileScreen() {
                   <Text style={styles.saveBtnText}>Salvar alterações</Text>
                 </>
               )}
+            </TouchableOpacity>
+          )}
+
+          {/* ── Sair da conta ── */}
+          {!editing && (
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#c0392b" />
+              <Text style={styles.logoutBtnText}>Sair da conta</Text>
             </TouchableOpacity>
           )}
         </Animated.View>
@@ -661,5 +690,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.2,
+  },
+
+  // Logout button
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#f3c9c4",
+    backgroundColor: "#fdf3f2",
+    marginTop: 4,
+  },
+  logoutBtnText: {
+    color: "#c0392b",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
