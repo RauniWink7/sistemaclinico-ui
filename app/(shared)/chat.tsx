@@ -156,6 +156,8 @@ export default function ChatScreen() {
   // WebSocket
   const wsRef = useRef<WebSocket | null>(null);
   const wsContactRef = useRef<string>(""); // contactId da conexão WS ativa
+  // Ref para sempre chamar a versão atual de handleWsFrame sem stale closure
+  const handleWsFrameRef = useRef<(frame: any, contactId: string) => void>(() => {});
 
   // Animação de entrada
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -326,7 +328,7 @@ export default function ChatScreen() {
       ws.onmessage = (event) => {
         try {
           const frame = JSON.parse(event.data as string);
-          handleWsFrame(frame, contactId);
+          handleWsFrameRef.current(frame, contactId);
         } catch {
           // ignora frames inválidos
         }
@@ -449,6 +451,41 @@ export default function ChatScreen() {
     },
     [myUserId],
   );
+
+  // Mantém ref sincronizada com a versão atual do handler
+  useEffect(() => {
+    handleWsFrameRef.current = handleWsFrame;
+  }, [handleWsFrame]);
+
+  // Polling de segurança: garante sync mesmo se o WS perder algum frame
+  useEffect(() => {
+    if (!activeContactId || !myUserId) return;
+
+    const syncMessages = async () => {
+      const result = await getMessagesWithPsychologist(activeContactId);
+      if (!result.ok || !Array.isArray(result.data)) return;
+      setMessages((prev) => {
+        const knownIds = new Set(prev.map((m) => m.id));
+        const newer = (result.data as any[])
+          .filter((msg) => !knownIds.has(msg.id))
+          .map((msg) => ({
+            id: msg.id,
+            senderId: msg.sender_id || msg.sender || "",
+            text: msg.content_encrypted || msg.text || "",
+            createdAt: msg.created_at || msg.sent_at || "",
+            read: msg.read ?? true,
+          }));
+        if (newer.length === 0) return prev;
+        return [...prev, ...newer].sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+      });
+    };
+
+    const id = setInterval(syncMessages, 5000);
+    return () => clearInterval(id);
+  }, [activeContactId, myUserId]);
 
   // ─── Enviar mensagem ────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {

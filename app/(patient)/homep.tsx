@@ -273,9 +273,7 @@ export default function HomeP() {
 
         <TouchableOpacity
           style={styles.notifBtn}
-          onPress={() =>
-            Alert.alert("Avisos", "Central de notificacoes em breve.")
-          }
+          onPress={() => router.push("/(patient)/notificacoes")}
         >
           <Ionicons name="notifications-outline" size={22} color="#fff" />
           <View style={styles.notifDot} />

@@ -13,7 +13,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getMe, getPsychologists, updateMe, updateProfessionalProfile } from "../../services/api";
+import { getMe, getPsychologists, logout, updateMe, updateProfessionalProfile } from "../../services/api";
+import { confirmAction } from "../../services/confirm";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface EditableFields {
@@ -185,6 +186,21 @@ export default function PsychologistProfileScreen() {
     }
   };
 
+  const handleLogout = () => {
+    confirmAction(
+      "Deseja sair da sua conta?",
+      "Você será desconectado e precisará fazer login novamente.",
+      async () => {
+        try {
+          await logout();
+        } finally {
+          router.replace("/login");
+        }
+      },
+      { confirmText: "Sair" },
+    );
+  };
+
   const initials = fields.name
     .split(" ")
     .filter((n) => n.length > 1)
@@ -261,6 +277,18 @@ export default function PsychologistProfileScreen() {
             <EditableRow label="Bio / Apresentação" value={fields.bio} onChangeText={set("bio")} editable={editing} multiline />
           </View>
 
+
+          {/* ── Botão Sair ── */}
+          {!editing && (
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#e05c5c" />
+              <Text style={styles.logoutBtnText}>Sair da conta</Text>
+            </TouchableOpacity>
+          )}
 
           {/* ── Botão Salvar ── */}
           {editing && (
@@ -396,4 +424,19 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.7 },
   saveBtnText: { color: WHITE, fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
+
+  logoutBtn: {
+    borderRadius: 16,
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: "#f5d0d0",
+    backgroundColor: "#fff8f8",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  logoutBtnText: { color: "#e05c5c", fontSize: 15, fontWeight: "700" },
 });

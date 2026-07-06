@@ -204,7 +204,13 @@ export default function AdminUsuariosScreen() {
           {/* Ação rápida */}
           <TouchableOpacity
             style={styles.newButton}
-            onPress={() => router.push('/(admin)/cadastrar-usuario')}
+            onPress={() =>
+              Alert.alert('Cadastrar usuário', 'Qual tipo de perfil deseja cadastrar?', [
+                { text: 'Paciente', onPress: () => router.push('/(admin)/cadastrar-paciente') },
+                { text: 'Psicólogo', onPress: () => router.push('/(admin)/cadastrar-psicologo') },
+                { text: 'Cancelar', style: 'cancel' },
+              ])
+            }
             activeOpacity={0.85}
           >
             <Ionicons name="person-add-outline" size={20} color="#fff" />

@@ -54,8 +54,10 @@ const normalizeAppointment = (
 
   const statusMap: Record<string, AppointmentStatus> = {
     scheduled: "agendada",
+    rescheduled: "agendada",
     completed: "realizada",
     cancelled: "cancelada",
+    no_show: "cancelada",
   };
   const status = (statusMap[item.status ?? ""] ??
     "agendada") as AppointmentStatus;

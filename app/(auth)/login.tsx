@@ -59,7 +59,14 @@ const FloatingInput = ({
   const [focused, setFocused] = useState(false);
   const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
 
-
+  const handleFocus = useCallback(() => {
+    setFocused(true);
+    Animated.timing(animatedLabel, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [animatedLabel]);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
@@ -112,6 +119,7 @@ const FloatingInput = ({
           value={value}
           onChangeText={onChangeText}
 
+          onFocus={handleFocus}
           onBlur={handleBlur}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType ?? "default"}

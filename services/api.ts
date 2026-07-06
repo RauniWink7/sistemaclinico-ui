@@ -604,8 +604,7 @@ export const createPatientAsAdmin = async (payload: {
 }): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
-  console.log(payload.birth_date)
-  
+  if (__DEV__) console.log("birth_date (raw):", payload.birth_date);
   payload.birth_date = normalizeDateToYYYYMMDD(payload.birth_date);
   const { response, data } = await fetchJson(
     `${API_BASE_URL}/auth/admin/users/patients/`,
@@ -615,7 +614,7 @@ export const createPatientAsAdmin = async (payload: {
       body: JSON.stringify(payload),
     },
   );
-  console.log(JSON.stringify(payload));
+  if (__DEV__) console.log("createPatientAsAdmin payload:", JSON.stringify(payload));
 
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
