@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -12,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import { getClinicData, getClinicStats, getMe } from "../../services/api";
 
 // ─── Tipagens ────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export default function AdminDashboardScreen() {
         // 1. Busca usuário logado
         const meResult = await getMe();
         if (!meResult.ok || !meResult.data) {
-          Alert.alert(
+          showAlert(
             "Erro",
             meResult.error ?? "Não foi possível carregar o perfil.",
           );
@@ -124,7 +124,7 @@ export default function AdminDashboardScreen() {
 
         const clinicId = me.clinic;
         if (!clinicId) {
-          Alert.alert("Erro", "Nenhuma clínica associada ao usuário.");
+          showAlert("Erro", "Nenhuma clínica associada ao usuário.");
           return;
         }
 
@@ -135,7 +135,7 @@ export default function AdminDashboardScreen() {
         ]);
 
         if (!statsResult.ok) {
-          Alert.alert(
+          showAlert(
             "Erro",
             statsResult.error ??
               "Não foi possível carregar os indicadores da clínica.",
@@ -143,7 +143,7 @@ export default function AdminDashboardScreen() {
           return;
         }
         if (!clinicResult.ok) {
-          Alert.alert(
+          showAlert(
             "Erro",
             clinicResult.error ??
               "Não foi possível carregar os dados da clínica.",
@@ -154,7 +154,7 @@ export default function AdminDashboardScreen() {
         setStats(statsResult.data as ClinicStats);
         setClinicData(clinicResult.data as ClinicData);
       } catch (err: any) {
-        Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
+        showAlert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
       } finally {
         setLoading(false);
       }

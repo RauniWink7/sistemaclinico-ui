@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   RefreshControl,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
   getNotifications,
   markNotificationRead,
@@ -214,7 +214,7 @@ export default function NotificationsScreen() {
     if (result.ok && Array.isArray(result.data)) {
       setNotifications(result.data);
     } else {
-      Alert.alert(
+      showAlert(
         "Erro",
         result.error || "Nao foi possivel carregar as notificacoes.",
       );
@@ -264,7 +264,7 @@ export default function NotificationsScreen() {
       );
     } else {
       setNotifications(previous);
-      Alert.alert(
+      showAlert(
         "Erro",
         result.error || "Nao foi possivel marcar a notificacao como lida.",
       );
@@ -287,7 +287,7 @@ export default function NotificationsScreen() {
     );
     if (results.some((result) => !result.ok)) {
       setNotifications(previous);
-      Alert.alert("Erro", "Nao foi possivel marcar todos os avisos como lidos.");
+      showAlert("Erro", "Nao foi possivel marcar todos os avisos como lidos.");
       return;
     }
 

@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     ScrollView,
     StatusBar,
@@ -13,6 +12,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
+import { DateField } from "../../components/DateTimeField";
 import {
     getMe,
     getPatientProfile,
@@ -21,6 +22,9 @@ import {
     updatePatientProfile,
 } from "../../services/api";
 import { confirmAction } from "../../services/confirm";
+
+// Data máxima para nascimento: hoje (formato AAAA-MM-DD).
+const TODAY_STR = new Date().toLocaleDateString("en-CA");
 
 // Campos enviados no PATCH /api/auth/patients/{id}/profile/
 // phone e full_name NÃO ficam aqui — pertencem ao User, salvos via updateMe
@@ -74,6 +78,8 @@ interface EditableRowProps {
   multiline?: boolean;
   numberOfLines?: number;
   minHeight?: number;
+  // "date" mostra o calendário clássico ao editar.
+  type?: "text" | "date";
 }
 
 const EditableRow = ({
@@ -86,20 +92,30 @@ const EditableRow = ({
   multiline,
   numberOfLines,
   minHeight,
+  type,
 }: EditableRowProps) => (
   <View style={styles.editableRow}>
     <Text style={styles.infoLabel}>{label}</Text>
     {editable && !readOnly ? (
-      <TextInput
-        style={[styles.editInput, multiline && { minHeight: minHeight ?? 80 }]}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType ?? "default"}
-        autoCapitalize="none"
-        placeholderTextColor="#9bbfb0"
-        multiline={multiline}
-        numberOfLines={numberOfLines}
-      />
+      type === "date" ? (
+        <DateField
+          value={value}
+          onChange={onChangeText}
+          max={TODAY_STR}
+          variant="underline"
+        />
+      ) : (
+        <TextInput
+          style={[styles.editInput, multiline && { minHeight: minHeight ?? 80 }]}
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType ?? "default"}
+          autoCapitalize="none"
+          placeholderTextColor="#9bbfb0"
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+        />
+      )
     ) : (
       <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
         {value}
@@ -133,7 +149,7 @@ export default function ProfileScreen() {
       setLoading(true);
       const meResult = await getMe();
       if (!meResult.ok || !meResult.data?.id) {
-        Alert.alert(
+        showAlert(
           "Erro",
           meResult.error || "Não foi possível carregar o perfil.",
         );
@@ -143,7 +159,7 @@ export default function ProfileScreen() {
 
       const profileResult = await getPatientProfile(meResult.data.id);
       if (!profileResult.ok || !profileResult.data) {
-        Alert.alert(
+        showAlert(
           "Erro",
           profileResult.error || "Não foi possível carregar o perfil.",
         );
@@ -228,7 +244,7 @@ export default function ProfileScreen() {
     try {
       const meResult = await getMe();
       if (!meResult.ok || !meResult.data?.id) {
-        Alert.alert("Erro", "Não foi possível identificar o paciente.");
+        showAlert("Erro", "Não foi possível identificar o paciente.");
         setLoading(false);
         return;
       }
@@ -247,7 +263,7 @@ export default function ProfileScreen() {
           meUpdateResult.error,
           meUpdateResult.data,
         );
-        Alert.alert(
+        showAlert(
           "Erro",
           meUpdateResult.error || "Não foi possível salvar nome/telefone.",
         );
@@ -271,7 +287,7 @@ export default function ProfileScreen() {
           profileResult.error,
           profileResult.data,
         );
-        Alert.alert(
+        showAlert(
           "Erro",
           profileResult.error || "Não foi possível salvar as alterações.",
         );
@@ -280,9 +296,9 @@ export default function ProfileScreen() {
 
       setOriginal({ ...fields });
       setEditing(false);
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
+      showAlert("Sucesso", "Perfil atualizado com sucesso!");
     } catch {
-      Alert.alert("Erro", "Não foi possível salvar as alterações.");
+      showAlert("Erro", "Não foi possível salvar as alterações.");
     } finally {
       setLoading(false);
     }
@@ -364,6 +380,7 @@ export default function ProfileScreen() {
               value={fields.birthDate}
               onChangeText={set("birthDate")}
               editable={editing}
+              type="date"
             />
             <View style={styles.rowDivider} />
 

@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -12,7 +11,6 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
-  Platform,
 } from "react-native";
 import {
   AppointmentAvailabilityApiItem,
@@ -22,20 +20,7 @@ import {
   getPsychologists,
   ProfessionalApiItem,
 } from "../../services/api";
-
-// Logo após os imports
-const showAlert = (title: string, message: string, onOk?: () => void) => {
-  if (Platform.OS === "web") {
-    window.alert(`${title}\n\n${message}`);
-    onOk?.();
-  } else {
-    Alert.alert(
-      title,
-      message,
-      onOk ? [{ text: "OK", onPress: onOk }] : undefined,
-    );
-  }
-};
+import { showAlert } from "../../services/feedback";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS = [
@@ -374,8 +359,8 @@ export default function ScheduleScreen() {
 
       showAlert(
         "Consulta agendada! 🎉",
-        `${activePsychologist?.name ?? ""}\n${formatDate(selectedDate)}às ${selectedTime}\n\nUm e-mail de confirmação foi enviado.`,
-        () => router.back(),
+        `${activePsychologist?.name ?? ""} — ${formatDate(selectedDate)} às ${selectedTime}. Um e-mail de confirmação foi enviado.`,
+        [{ text: "OK", onPress: () => router.back() }],
       );
     } catch {
       showAlert("Erro", "Não foi possível confirmar o agendamento.");

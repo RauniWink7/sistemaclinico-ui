@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
   AdminAppointmentsReportApi,
   downloadReportFile,
@@ -62,7 +62,7 @@ export default function AdminReportsScreen() {
     if (result.ok && result.data) {
       setReport(result.data);
     } else {
-      Alert.alert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
+      showAlert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
     }
     setLoading(false);
   };
@@ -79,7 +79,7 @@ export default function AdminReportsScreen() {
       if (result.ok && result.data) {
         setReport(result.data);
       } else {
-        Alert.alert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
+        showAlert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
       }
       setLoading(false);
     };
@@ -102,7 +102,7 @@ export default function AdminReportsScreen() {
       params,
       `relatorio-admin-consultas.${extension}`,
     );
-    if (!result.ok) Alert.alert("Exportacao", result.error || "Falha ao exportar.");
+    if (!result.ok) showAlert("Exportacao", result.error || "Falha ao exportar.");
     setExporting(null);
   };
 

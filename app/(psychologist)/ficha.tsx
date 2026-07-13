@@ -4,7 +4,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Linking,
   Modal,
@@ -17,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
   deleteDocument,
   getAccessToken,
@@ -27,11 +27,12 @@ import {
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
 const BLUE_LIGHT = "#eaf1ff";
-const BG = "#f0faf5";
+const BG = "#e8f1ec";
 const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const MAX_WIDTH = 1120;
 
 // A mesma URL base da api.ts
 const API_BASE_URL = Platform.select({
@@ -104,14 +105,6 @@ const formatDate = (iso: string): string => {
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm}/${d.getFullYear()} ${hh}:${mi}`;
 };
-
-// ─── Decorative Background ────────────────────────────────────────────────────
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
 
 // ─── ReadOnly Row ─────────────────────────────────────────────────────────────
 const ReadOnlyRow = ({ label, value }: { label: string; value: string }) => (
@@ -210,7 +203,7 @@ const UploadModal = ({ visible, onClose, onUpload }: UploadModalProps) => {
         });
       }
     } catch {
-      Alert.alert("Erro", "Não foi possível selecionar o arquivo.");
+      showAlert("Erro", "Não foi possível selecionar o arquivo.");
     }
   };
 
@@ -220,7 +213,7 @@ const UploadModal = ({ visible, onClose, onUpload }: UploadModalProps) => {
       return;
     }
     if (!selectedFile) {
-      Alert.alert("Erro", "Selecione um arquivo.");
+      showAlert("Erro", "Selecione um arquivo.");
       return;
     }
     setTitleError("");
@@ -458,7 +451,7 @@ export default function PsychologistPatientRecordScreen() {
   useEffect(() => {
     const loadPatientData = async () => {
       if (!params.patientId) {
-        Alert.alert("Erro", "ID do paciente não fornecido.");
+        showAlert("Erro", "ID do paciente não fornecido.");
         router.back();
         return;
       }
@@ -471,14 +464,14 @@ export default function PsychologistPatientRecordScreen() {
           setMedicalHistory(profileResult.data.medical_history || "");
           setAnamnesis(profileResult.data.anamnesis || "");
         } else {
-          Alert.alert(
+          showAlert(
             "Erro",
             profileResult.error || "Erro ao carregar perfil do paciente.",
           );
           router.back();
         }
       } catch {
-        Alert.alert("Erro", "Erro inesperado ao carregar dados.");
+        showAlert("Erro", "Erro inesperado ao carregar dados.");
       } finally {
         setLoading(false);
       }
@@ -519,7 +512,7 @@ export default function PsychologistPatientRecordScreen() {
       await Linking.openURL(url);
       return;
     }
-    Alert.alert(
+    showAlert(
       "Download",
       `Não foi possível localizar o link do documento "${item.title}".`,
     );
@@ -539,7 +532,7 @@ export default function PsychologistPatientRecordScreen() {
     setDeleting(false);
     setDeleteConfirm(null);
     if (!result.ok) {
-      Alert.alert(
+      showAlert(
         "Erro",
         result.error || "Não foi possível excluir o documento.",
       );
@@ -603,7 +596,7 @@ export default function PsychologistPatientRecordScreen() {
           data?.patient?.[0] ||
           data?.non_field_errors?.[0] ||
           "Não foi possível enviar o documento.";
-        Alert.alert("Erro", errorMsg);
+        showAlert("Erro", errorMsg);
         return;
       }
 
@@ -621,9 +614,9 @@ export default function PsychologistPatientRecordScreen() {
         ...prev,
       ]);
       setModalVisible(false);
-      Alert.alert("Sucesso", "Documento enviado com sucesso.");
+      showAlert("Sucesso", "Documento enviado com sucesso.");
     } catch {
-      Alert.alert("Erro", "Erro inesperado ao enviar o documento.");
+      showAlert("Erro", "Erro inesperado ao enviar o documento.");
     }
   };
 
@@ -631,7 +624,7 @@ export default function PsychologistPatientRecordScreen() {
   const handleSave = async () => {
     const userId = patientUserId || params.patientId;
     if (!userId) {
-      Alert.alert(
+      showAlert(
         "Erro",
         "ID do paciente não encontrado. Tente fechar e abrir a ficha novamente.",
       );
@@ -646,10 +639,10 @@ export default function PsychologistPatientRecordScreen() {
       if (result.ok) {
         showSavedToast();
       } else {
-        Alert.alert("Erro", result.error ?? "Não foi possível salvar.");
+        showAlert("Erro", result.error ?? "Não foi possível salvar.");
       }
     } catch {
-      Alert.alert("Erro", "Erro inesperado ao salvar a ficha.");
+      showAlert("Erro", "Erro inesperado ao salvar a ficha.");
     } finally {
       setSaving(false);
     }
@@ -659,23 +652,23 @@ export default function PsychologistPatientRecordScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-      <DecorativeBackground />
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Area do psicologo</Text>
-          <Text style={styles.headerTitle}>Ficha do paciente</Text>
+        <View style={styles.headerInner}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerTitle}>Ficha do paciente</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.homeBtn}
+            onPress={() => router.replace("/(psychologist)/dashboardP")}
+          >
+            <Ionicons name="home-outline" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.homeBtn}
-          onPress={() => router.replace("/(psychologist)/dashboardP")}
-        >
-          <Ionicons name="home-outline" size={20} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -981,31 +974,16 @@ export default function PsychologistPatientRecordScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
-  circle1: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "#27795f",
-    top: -110,
-    right: -70,
-    opacity: 0.45,
-  },
-  circle2: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: GREEN_DARK,
-    top: -55,
-    left: -70,
-    opacity: 0.28,
-  },
   header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
     backgroundColor: GREEN,
+    paddingTop: 52,
+    paddingBottom: 20,
+  },
+  headerInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1027,27 +1005,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTextBox: { flex: 1, marginHorizontal: 14 },
-  headerEyebrow: { color: "#bce3d5", fontSize: 13, fontWeight: "600" },
   headerTitle: {
     color: WHITE,
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "800",
-    marginTop: 2,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40 },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 40,
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+  },
   heroCard: {
     backgroundColor: WHITE,
-    borderRadius: 26,
-    padding: 22,
-    marginTop: -18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 20,
     marginBottom: 22,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.08,
+    shadowColor: "#1f5442",
+    shadowOpacity: 0.05,
     shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   heroTopRow: { flexDirection: "row", alignItems: "center" },
   avatar: {
@@ -1091,12 +1075,14 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: WHITE,
-    borderRadius: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
     padding: 18,
     marginBottom: 16,
-    shadowColor: "#174c3e",
+    shadowColor: "#1f5442",
     shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },

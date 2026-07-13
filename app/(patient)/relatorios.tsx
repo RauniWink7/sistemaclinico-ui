@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
   downloadReportFile,
   getMe,
@@ -132,7 +132,7 @@ export default function PatientReportsScreen() {
     if (result.ok && result.data) {
       setReport(result.data);
     } else {
-      Alert.alert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
+      showAlert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
     }
     setLoading(false);
   };
@@ -142,14 +142,14 @@ export default function PatientReportsScreen() {
       setLoading(true);
       const me = await getMe();
       if (!me.ok || !me.data?.id) {
-        Alert.alert("Erro", me.error || "Nao foi possivel carregar seu perfil.");
+        showAlert("Erro", me.error || "Nao foi possivel carregar seu perfil.");
         setLoading(false);
         return;
       }
 
       const profile = await getPatientProfile(me.data.id);
       if (!profile.ok || !profile.data?.id) {
-        Alert.alert("Erro", profile.error || "Perfil de paciente nao encontrado.");
+        showAlert("Erro", profile.error || "Perfil de paciente nao encontrado.");
         setLoading(false);
         return;
       }
@@ -159,7 +159,7 @@ export default function PatientReportsScreen() {
       if (reportResult.ok && reportResult.data) {
         setReport(reportResult.data);
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           reportResult.error || "Nao foi possivel carregar o relatorio.",
         );
@@ -185,7 +185,7 @@ export default function PatientReportsScreen() {
       period,
       "relatorio-paciente.pdf",
     );
-    if (!result.ok) Alert.alert("Exportacao", result.error || "Falha ao exportar.");
+    if (!result.ok) showAlert("Exportacao", result.error || "Falha ao exportar.");
     setExporting(false);
   };
 

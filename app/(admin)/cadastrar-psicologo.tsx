@@ -8,8 +8,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { createProfessionalAsAdmin } from '../../services/api';
@@ -47,9 +47,9 @@ export default function CadastrarPsicologoScreen() {
 
   const handleSubmit = async () => {
     if (!form.fullName || !form.email)
-      return Alert.alert('Campos obrigatórios', 'Preencha nome e e-mail.');
+      return showAlert('Campos obrigatórios', 'Preencha nome e e-mail.');
     if (!form.crp)
-      return Alert.alert('CRP obrigatório', 'Informe o CRP do psicólogo.');
+      return showAlert('CRP obrigatório', 'Informe o CRP do psicólogo.');
 
     setLoading(true);
     const result = await createProfessionalAsAdmin({
@@ -62,8 +62,8 @@ export default function CadastrarPsicologoScreen() {
     });
     setLoading(false);
 
-    if (!result.ok) return Alert.alert('Erro', result.error ?? 'Não foi possível cadastrar.');
-    Alert.alert('Sucesso', 'Psicólogo cadastrado! Um e-mail de convite foi enviado para ele definir a senha.', [{ text: 'OK', onPress: () => router.back() }]);
+    if (!result.ok) return showAlert('Erro', result.error ?? 'Não foi possível cadastrar.');
+    showAlert('Sucesso', 'Psicólogo cadastrado! Um e-mail de convite foi enviado para ele definir a senha.', [{ text: 'OK', onPress: () => router.back() }]);
   };
 
   return (

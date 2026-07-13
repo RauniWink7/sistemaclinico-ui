@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -13,6 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
+import { DateField, TimeField } from "../../components/DateTimeField";
 import {
   createAppointment,
   getClinicPatients,
@@ -138,6 +139,9 @@ export default function AdminAgendarScreen() {
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState("50");
 
+  // Data mínima do calendário: hoje (impede agendar no passado). Formato AAAA-MM-DD.
+  const todayStr = new Date().toLocaleDateString("en-CA");
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -163,7 +167,7 @@ export default function AdminAgendarScreen() {
 
         const meResult = await getMe();
         if (!meResult.ok || !meResult.data?.clinic) {
-          Alert.alert("Erro", "Não foi possível identificar a clínica.");
+          showAlert("Erro", "Não foi possível identificar a clínica.");
           return;
         }
 
@@ -200,7 +204,7 @@ export default function AdminAgendarScreen() {
           );
         }
       } catch (err: any) {
-        Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
+        showAlert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
       } finally {
         setLoadingInitial(false);
       }
@@ -211,22 +215,22 @@ export default function AdminAgendarScreen() {
 
   const handleSave = async () => {
     if (!selectedPatient) {
-      Alert.alert("Campo obrigatório", "Selecione o paciente.");
+      showAlert("Campo obrigatório", "Selecione o paciente.");
       return;
     }
     if (!selectedProfessional) {
-      Alert.alert("Campo obrigatório", "Selecione o psicólogo.");
+      showAlert("Campo obrigatório", "Selecione o psicólogo.");
       return;
     }
     if (!date || !time) {
-      Alert.alert(
+      showAlert(
         "Campo obrigatório",
         "Informe a data e o horário da consulta.",
       );
       return;
     }
     if (!clinicId) {
-      Alert.alert("Erro", "Clínica não identificada.");
+      showAlert("Erro", "Clínica não identificada.");
       return;
     }
 
@@ -234,20 +238,20 @@ export default function AdminAgendarScreen() {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     const timeRegex = /^\d{2}:\d{2}$/;
     if (!dateRegex.test(date)) {
-      Alert.alert(
+      showAlert(
         "Data inválida",
         "Use o formato AAAA-MM-DD (ex: 2026-05-10).",
       );
       return;
     }
     if (!timeRegex.test(time)) {
-      Alert.alert("Hora inválida", "Use o formato HH:MM (ex: 14:30).");
+      showAlert("Hora inválida", "Use o formato HH:MM (ex: 14:30).");
       return;
     }
 
     const durationMin = parseInt(duration, 10);
     if (isNaN(durationMin) || durationMin < 10) {
-      Alert.alert(
+      showAlert(
         "Duração inválida",
         "Informe uma duração de pelo menos 10 minutos.",
       );
@@ -265,18 +269,18 @@ export default function AdminAgendarScreen() {
       );
 
       if (!result.ok) {
-        Alert.alert(
+        showAlert(
           "Erro ao agendar",
           result.error ?? "Não foi possível criar a consulta.",
         );
         return;
       }
 
-      Alert.alert("Consulta agendada", "A consulta foi criada com sucesso.", [
+      showAlert("Consulta agendada", "A consulta foi criada com sucesso.", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (err: any) {
-      Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
+      showAlert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
     } finally {
       setSaving(false);
     }
@@ -366,29 +370,15 @@ export default function AdminAgendarScreen() {
           <View style={styles.formCard}>
             <Text style={styles.sectionTitle}>Data e horario</Text>
 
-            <Text style={styles.fieldLabel}>Data e Hora</Text>
-
-            {/* Campos reais */}
+            {/* Campos com calendário/relógio nativos */}
             <View style={styles.rowFields}>
               <View style={styles.halfField}>
-                <Text style={styles.fieldLabel}>Data * (AAAA-MM-DD)</Text>
-                <TextInput
-                  style={styles.textRealInput}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="2026-05-10"
-                  placeholderTextColor="#94b3a6"
-                />
+                <Text style={styles.fieldLabel}>Data *</Text>
+                <DateField value={date} onChange={setDate} min={todayStr} />
               </View>
               <View style={styles.halfField}>
-                <Text style={styles.fieldLabel}>Hora * (HH:MM)</Text>
-                <TextInput
-                  style={styles.textRealInput}
-                  value={time}
-                  onChangeText={setTime}
-                  placeholder="14:30"
-                  placeholderTextColor="#94b3a6"
-                />
+                <Text style={styles.fieldLabel}>Hora *</Text>
+                <TimeField value={time} onChange={setTime} />
               </View>
             </View>
 

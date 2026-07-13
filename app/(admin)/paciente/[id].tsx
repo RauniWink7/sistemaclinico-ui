@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showAlert } from '../../../services/feedback';
 import { getPatientProfile, updatePatientProfile, updateUser, PatientProfileApiItem } from '../../../services/api';
 
 const GREEN = '#2e8b6e';
@@ -82,7 +82,7 @@ export default function PatientDetailScreen() {
         setLoading(true);
         const result = await getPatientProfile(id);
         if (!result.ok || !result.data) {
-          Alert.alert('Erro', result.error ?? 'Não foi possível carregar o paciente.');
+          showAlert('Erro', result.error ?? 'Não foi possível carregar o paciente.');
           router.back();
           return;
         }
@@ -90,7 +90,7 @@ export default function PatientDetailScreen() {
         setEditName(result.data.user.full_name ?? '');
         setEditPhone(result.data.user.phone ?? '');
       } catch (err: any) {
-        Alert.alert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+        showAlert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
         router.back();
       } finally {
         setLoading(false);
@@ -102,7 +102,7 @@ export default function PatientDetailScreen() {
   const handleSave = async () => {
     if (!patient) return;
     if (!editName.trim()) {
-      Alert.alert('Campo obrigatório', 'O nome não pode ficar em branco.');
+      showAlert('Campo obrigatório', 'O nome não pode ficar em branco.');
       return;
     }
     setSaving(true);
@@ -113,7 +113,7 @@ export default function PatientDetailScreen() {
         phone: editPhone.trim() || undefined,
       });
       if (!userResult.ok) {
-        Alert.alert('Erro', userResult.error ?? 'Não foi possível salvar as alterações.');
+        showAlert('Erro', userResult.error ?? 'Não foi possível salvar as alterações.');
         return;
       }
       setPatient((prev) =>
@@ -122,9 +122,9 @@ export default function PatientDetailScreen() {
           : prev
       );
       setEditing(false);
-      Alert.alert('Sucesso', 'Dados do paciente atualizados.');
+      showAlert('Sucesso', 'Dados do paciente atualizados.');
     } catch (err: any) {
-      Alert.alert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+      showAlert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
     } finally {
       setSaving(false);
     }

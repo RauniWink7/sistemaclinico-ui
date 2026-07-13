@@ -12,7 +12,10 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import React, {
     useCallback,
     useEffect,
@@ -22,7 +25,6 @@ import React, {
 } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     KeyboardAvoidingView,
     Modal,
@@ -36,12 +38,21 @@ import {
     View,
 } from "react-native";
 import {
+    AudioMessage,
+    formatClock,
+    useChatAudioRecorder,
+    type RecordedAudio,
+} from "../../services/chatAudio";
+import { showAlert } from "../../services/feedback";
+import {
     getAccessToken,
     getChatContacts,
     getConversations,
     getMe,
     getMessagesWithPsychologist,
     markMessagesRead,
+    resolveMediaUrl,
+    sendChatAttachment,
     sendChatMessage,
 } from "../../services/api";
 
@@ -106,14 +117,47 @@ interface Conversation {
   online: boolean;
 }
 
+type MessageType = "text" | "image" | "audio";
+
 interface Message {
   id: string;
   senderId: string; // user.id de quem enviou
   text: string;
+  type: MessageType;
+  mediaUrl?: string; // URL absoluta da mídia (imagem/áudio)
   createdAt: string;
   read: boolean;
   pending?: boolean; // mensagem otimista ainda não confirmada pelo backend
 }
+
+// message_type do backend → tipo interno da mensagem
+const mediaTypeOf = (t?: string): MessageType =>
+  t === "image" ? "image" : t === "audio" ? "audio" : "text";
+
+// Normaliza uma mensagem vinda do REST (sent_at/sender_id) ou do WS (sent_at/sender).
+const mapApiMessage = (msg: any): Message => ({
+  id: msg.id,
+  senderId: msg.sender_id || msg.sender || "",
+  text: msg.content_encrypted || msg.text || "",
+  type: mediaTypeOf(msg.message_type),
+  mediaUrl: resolveMediaUrl(msg.media_url),
+  createdAt: msg.created_at || msg.sent_at || "",
+  read: msg.read ?? true,
+});
+
+// Texto curto para o snippet da lista de conversas.
+const snippetFor = (m: Message): string =>
+  m.type === "image" ? "📷 Imagem" : m.type === "audio" ? "🎤 Áudio" : m.text;
+
+// Abre a mídia fora da bolha (nova aba na web, navegador no nativo).
+const openMedia = (uri?: string) => {
+  if (!uri) return;
+  if (Platform.OS === "web") {
+    window.open(uri, "_blank");
+  } else {
+    void WebBrowser.openBrowserAsync(uri);
+  }
+};
 
 interface Contact {
   id: string;
@@ -146,6 +190,10 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [isTyping, setIsTyping] = useState(false); // o outro lado está digitando
   const [contactOnline, setContactOnline] = useState(false);
+  const [sendingAttachment, setSendingAttachment] = useState(false);
+
+  // Áudio (gravação estilo WhatsApp) — implementação por plataforma
+  const recorder = useChatAudioRecorder();
 
   // Modal novo contato
   const [contactModalVisible, setContactModalVisible] = useState(false);
@@ -173,7 +221,7 @@ export default function ChatScreen() {
         // Identificar quem está logado
         const meResult = await getMe();
         if (!meResult.ok || !meResult.data) {
-          Alert.alert("Erro", "Sessão expirada. Faça login novamente.");
+          showAlert("Erro", "Sessão expirada. Faça login novamente.");
           router.replace("/login");
           return;
         }
@@ -219,7 +267,7 @@ export default function ChatScreen() {
           }
         }
       } catch {
-        Alert.alert("Erro", "Não foi possível carregar as conversas.");
+        showAlert("Erro", "Não foi possível carregar as conversas.");
       } finally {
         setLoading(false);
         Animated.parallel([
@@ -254,14 +302,7 @@ export default function ChatScreen() {
       try {
         const result = await getMessagesWithPsychologist(activeContactId);
         if (result.ok && Array.isArray(result.data)) {
-          const mapped: Message[] = result.data.map((msg: any) => ({
-            id: msg.id,
-            senderId: msg.sender_id || msg.sender || "",
-            text: msg.content_encrypted || msg.text || "",
-            createdAt: msg.created_at || msg.sent_at || "",
-            read: msg.read ?? true,
-          }));
-          setMessages(mapped);
+          setMessages(result.data.map(mapApiMessage));
           scrollToBottom(false);
         }
       } catch {
@@ -340,7 +381,7 @@ export default function ChatScreen() {
 
       ws.onclose = (e) => {
         if (e.code === 4401) {
-          Alert.alert("Sessão expirada", "Faça login novamente.");
+          showAlert("Sessão expirada", "Faça login novamente.");
           router.replace("/login");
           return;
         }
@@ -362,26 +403,29 @@ export default function ChatScreen() {
       const { type, payload } = frame;
 
       if (type === "message.new") {
-        const incoming: Message = {
-          id: payload.id,
-          senderId: payload.sender,
-          text: payload.content_encrypted || "",
-          createdAt: payload.sent_at || new Date().toISOString(),
-          read: payload.read ?? false,
-        };
+        const incoming = mapApiMessage(payload);
 
         setMessages((prev) => {
-          // Substitui mensagem pendente se tiver o mesmo conteúdo enviado agora
-          const replaced = prev.map((m) =>
-            m.pending &&
-            m.text === incoming.text &&
-            m.senderId === incoming.senderId
-              ? { ...incoming }
-              : m,
-          );
-          // Se não substituiu, adiciona nova
-          const alreadyExists = replaced.some((m) => m.id === incoming.id);
-          return alreadyExists ? replaced : [...replaced, incoming];
+          // Se já existe (ex.: eco do próprio envio já reconciliado), ignora.
+          if (prev.some((m) => m.id === incoming.id)) return prev;
+          // Substitui bolha otimista de TEXTO com o mesmo conteúdo enviado agora.
+          // Mídia é sempre deduplicada por id (o REST já reconcilia o envio).
+          let replacedPending = false;
+          const replaced = prev.map((m) => {
+            if (
+              !replacedPending &&
+              m.pending &&
+              incoming.type === "text" &&
+              m.type === "text" &&
+              m.text === incoming.text &&
+              m.senderId === incoming.senderId
+            ) {
+              replacedPending = true;
+              return { ...incoming };
+            }
+            return m;
+          });
+          return replacedPending ? replaced : [...replaced, incoming];
         });
 
         // Atualiza snippet da conversa
@@ -390,7 +434,7 @@ export default function ChatScreen() {
             c.contactUserId === contactId
               ? {
                   ...c,
-                  lastText: incoming.text,
+                  lastText: snippetFor(incoming),
                   lastAt: incoming.createdAt,
                   // Se é mensagem do outro lado, incrementa unread (a menos que esteja ativo)
                   unread:
@@ -468,13 +512,7 @@ export default function ChatScreen() {
         const knownIds = new Set(prev.map((m) => m.id));
         const newer = (result.data as any[])
           .filter((msg) => !knownIds.has(msg.id))
-          .map((msg) => ({
-            id: msg.id,
-            senderId: msg.sender_id || msg.sender || "",
-            text: msg.content_encrypted || msg.text || "",
-            createdAt: msg.created_at || msg.sent_at || "",
-            read: msg.read ?? true,
-          }));
+          .map(mapApiMessage);
         if (newer.length === 0) return prev;
         return [...prev, ...newer].sort(
           (a, b) =>
@@ -502,6 +540,7 @@ export default function ChatScreen() {
       id: tempId,
       senderId: myUserId,
       text,
+      type: "text",
       createdAt: now,
       read: true,
       pending: true,
@@ -533,7 +572,7 @@ export default function ChatScreen() {
       // Fallback REST
       const result = await sendChatMessage(activeContactId, text);
       if (!result.ok) {
-        Alert.alert("Erro", result.error || "Não foi possível enviar.");
+        showAlert("Erro", result.error || "Não foi possível enviar.");
         // Remove mensagem otimista em caso de falha
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         return;
@@ -563,6 +602,111 @@ export default function ChatScreen() {
     }
   }, []);
 
+  // ─── Enviar anexo (imagem ou áudio) ─────────────────────────────────────────
+  const sendAttachment = useCallback(
+    async (
+      file: { uri: string; name: string; type: string },
+      msgType: MessageType,
+    ) => {
+      if (!activeContactId) return;
+
+      const now = new Date().toISOString();
+      const tempId = `pending-${Date.now()}`;
+
+      // Bolha otimista com preview local (URI local do arquivo/gravação)
+      const optimistic: Message = {
+        id: tempId,
+        senderId: myUserId,
+        text: "",
+        type: msgType,
+        mediaUrl: file.uri,
+        createdAt: now,
+        read: true,
+        pending: true,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.contactUserId === activeContactId
+            ? { ...c, lastText: snippetFor(optimistic), lastAt: now }
+            : c,
+        ),
+      );
+      scrollToBottom(true);
+
+      setSendingAttachment(true);
+      const result = await sendChatAttachment(activeContactId, file);
+      setSendingAttachment(false);
+
+      if (!result.ok || !result.data) {
+        showAlert("Erro", result.error || "Não foi possível enviar o anexo.");
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        return;
+      }
+
+      // Troca a bolha otimista pelo registro real (id + media_url resolvido).
+      // O eco do WS (message.new) chega com o mesmo id e é deduplicado.
+      const real = mapApiMessage(result.data);
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? real : m)));
+    },
+    [activeContactId, myUserId],
+  );
+
+  // ─── Selecionar imagem ──────────────────────────────────────────────────────
+  const handlePickImage = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      await sendAttachment(
+        {
+          uri: asset.uri,
+          name: asset.name || `imagem-${Date.now()}.jpg`,
+          type: asset.mimeType || "image/jpeg",
+        },
+        "image",
+      );
+    } catch {
+      showAlert("Erro", "Não foi possível selecionar a imagem.");
+    }
+  }, [sendAttachment]);
+
+  // ─── Gravação de áudio (start / enviar / cancelar) ──────────────────────────
+  const handleStartRecording = useCallback(async () => {
+    try {
+      await recorder.start();
+    } catch (e: any) {
+      showAlert(
+        "Microfone",
+        e?.message || "Não foi possível acessar o microfone.",
+      );
+    }
+  }, [recorder]);
+
+  const handleSendRecording = useCallback(async () => {
+    let recorded: RecordedAudio | null = null;
+    try {
+      recorded = await recorder.stop();
+    } catch {
+      recorded = null;
+    }
+    if (!recorded) {
+      showAlert("Áudio", "Gravação muito curta ou indisponível.");
+      return;
+    }
+    await sendAttachment(
+      { uri: recorded.uri, name: recorded.name, type: recorded.type },
+      "audio",
+    );
+  }, [recorder, sendAttachment]);
+
+  const handleCancelRecording = useCallback(async () => {
+    await recorder.cancel();
+  }, [recorder]);
+
   // ─── Abrir modal de novo contato ────────────────────────────────────────────
   const handleOpenNewContact = useCallback(async () => {
     setContactSearch("");
@@ -573,14 +717,14 @@ export default function ChatScreen() {
       if (result.ok && Array.isArray(result.data)) {
         setContacts(result.data);
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível carregar contatos.",
         );
         setContactModalVisible(false);
       }
     } catch {
-      Alert.alert("Erro", "Não foi possível carregar contatos.");
+      showAlert("Erro", "Não foi possível carregar contatos.");
       setContactModalVisible(false);
     } finally {
       setContactsLoading(false);
@@ -932,18 +1076,38 @@ export default function ChatScreen() {
                               styles.bubble,
                               isMine ? styles.bubbleOut : styles.bubbleIn,
                               msg.pending && styles.bubblePending,
+                              msg.type === "image" && styles.bubbleImage,
                             ]}
                           >
-                            <Text
-                              style={[
-                                styles.bubbleText,
-                                isMine
-                                  ? styles.bubbleTextOut
-                                  : styles.bubbleTextIn,
-                              ]}
-                            >
-                              {msg.text}
-                            </Text>
+                            {msg.type === "image" ? (
+                              <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={() => openMedia(msg.mediaUrl)}
+                              >
+                                <ExpoImage
+                                  source={{ uri: msg.mediaUrl }}
+                                  style={styles.imageThumb}
+                                  contentFit="cover"
+                                  transition={150}
+                                />
+                              </TouchableOpacity>
+                            ) : msg.type === "audio" ? (
+                              <AudioMessage
+                                uri={msg.mediaUrl || ""}
+                                mine={isMine}
+                              />
+                            ) : (
+                              <Text
+                                style={[
+                                  styles.bubbleText,
+                                  isMine
+                                    ? styles.bubbleTextOut
+                                    : styles.bubbleTextIn,
+                                ]}
+                              >
+                                {msg.text}
+                              </Text>
+                            )}
                             <View style={styles.bubbleMeta}>
                               <Text
                                 style={[
@@ -1003,28 +1167,69 @@ export default function ChatScreen() {
             </ScrollView>
 
             {/* Composer */}
-            <View style={styles.composer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Escreva uma mensagem…"
-                placeholderTextColor="#89a89d"
-                value={draft}
-                onChangeText={handleDraftChange}
-                multiline
-                maxLength={2000}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.sendBtn,
-                  !draft.trim() && styles.sendBtnDisabled,
-                ]}
-                onPress={handleSend}
-                disabled={!draft.trim()}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="send" size={18} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            {recorder.isRecording ? (
+              <View style={styles.composer}>
+                <TouchableOpacity
+                  style={styles.recCancelBtn}
+                  onPress={handleCancelRecording}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#df5d5d" />
+                </TouchableOpacity>
+                <View style={styles.recInfo}>
+                  <View style={styles.recDot} />
+                  <Text style={styles.recTime}>
+                    {formatClock(recorder.durationMs)}
+                  </Text>
+                  <Text style={styles.recHint}>Gravando…</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={handleSendRecording}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="send" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.composer}>
+                <TouchableOpacity
+                  style={styles.attachBtn}
+                  onPress={handlePickImage}
+                  disabled={sendingAttachment}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="image-outline" size={22} color={GREEN} />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Escreva uma mensagem…"
+                  placeholderTextColor="#89a89d"
+                  value={draft}
+                  onChangeText={handleDraftChange}
+                  multiline
+                  maxLength={2000}
+                />
+                {draft.trim() ? (
+                  <TouchableOpacity
+                    style={styles.sendBtn}
+                    onPress={handleSend}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="send" size={18} color="#fff" />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.sendBtn}
+                    onPress={handleStartRecording}
+                    disabled={sendingAttachment}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="mic" size={20} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.noChatCard}>
@@ -1532,6 +1737,55 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { backgroundColor: "#8fbbaa" },
+
+  // Botão de anexo (imagem)
+  attachBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: GREEN_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Barra de gravação de áudio
+  recCancelBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#fdeaea",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recInfo: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 18,
+    backgroundColor: "#f4faf7",
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  recDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#df5d5d",
+  },
+  recTime: { fontSize: 15, fontWeight: "800", color: "#1d4136" },
+  recHint: { fontSize: 13, color: "#7c958b", fontWeight: "600" },
+
+  // Bolha de imagem (mantém o fundo colorido para o horário/checks ficarem legíveis)
+  bubbleImage: {
+    padding: 5,
+  },
+  imageThumb: {
+    width: 200,
+    height: 200,
+    borderRadius: 14,
+    backgroundColor: "#e6f0eb",
+  },
 
   // Empty state (sem conversa selecionada)
   noChatCard: {

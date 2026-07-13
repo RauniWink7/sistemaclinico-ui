@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import FeedbackHost from '../components/FeedbackHost';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -12,6 +13,7 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
       <StatusBar style="auto" />
+      <FeedbackHost />
     </ThemeProvider>
   );
 }

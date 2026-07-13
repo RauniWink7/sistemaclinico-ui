@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     Modal,
     ScrollView,
@@ -13,6 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
     createAvailabilityBlock,
     deleteAvailability,
@@ -72,8 +72,10 @@ const TIME_OPTIONS = Array.from({ length: 28 }, (_, i) => {
 const GREEN = "#2e8b6e";
 const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
-const BG = "#f0faf5";
+const BG = "#e8f1ec";
 const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const MAX_WIDTH = 1120;
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AvailabilityScreen() {
@@ -106,7 +108,7 @@ export default function AvailabilityScreen() {
       setLoading(true);
       const meResult = await getMe();
       if (!meResult.ok || !meResult.data?.id) {
-        Alert.alert("Erro", "Não foi possível carregar o perfil.");
+        showAlert("Erro", "Não foi possível carregar o perfil.");
         setLoading(false);
         return;
       }
@@ -169,7 +171,7 @@ export default function AvailabilityScreen() {
 
   const handleSave = async () => {
     if (newSlot.start_time >= newSlot.end_time) {
-      Alert.alert(
+      showAlert(
         "Erro",
         "O horário de início deve ser antes do horário de fim.",
       );
@@ -191,9 +193,9 @@ export default function AvailabilityScreen() {
           setAvailability(availResult.data as AvailabilitySlot[]);
         }
         setShowModal(false);
-        Alert.alert("Sucesso", "Horário atualizado!");
+        showAlert("Sucesso", "Horário atualizado!");
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível atualizar o horário.",
         );
@@ -201,7 +203,7 @@ export default function AvailabilityScreen() {
     } else {
       // Criar novo slot
       if (!professionalId) {
-        Alert.alert("Erro", "Perfil profissional não carregado.");
+        showAlert("Erro", "Perfil profissional não carregado.");
         setSaving(false);
         return;
       }
@@ -218,9 +220,9 @@ export default function AvailabilityScreen() {
           setAvailability(availResult.data as AvailabilitySlot[]);
         }
         setShowModal(false);
-        Alert.alert("Sucesso", "Horário adicionado!");
+        showAlert("Sucesso", "Horário adicionado!");
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível adicionar o horário.",
         );
@@ -249,14 +251,14 @@ export default function AvailabilityScreen() {
         setShowDeleteModal(false);
         setSlotToDelete(null);
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível remover o horário.",
         );
       }
     } catch (error) {
       console.log("💥 Exceção na deleção:", error);
-      Alert.alert("Erro", `Exceção: ${error}`);
+      showAlert("Erro", `Exceção: ${error}`);
     } finally {
       setIsDeleting(false);
     }
@@ -280,37 +282,44 @@ export default function AvailabilityScreen() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Disponibilidade</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
-          <Ionicons name="add-outline" size={20} color="#fff" />
-          <Text style={styles.addBtnText}>Adicionar</Text>
-        </TouchableOpacity>
+        <View style={styles.headerInner}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.replace("/(psychologist)/dashboardP")}
+          >
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Disponibilidade</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
+            <Ionicons name="add-outline" size={20} color="#fff" />
+            <Text style={styles.addBtnText}>Adicionar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Summary Bar ── */}
       <View style={styles.summaryBar}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryNumber}>{totalSlots}</Text>
-          <Text style={styles.summaryLabel}>
-            {totalSlots === 1 ? "horário" : "horários"}
-          </Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryNumber}>{availabilityByDay.length}</Text>
-          <Text style={styles.summaryLabel}>
-            {availabilityByDay.length === 1 ? "dia ativo" : "dias ativos"}
-          </Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryNumber}>
-            {7 - availabilityByDay.length}
-          </Text>
-          <Text style={styles.summaryLabel}>dias livres</Text>
+        <View style={styles.summaryInner}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>{totalSlots}</Text>
+            <Text style={styles.summaryLabel}>
+              {totalSlots === 1 ? "horário" : "horários"}
+            </Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>{availabilityByDay.length}</Text>
+            <Text style={styles.summaryLabel}>
+              {availabilityByDay.length === 1 ? "dia ativo" : "dias ativos"}
+            </Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryNumber}>
+              {7 - availabilityByDay.length}
+            </Text>
+            <Text style={styles.summaryLabel}>dias livres</Text>
+          </View>
         </View>
       </View>
 
@@ -719,6 +728,11 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     paddingTop: 52,
     paddingBottom: 16,
+  },
+  headerInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
     paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -751,9 +765,14 @@ const styles = StyleSheet.create({
 
   summaryBar: {
     backgroundColor: GREEN_DARK,
-    flexDirection: "row",
     paddingVertical: 14,
+  },
+  summaryInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
     paddingHorizontal: 20,
+    flexDirection: "row",
   },
   summaryItem: { flex: 1, alignItems: "center" },
   summaryNumber: { fontSize: 22, fontWeight: "800", color: WHITE },
@@ -773,7 +792,14 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14, color: "#7aab96" },
 
   scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 48 },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 48,
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+  },
 
   overviewRow: {
     flexDirection: "row",
@@ -794,14 +820,16 @@ const styles = StyleSheet.create({
 
   dayCard: {
     backgroundColor: WHITE,
-    borderRadius: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
     padding: 18,
     marginBottom: 12,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowColor: "#1f5442",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 2,
   },
   dayCardHeader: {
     flexDirection: "row",

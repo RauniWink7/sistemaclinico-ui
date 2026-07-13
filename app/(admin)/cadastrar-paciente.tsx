@@ -8,8 +8,9 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
+import { DateField } from '../../components/DateTimeField';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { createPatientAsAdmin } from '../../services/api';
@@ -42,9 +43,12 @@ export default function CadastrarPacienteScreen() {
   const patch = (field: keyof typeof form) => (val: string) =>
     setForm((f) => ({ ...f, [field]: val }));
 
+  // Data máxima do calendário: hoje (não faz sentido nascer no futuro).
+  const todayStr = new Date().toLocaleDateString('en-CA');
+
   const handleSubmit = async () => {
     if (!form.fullName || !form.email)
-      return Alert.alert('Campos obrigatórios', 'Preencha nome e e-mail.');
+      return showAlert('Campos obrigatórios', 'Preencha nome e e-mail.');
 
     setLoading(true);
     const result = await createPatientAsAdmin({
@@ -59,8 +63,8 @@ export default function CadastrarPacienteScreen() {
     });
     setLoading(false);
 
-    if (!result.ok) return Alert.alert('Erro', result.error ?? 'Não foi possível cadastrar.');
-    Alert.alert('Sucesso', 'Paciente cadastrado! Um e-mail de convite foi enviado para ele definir a senha.', [{ text: 'OK', onPress: () => router.back() }]);
+    if (!result.ok) return showAlert('Erro', result.error ?? 'Não foi possível cadastrar.');
+    showAlert('Sucesso', 'Paciente cadastrado! Um e-mail de convite foi enviado para ele definir a senha.', [{ text: 'OK', onPress: () => router.back() }]);
   };
 
   return (
@@ -112,7 +116,7 @@ export default function CadastrarPacienteScreen() {
           </View>
 
           <Text style={styles.fieldLabel}>Data de nascimento</Text>
-          <TextInput style={styles.input} placeholder="DD/MM/AAAA" placeholderTextColor="#94b3a6" value={form.birthDate} onChangeText={patch('birthDate')} keyboardType="numeric" />
+          <DateField value={form.birthDate} onChange={patch('birthDate')} max={todayStr} />
 
           <Text style={styles.fieldLabel}>CPF</Text>
           <TextInput style={styles.input} placeholder="000.000.000-00" placeholderTextColor="#94b3a6" value={form.cpf} onChangeText={patch('cpf')} keyboardType="numeric" />

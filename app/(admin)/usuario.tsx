@@ -9,8 +9,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { getMe, getProfessionalsByClinic, getPatientsByClinic } from '../../services/api';
@@ -68,12 +68,12 @@ export default function AdminUsuariosScreen() {
         setLoading(true);
         const meResult = await getMe();
         if (!meResult.ok || !meResult.data) {
-          Alert.alert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
+          showAlert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
           return;
         }
         const clinicId = meResult.data.clinic;
         if (!clinicId) {
-          Alert.alert('Erro', 'Nenhuma clínica associada.');
+          showAlert('Erro', 'Nenhuma clínica associada.');
           return;
         }
 
@@ -112,7 +112,7 @@ export default function AdminUsuariosScreen() {
 
         setUsers([adminRow, ...profs, ...patients]);
       } catch (err: any) {
-        Alert.alert('Erro', err?.message ?? 'Erro inesperado.');
+        showAlert('Erro', err?.message ?? 'Erro inesperado.');
       } finally {
         setLoading(false);
       }
@@ -205,7 +205,7 @@ export default function AdminUsuariosScreen() {
           <TouchableOpacity
             style={styles.newButton}
             onPress={() =>
-              Alert.alert('Cadastrar usuário', 'Qual tipo de perfil deseja cadastrar?', [
+              showAlert('Cadastrar usuário', 'Qual tipo de perfil deseja cadastrar?', [
                 { text: 'Paciente', onPress: () => router.push('/(admin)/cadastrar-paciente') },
                 { text: 'Psicólogo', onPress: () => router.push('/(admin)/cadastrar-psicologo') },
                 { text: 'Cancelar', style: 'cancel' },

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Modal,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -131,7 +131,7 @@ export default function ConsultaDetalheScreen() {
       if (detailRes.ok && detailRes.data) {
         setAppointment(detailRes.data);
       } else {
-        Alert.alert('Erro', detailRes.error ?? 'Nao foi possivel carregar a consulta.');
+        showAlert('Erro', detailRes.error ?? 'Nao foi possivel carregar a consulta.');
       }
 
       setLoading(false);
@@ -184,9 +184,9 @@ export default function ConsultaDetalheScreen() {
     if (result.ok) {
       setAppointment({ ...appointment, status: 'cancelled', cancel_reason: reason });
       setCancelModalVisible(false);
-      Alert.alert('Sucesso', 'Consulta cancelada.');
+      showAlert('Sucesso', 'Consulta cancelada.');
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel cancelar.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel cancelar.');
     }
   };
 
@@ -198,15 +198,15 @@ export default function ConsultaDetalheScreen() {
     if (result.ok) {
       setAppointment({ ...appointment, status: newStatus });
       setStatusModalVisible(false);
-      Alert.alert('Sucesso', 'Status atualizado.');
+      showAlert('Sucesso', 'Status atualizado.');
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel alterar o status.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel alterar o status.');
     }
   };
 
   const handleSubmitRating = async () => {
     if (!appointment || ratingScore === 0) {
-      Alert.alert('Erro', 'Selecione uma nota de 1 a 5.');
+      showAlert('Erro', 'Selecione uma nota de 1 a 5.');
       return;
     }
     setSubmittingRating(true);
@@ -219,9 +219,9 @@ export default function ConsultaDetalheScreen() {
     if (result.ok) {
       setAppointment({ ...appointment, has_review: true, rating: { score: ratingScore, comment: ratingComment } });
       setRatingModalVisible(false);
-      Alert.alert('Sucesso', 'Avaliacao enviada.');
+      showAlert('Sucesso', 'Avaliacao enviada.');
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel enviar a avaliacao.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel enviar a avaliacao.');
     }
   };
 

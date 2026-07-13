@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Alert,
     Animated,
     Dimensions,
     RefreshControl,
@@ -13,6 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import { getAppointments, getMe, getPsychologists } from "../../services/api";
 
 const { width } = Dimensions.get("window");
@@ -20,6 +20,7 @@ const { width } = Dimensions.get("window");
 const DEFAULT_PATIENT_NAME = "Paciente";
 
 interface NextAppointment {
+  id: string;
   date: string;
   time: string;
   professional: string;
@@ -128,7 +129,7 @@ export default function HomeP() {
           result.data.full_name || result.data.name || DEFAULT_PATIENT_NAME;
         setPatientName(name);
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível carregar o perfil.",
         );
@@ -184,6 +185,7 @@ export default function HomeP() {
               .join("");
 
             return {
+              id: String(item.id ?? ""),
               date,
               time,
               professional: professionalName,
@@ -341,7 +343,16 @@ export default function HomeP() {
                 </View>
 
                 {/* Botão */}
-                <TouchableOpacity style={styles.detailsBtn} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={styles.detailsBtn}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(shared)/consulta-detalhe",
+                      params: { id: nextAppointment.id },
+                    })
+                  }
+                >
                   <Text style={styles.detailsBtnText}>Ver detalhes</Text>
                   <Ionicons
                     name="arrow-forward-outline"
@@ -395,7 +406,7 @@ export default function HomeP() {
                     return;
                   }
 
-                  Alert.alert(
+                  showAlert(
                     "Tela indisponivel",
                     "Esse atalho ainda nao foi configurado.",
                   );

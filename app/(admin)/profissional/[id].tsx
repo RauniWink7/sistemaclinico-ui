@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showAlert } from '../../../services/feedback';
 import { getPsychologists, updateProfessionalProfile, ProfessionalApiItem } from '../../../services/api';
 
 const GREEN = '#2e8b6e';
@@ -84,13 +84,13 @@ export default function ProfessionalDetailScreen() {
         setLoading(true);
         const result = await getPsychologists();
         if (!result.ok || !result.data) {
-          Alert.alert('Erro', result.error ?? 'Não foi possível carregar o profissional.');
+          showAlert('Erro', result.error ?? 'Não foi possível carregar o profissional.');
           router.back();
           return;
         }
         const data = result.data.find((p) => p.id === id);
         if (!data) {
-          Alert.alert('Erro', 'Profissional não encontrado.');
+          showAlert('Erro', 'Profissional não encontrado.');
           router.back();
           return;
         }
@@ -100,7 +100,7 @@ export default function ProfessionalDetailScreen() {
         setEditBio(data.bio ?? '');
         setEditDuration(String(data.session_duration_minutes ?? 50));
       } catch (err: any) {
-        Alert.alert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+        showAlert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
         router.back();
       } finally {
         setLoading(false);
@@ -120,7 +120,7 @@ export default function ProfessionalDetailScreen() {
         session_duration_minutes: parseInt(editDuration, 10) || 50,
       });
       if (!result.ok) {
-        Alert.alert('Erro', result.error ?? 'Não foi possível salvar as alterações.');
+        showAlert('Erro', result.error ?? 'Não foi possível salvar as alterações.');
         return;
       }
       setProfessional((prev) =>
@@ -135,9 +135,9 @@ export default function ProfessionalDetailScreen() {
           : prev
       );
       setEditing(false);
-      Alert.alert('Sucesso', 'Perfil do profissional atualizado.');
+      showAlert('Sucesso', 'Perfil do profissional atualizado.');
     } catch (err: any) {
-      Alert.alert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+      showAlert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
     } finally {
       setSaving(false);
     }

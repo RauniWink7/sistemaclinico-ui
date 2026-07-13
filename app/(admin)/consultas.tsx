@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     Modal,
     RefreshControl,
@@ -15,6 +14,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
     AppointmentApiItem,
     cancelAppointment,
@@ -317,7 +317,7 @@ export default function AdminAppointmentsScreen() {
       }
 
       if (!apptResult.ok) {
-        Alert.alert(
+        showAlert(
           "Erro",
           apptResult.error ?? "Não foi possível carregar as consultas.",
         );
@@ -334,7 +334,7 @@ export default function AdminAppointmentsScreen() {
       );
       setAppointments(normalized);
     } catch (err: any) {
-      Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
+      showAlert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -381,7 +381,7 @@ export default function AdminAppointmentsScreen() {
     try {
       const result = await updateAppointmentStatus(selectedItem.id, newStatus);
       if (!result.ok) {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error ?? "Não foi possível atualizar o status.",
         );
@@ -394,7 +394,7 @@ export default function AdminAppointmentsScreen() {
       );
       setStatusModalVisible(false);
     } catch (err: any) {
-      Alert.alert("Erro", err?.message ?? "Erro inesperado.");
+      showAlert("Erro", err?.message ?? "Erro inesperado.");
     } finally {
       setUpdatingStatus(false);
     }
@@ -414,7 +414,7 @@ export default function AdminAppointmentsScreen() {
       const reason = cancelReason.trim() || "Cancelado pelo administrador";
       const result = await cancelAppointment(cancelTarget.id, reason);
       if (!result.ok) {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error ?? "Não foi possível cancelar a consulta.",
         );
@@ -427,7 +427,7 @@ export default function AdminAppointmentsScreen() {
       );
       setCancelModalVisible(false);
     } catch (err: any) {
-      Alert.alert("Erro", err?.message ?? "Erro inesperado.");
+      showAlert("Erro", err?.message ?? "Erro inesperado.");
     } finally {
       setCancelling(false);
     }

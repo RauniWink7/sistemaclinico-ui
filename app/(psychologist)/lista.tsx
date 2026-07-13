@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     ScrollView,
     StatusBar,
@@ -11,8 +10,10 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
     getAppointments,
     getClinicPatients,
@@ -21,18 +22,25 @@ import {
 } from "../../services/api";
 
 const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
 const BLUE_LIGHT = "#eaf1ff";
-const BG = "#f0faf5";
-const WHITE = "#ffffff";
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+const PAGE_BG = "#e8f1ec";
+const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const TEXT_DARK = "#17352b";
+const TEXT_MUTED = "#5f7a6f";
+
+const MAX_WIDTH = 1120;
+const DESKTOP_BREAKPOINT = 900;
+
+const CARD_SHADOW = {
+  shadowColor: "#1f5442",
+  shadowOpacity: 0.05,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+} as const;
 
 export default function PsychologistPatientListScreen() {
   const [query, setQuery] = useState("");
@@ -46,6 +54,9 @@ export default function PsychologistPatientListScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
+
   useEffect(() => {
     const loadPatients = async () => {
       setLoading(true);
@@ -57,7 +68,7 @@ export default function PsychologistPatientListScreen() {
         ]);
 
         if (!meResult.ok || !meResult.data?.clinic) {
-          Alert.alert("Erro", "Não foi possível obter a clínica do usuário.");
+          showAlert("Erro", "Não foi possível obter a clínica do usuário.");
           setLoading(false);
           return;
         }
@@ -65,7 +76,7 @@ export default function PsychologistPatientListScreen() {
 
         const patientsResult = await getClinicPatients(clinicId);
         if (!patientsResult.ok) {
-          Alert.alert(
+          showAlert(
             "Erro",
             patientsResult.error || "Erro ao carregar pacientes.",
           );
@@ -126,7 +137,7 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
         setHasMore(patientsWithLastAppointment.length > pageSize);
         setPage(1);
       } catch {
-        Alert.alert("Erro", "Erro inesperado ao carregar pacientes.");
+        showAlert("Erro", "Erro inesperado ao carregar pacientes.");
       } finally {
         setLoading(false);
       }
@@ -182,24 +193,24 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-      <DecorativeBackground />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerInner}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
 
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Area do psicologo</Text>
-          <Text style={styles.headerTitle}>Lista de pacientes</Text>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerTitle}>Pacientes</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.replace("/(psychologist)/dashboardP")}
+          >
+            <Ionicons name="home-outline" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.homeBtn}
-          onPress={() => router.replace("/(psychologist)/dashboardP")}
-        >
-          <Ionicons name="home-outline" size={20} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -214,37 +225,19 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
           </View>
         ) : (
           <Animated.View
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
+            style={[
+              styles.container,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
           >
-            <View style={styles.heroCard}>
-              <Text style={styles.heroTitle}>
-                Pacientes vinculados ao seu acompanhamento
-              </Text>
-              <Text style={styles.heroSubtitle}>
-                Consulte rapidamente nome, telefone e data da ultima consulta.
-                Toque em um paciente para abrir a ficha completa.
-              </Text>
-
-              <View style={styles.heroBadge}>
-                <Ionicons name="people-outline" size={14} color={GREEN} />
-                <Text style={styles.heroBadgeText}>
-                  {patients.length} pacientes ativos
-                </Text>
-              </View>
-            </View>
-
             <View style={styles.searchCard}>
-              <Text style={styles.sectionTitle}>Buscar paciente</Text>
               <View style={styles.searchBox}>
-                <Ionicons name="search-outline" size={18} color="#6c8c80" />
+                <Ionicons name="search-outline" size={18} color={TEXT_MUTED} />
                 <TextInput
                   style={styles.searchInput}
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Digite o nome do paciente"
+                  placeholder="Buscar por nome ou telefone"
                   placeholderTextColor="#8ba99d"
                 />
               </View>
@@ -252,66 +245,73 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
 
             <View style={styles.listHeader}>
               <Text style={styles.sectionTitle}>Pacientes encontrados</Text>
-              <Text style={styles.resultCount}>{filteredPatients.length}</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.resultCount}>{filteredPatients.length}</Text>
+              </View>
             </View>
 
-            {filteredPatients.map((patient) => {
-              const initials = patient._displayName
-                .split(" ")
-                .slice(0, 2)
-                .map((part: string) => part[0])
-                .join("");
+            <View style={styles.patientsWrap}>
+              {filteredPatients.map((patient) => {
+                const initials = patient._displayName
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((part: string) => part[0])
+                  .join("");
 
-              return (
-                <TouchableOpacity
-                  key={patient._profileId}
-                  style={styles.patientCard}
-                  activeOpacity={0.85}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(psychologist)/ficha",
-                      params: {
-                        // user.id — necessário para carregar o perfil do paciente
-                        patientId: patient._userId,
-                        // patientProfileId será sobrescrito em ficha.tsx com patient?.id do getPatientProfile()
-                        // que é o verdadeiro PatientProfile.id exigido pelo backend para upload
-                        patientProfileId: patient._profileId,
-                        patientName: patient._displayName,
-                        patientPhone: patient._displayPhone,
-                      },
-                    })
-                  }
-                >
-                  <View style={styles.patientHeader}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{initials}</Text>
+                return (
+                  <TouchableOpacity
+                    key={patient._profileId}
+                    style={[
+                      styles.patientCard,
+                      { flexBasis: isDesktop ? 360 : "100%" },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(psychologist)/ficha",
+                        params: {
+                          // user.id — necessário para carregar o perfil do paciente
+                          patientId: patient._userId,
+                          // patientProfileId será sobrescrito em ficha.tsx com patient?.id do getPatientProfile()
+                          // que é o verdadeiro PatientProfile.id exigido pelo backend para upload
+                          patientProfileId: patient._profileId,
+                          patientName: patient._displayName,
+                          patientPhone: patient._displayPhone,
+                        },
+                      })
+                    }
+                  >
+                    <View style={styles.patientHeader}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{initials}</Text>
+                      </View>
+
+                      <View style={styles.patientTextBox}>
+                        <Text style={styles.patientName} numberOfLines={1}>
+                          {patient._displayName}
+                        </Text>
+                        <Text style={styles.patientMeta} numberOfLines={1}>
+                          {patient._displayPhone}
+                        </Text>
+                      </View>
+
+                      <Ionicons
+                        name="chevron-forward-outline"
+                        size={20}
+                        color="#9db6ab"
+                      />
                     </View>
 
-                    <View style={styles.patientTextBox}>
-                      <Text style={styles.patientName}>
-                        {patient._displayName}
-                      </Text>
-                      <Text style={styles.patientMeta}>
-                        {patient._displayPhone}
+                    <View style={styles.lastAppointmentBox}>
+                      <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                      <Text style={styles.lastAppointmentText}>
+                        Última consulta: {patient.lastAppointment}
                       </Text>
                     </View>
-
-                    <Ionicons
-                      name="chevron-forward-outline"
-                      size={20}
-                      color="#6c8c80"
-                    />
-                  </View>
-
-                  <View style={styles.lastAppointmentBox}>
-                    <Ionicons name="calendar-outline" size={15} color={GREEN} />
-                    <Text style={styles.lastAppointmentText}>
-                      Última consulta: {patient.lastAppointment}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             {/* ─── FEATURE 5: Load more button ────────────────────────────────── */}
             {hasMore && (
@@ -347,138 +347,67 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
-  },
-  circle1: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "#27795f",
-    top: -110,
-    right: -70,
-    opacity: 0.45,
-  },
-  circle2: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: GREEN_DARK,
-    top: -55,
-    left: -70,
-    opacity: 0.28,
+    backgroundColor: PAGE_BG,
   },
   header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
     backgroundColor: GREEN,
+    paddingTop: 52,
+    paddingBottom: 20,
+  },
+  headerInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
-  backBtn: {
+  iconBtn: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  homeBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   headerTextBox: {
     flex: 1,
-    marginHorizontal: 14,
-  },
-  headerEyebrow: {
-    color: "#bce3d5",
-    fontSize: 13,
-    fontWeight: "600",
   },
   headerTitle: {
     color: WHITE,
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "800",
-    marginTop: 2,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 22,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 44,
   },
-  heroCard: {
-    backgroundColor: WHITE,
-    borderRadius: 26,
-    padding: 22,
-    marginTop: -18,
-    marginBottom: 22,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#163c31",
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#5d7c71",
-  },
-  heroBadge: {
-    alignSelf: "flex-start",
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: GREEN_LIGHT,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  heroBadgeText: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: "700",
-    color: GREEN,
+  container: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
   },
   searchCard: {
     backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 18,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#163c31",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 12,
+    marginBottom: 22,
+    ...CARD_SHADOW,
   },
   searchBox: {
-    marginTop: 14,
-    borderRadius: 18,
-    backgroundColor: "#f4faf7",
+    borderRadius: 12,
+    backgroundColor: "#f6faf8",
     borderWidth: 1,
-    borderColor: "#e3efe8",
+    borderColor: BORDER,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: "row",
@@ -488,7 +417,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
-    color: "#1f4036",
+    color: TEXT_DARK,
+    // @ts-ignore — remove o contorno azul no web
+    outlineStyle: "none",
   },
   listHeader: {
     marginBottom: 14,
@@ -496,37 +427,55 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  resultCount: {
+  sectionTitle: {
     fontSize: 16,
+    fontWeight: "800",
+    color: TEXT_DARK,
+    letterSpacing: -0.2,
+  },
+  countBadge: {
+    minWidth: 30,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: GREEN_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resultCount: {
+    fontSize: 14,
     fontWeight: "800",
     color: GREEN,
   },
+  patientsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
   patientCard: {
+    flexGrow: 1,
     backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    ...CARD_SHADOW,
   },
   patientHeader: {
     flexDirection: "row",
     alignItems: "center",
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     backgroundColor: BLUE_LIGHT,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   avatarText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
     color: "#2d6cdf",
   },
@@ -534,26 +483,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   patientName: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: "800",
-    color: "#183d32",
+    color: TEXT_DARK,
   },
   patientMeta: {
-    marginTop: 4,
+    marginTop: 3,
     fontSize: 13,
-    color: "#6a877c",
+    color: TEXT_MUTED,
   },
   lastAppointmentBox: {
-    marginTop: 16,
-    borderRadius: 16,
-    backgroundColor: "#f7fbf9",
-    padding: 14,
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor: "#f6faf8",
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   lastAppointmentText: {
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: "600",
     color: "#36594d",
   },
@@ -566,28 +517,23 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 15,
-    color: "#5d7c71",
+    color: TEXT_MUTED,
     fontWeight: "600",
   },
   loadMoreBtn: {
     backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 18,
-    marginTop: 8,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 16,
     marginBottom: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: GREEN,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   loadMoreText: {
-    marginLeft: 12,
+    marginLeft: 10,
     fontSize: 15,
     fontWeight: "800",
     color: GREEN,

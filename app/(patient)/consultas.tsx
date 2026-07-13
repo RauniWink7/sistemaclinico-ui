@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
     Animated,
     Modal,
     TextInput as RNTextInput,
@@ -14,6 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
     AppointmentApiItem,
     cancelAppointment,
@@ -187,7 +187,7 @@ export default function ConsultasScreen() {
         );
       } else {
         if (result.error) {
-          Alert.alert("Erro", result.error);
+          showAlert("Erro", result.error);
         }
       }
       setLoadingAppointments(false);
@@ -239,7 +239,7 @@ export default function ConsultasScreen() {
         );
       } else {
         if (result.error) {
-          Alert.alert("Erro", result.error);
+          showAlert("Erro", result.error);
         }
       }
     } catch (error) {
@@ -318,9 +318,9 @@ export default function ConsultasScreen() {
         ),
       );
       setReviewModalVisible(false);
-      Alert.alert("Sucesso", "Avaliação registrada com sucesso.");
+      showAlert("Sucesso", "Avaliação registrada com sucesso.");
     } else {
-      Alert.alert(
+      showAlert(
         "Erro",
         result.error || "Não foi possível registrar a avaliação.",
       );
@@ -337,7 +337,7 @@ export default function ConsultasScreen() {
   // FIX 1: submitCancel executa a chamada de API a partir do modal
   const submitCancel = async () => {
     if (!cancelReason.trim()) {
-      Alert.alert("Erro", "Motivo é obrigatório.");
+      showAlert("Erro", "Motivo é obrigatório.");
       return;
     }
     const result = await cancelAppointment(
@@ -353,9 +353,9 @@ export default function ConsultasScreen() {
         ),
       );
       setCancelModalVisible(false);
-      Alert.alert("Sucesso", "Consulta cancelada com sucesso.");
+      showAlert("Sucesso", "Consulta cancelada com sucesso.");
     } else {
-      Alert.alert(
+      showAlert(
         "Erro",
         result.error || "Não foi possível cancelar a consulta.",
       );

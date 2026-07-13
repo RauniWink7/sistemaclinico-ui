@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     ScrollView,
     StatusBar,
@@ -13,6 +12,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
+import { TimeField } from "../../components/DateTimeField";
 import { getClinicData, getMe, updateClinic } from "../../services/api";
 
 const GREEN = "#2e8b6e";
@@ -104,7 +105,7 @@ export default function AdminClinicManagementScreen() {
         // 1. Busca usuário logado para obter clinic_id
         const meResult = await getMe();
         if (!meResult.ok || !meResult.data) {
-          Alert.alert(
+          showAlert(
             "Erro",
             meResult.error ?? "Não foi possível carregar o perfil.",
           );
@@ -113,7 +114,7 @@ export default function AdminClinicManagementScreen() {
 
         const cId = meResult.data.clinic;
         if (!cId) {
-          Alert.alert("Erro", "Nenhuma clínica associada ao usuário.");
+          showAlert("Erro", "Nenhuma clínica associada ao usuário.");
           return;
         }
 
@@ -122,7 +123,7 @@ export default function AdminClinicManagementScreen() {
         // 2. Busca dados da clínica
         const clinicResult = await getClinicData(cId);
         if (!clinicResult.ok || !clinicResult.data) {
-          Alert.alert(
+          showAlert(
             "Erro",
             clinicResult.error ??
               "Não foi possível carregar os dados da clínica.",
@@ -140,7 +141,7 @@ export default function AdminClinicManagementScreen() {
           closingTime: clinicData.open_until || "",
         });
       } catch (err: any) {
-        Alert.alert(
+        showAlert(
           "Erro",
           err?.message ?? "Ocorreu um erro inesperado ao carregar dados.",
         );
@@ -158,13 +159,13 @@ export default function AdminClinicManagementScreen() {
 
   const handleSave = async () => {
     if (!clinicId) {
-      Alert.alert("Erro", "Clínica não identificada.");
+      showAlert("Erro", "Clínica não identificada.");
       return;
     }
 
     // Validação simples
     if (form.openingTime >= form.closingTime) {
-      Alert.alert(
+      showAlert(
         "Erro",
         "O horário de abertura deve ser antes do fechamento.",
       );
@@ -184,19 +185,19 @@ export default function AdminClinicManagementScreen() {
       });
 
       if (!result.ok) {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error ?? "Não foi possível salvar os dados.",
         );
         return;
       }
 
-      Alert.alert(
+      showAlert(
         "Sucesso",
         "As informações da clínica foram salvas com sucesso.",
       );
     } catch (err: any) {
-      Alert.alert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
+      showAlert("Erro", err?.message ?? "Ocorreu um erro inesperado.");
     } finally {
       setLoading(false);
     }
@@ -324,23 +325,17 @@ export default function AdminClinicManagementScreen() {
             <View style={styles.timeRow}>
               <View style={styles.timeCard}>
                 <Text style={styles.inputLabel}>Abertura</Text>
-                <TextInput
-                  style={styles.input}
+                <TimeField
                   value={form.openingTime}
-                  onChangeText={setField("openingTime")}
-                  placeholder="08:00"
-                  placeholderTextColor="#94b3a6"
+                  onChange={setField("openingTime")}
                 />
               </View>
 
               <View style={styles.timeCard}>
                 <Text style={styles.inputLabel}>Fechamento</Text>
-                <TextInput
-                  style={styles.input}
+                <TimeField
                   value={form.closingTime}
-                  onChangeText={setField("closingTime")}
-                  placeholder="19:00"
-                  placeholderTextColor="#94b3a6"
+                  onChange={setField("closingTime")}
                 />
               </View>
             </View>

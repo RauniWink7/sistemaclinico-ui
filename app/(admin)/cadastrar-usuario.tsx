@@ -8,8 +8,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { createPatientAsAdmin, createProfessionalAsAdmin } from '../../services/api';
@@ -44,7 +44,7 @@ export default function CadastrarUsuarioScreen() {
 
   const handleSubmit = async () => {
     if (!form.fullName || !form.email)
-      return Alert.alert('Campos obrigatórios', 'Preencha nome e e-mail.');
+      return showAlert('Campos obrigatórios', 'Preencha nome e e-mail.');
 
     setLoading(true);
     const payload = {
@@ -59,8 +59,8 @@ export default function CadastrarUsuarioScreen() {
       : await createProfessionalAsAdmin(payload);
     setLoading(false);
 
-    if (!result.ok) return Alert.alert('Erro', result.error ?? 'Não foi possível cadastrar.');
-    Alert.alert('Sucesso', 'Usuário cadastrado! Um e-mail de convite foi enviado para ele definir a senha.', [{ text: 'OK', onPress: () => router.back() }]);
+    if (!result.ok) return showAlert('Erro', result.error ?? 'Não foi possível cadastrar.');
+    showAlert('Sucesso', 'Usuário cadastrado! Um e-mail de convite foi enviado para ele definir a senha.', [{ text: 'OK', onPress: () => router.back() }]);
   };
 
   return (

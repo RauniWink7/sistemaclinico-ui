@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Modal,
   ScrollView,
@@ -12,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
+import { DateField } from '../../components/DateTimeField';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import {
@@ -22,6 +23,9 @@ import {
   createProfessionalAsAdmin,
   createPatientAsAdmin,
 } from '../../services/api';
+
+// Data máxima para nascimento: hoje (formato AAAA-MM-DD).
+const TODAY_STR = new Date().toLocaleDateString('en-CA');
 
 const GREEN = '#2e8b6e';
 const GREEN_DARK = '#1f684f';
@@ -115,7 +119,7 @@ export default function GestaoUsuariosScreen() {
         })),
       );
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel carregar os usuarios.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel carregar os usuarios.');
     }
     setLoading(false);
   };
@@ -151,7 +155,7 @@ export default function GestaoUsuariosScreen() {
   const handleToggleStatus = async (user: UserData) => {
     const newStatus = !user.is_active;
     const label = newStatus ? 'ativar' : 'desativar';
-    Alert.alert(
+    showAlert(
       `${newStatus ? 'Ativar' : 'Desativar'} usuario`,
       `Deseja ${label} ${user.full_name}?`,
       [
@@ -165,7 +169,7 @@ export default function GestaoUsuariosScreen() {
                 prev.map((u) => (u.id === user.id ? { ...u, is_active: newStatus } : u)),
               );
             } else {
-              Alert.alert('Erro', result.error ?? 'Nao foi possivel alterar o status.');
+              showAlert('Erro', result.error ?? 'Nao foi possivel alterar o status.');
             }
           },
         },
@@ -188,9 +192,9 @@ export default function GestaoUsuariosScreen() {
         prev.map((u) => (u.id === editUser.id ? { ...u, ...payload } : u)),
       );
       setEditUser(null);
-      Alert.alert('Sucesso', 'Dados atualizados com sucesso.');
+      showAlert('Sucesso', 'Dados atualizados com sucesso.');
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel atualizar.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel atualizar.');
     }
   };
 
@@ -204,16 +208,16 @@ export default function GestaoUsuariosScreen() {
         prev.map((u) => (u.id === roleChangeUser.id ? { ...u, role: selectedRole } : u)),
       );
       setRoleChangeUser(null);
-      Alert.alert('Sucesso', 'Papel alterado com sucesso.');
+      showAlert('Sucesso', 'Papel alterado com sucesso.');
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel alterar o papel.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel alterar o papel.');
     }
   };
 
   const handleCreate = async () => {
     if (!createMode) return;
     if (!createForm.full_name.trim() || !createForm.email.trim()) {
-      Alert.alert('Erro', 'Nome e e-mail sao obrigatorios.');
+      showAlert('Erro', 'Nome e e-mail sao obrigatorios.');
       return;
     }
     setCreating(true);
@@ -243,10 +247,10 @@ export default function GestaoUsuariosScreen() {
     if (result.ok) {
       setCreateMode(null);
       setCreateForm({ full_name: '', email: '', phone: '', crp: '', specialty: '', birth_date: '', cpf: '' });
-      Alert.alert('Sucesso', `${createMode === 'professional' ? 'Profissional' : 'Paciente'} criado com sucesso. Um convite foi enviado por e-mail.`);
+      showAlert('Sucesso', `${createMode === 'professional' ? 'Profissional' : 'Paciente'} criado com sucesso. Um convite foi enviado por e-mail.`);
       void loadUsers();
     } else {
-      Alert.alert('Erro', result.error ?? 'Nao foi possivel criar o usuario.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel criar o usuario.');
     }
   };
 
@@ -725,13 +729,11 @@ export default function GestaoUsuariosScreen() {
                 {createMode === 'patient' && (
                   <>
                     <Text style={styles.modalFieldLabel}>Data de nascimento</Text>
-                    <TextInput
-                      style={styles.modalInput}
-                      placeholder="AAAA-MM-DD"
-                      placeholderTextColor="#94b3a6"
+                    <DateField
                       value={createForm.birth_date}
-                      onChangeText={(t) => setCreateForm({ ...createForm, birth_date: t })}
-                      editable={!creating}
+                      onChange={(v) => setCreateForm({ ...createForm, birth_date: v })}
+                      max={TODAY_STR}
+                      disabled={creating}
                     />
 
                     <Text style={styles.modalFieldLabel}>CPF</Text>

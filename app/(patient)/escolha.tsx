@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     TextInput as RNTextInput,
     ScrollView,
@@ -13,6 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import { getPsychologists, ProfessionalApiItem } from "../../services/api";
 
 // Alias para evitar conflitos
@@ -198,7 +198,7 @@ export default function ChoosePsychologistScreen() {
         }
         setSpecialties(Array.from(specialtiesSet));
       } else {
-        Alert.alert(
+        showAlert(
           "Erro",
           result.error || "Não foi possível carregar os psicólogos.",
         );

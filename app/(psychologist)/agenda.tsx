@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     Modal,
     ScrollView,
@@ -11,8 +10,10 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import {
     AppointmentApiItem,
     getAppointments,
@@ -39,12 +40,27 @@ interface WeeklyAppointment {
 }
 
 const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
 const BLUE_LIGHT = "#eaf1ff";
 const ORANGE_LIGHT = "#fef3e8";
-const BG = "#f0faf5";
+
+const PAGE_BG = "#e8f1ec";
 const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const TEXT_DARK = "#17352b";
+const TEXT_MUTED = "#5f7a6f";
+const LABEL = "#78938a";
+
+const MAX_WIDTH = 1120;
+const DESKTOP_BREAKPOINT = 900;
+
+const CARD_SHADOW = {
+  shadowColor: "#1f5442",
+  shadowOpacity: 0.05,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+} as const;
 
 const getCurrentWeekDays = (weekOffset: number = 0) => {
   const today = new Date();
@@ -99,13 +115,6 @@ const toWeeklyAppointment = (item: AppointmentApiItem): WeeklyAppointment => {
   };
 };
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
-
 const getStatusMeta = (status: AppointmentStatus) => {
   switch (status) {
     case "completed":
@@ -159,6 +168,9 @@ export default function PsychologistAgendaScreen() {
   const slideAnim = useRef(new Animated.Value(24)).current;
   const weekDays = useMemo(() => getCurrentWeekDays(weekOffset), [weekOffset]);
 
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
+
   useEffect(() => {
     // Compute the week days for the current offset inside the effect
     // so we don't depend on the weekDays memo (which changes reference every render)
@@ -173,7 +185,7 @@ export default function PsychologistAgendaScreen() {
         ]);
 
         if (!meResult.ok || !meResult.data) {
-          Alert.alert("Erro", meResult.error || "Erro ao carregar perfil.");
+          showAlert("Erro", meResult.error || "Erro ao carregar perfil.");
           setLoading(false);
           return;
         }
@@ -187,7 +199,7 @@ export default function PsychologistAgendaScreen() {
             );
           setAppointments(weeklyAppointments);
         } else {
-          Alert.alert(
+          showAlert(
             "Erro",
             appointmentsResult.error || "Erro ao carregar consultas.",
           );
@@ -200,7 +212,7 @@ export default function PsychologistAgendaScreen() {
           setSelectedDay(currentWeekDays[0].key);
         }
       } catch {
-        Alert.alert("Erro", "Erro inesperado ao carregar dados.");
+        showAlert("Erro", "Erro inesperado ao carregar dados.");
       } finally {
         setLoading(false);
       }
@@ -281,7 +293,7 @@ export default function PsychologistAgendaScreen() {
         current ? { ...current, status: newStatus } : current,
       );
 
-      Alert.alert("Consulta atualizada", successMessage);
+      showAlert("Consulta atualizada", successMessage);
 
       // Recarrega do backend após 1.5s e FAZ MERGE preservando o status confirmado
       // Isso evita que uma resposta lenta do backend reverta o status local
@@ -336,7 +348,7 @@ export default function PsychologistAgendaScreen() {
         console.error("❌ Erro ao atualizar:", result.error);
       }
       const detail = result.data ? JSON.stringify(result.data) : "";
-      Alert.alert(
+      showAlert(
         "Erro ao atualizar",
         result.error
           ? `${result.error}${detail ? `\n\n${detail}` : ""}`
@@ -381,27 +393,59 @@ export default function PsychologistAgendaScreen() {
     }
   };
 
+  const renderDay = (day: ReturnType<typeof getCurrentWeekDays>[number]) => {
+    const isActive = day.key === selectedDay;
+    const appointmentsCount = appointments.filter(
+      (item) => item.dayKey === day.key,
+    ).length;
+
+    return (
+      <TouchableOpacity
+        key={day.key}
+        style={[
+          styles.dayCard,
+          isDesktop ? styles.dayCardDesktop : styles.dayCardMobile,
+          isActive && styles.dayCardActive,
+        ]}
+        onPress={() => setSelectedDay(day.key)}
+        activeOpacity={0.85}
+      >
+        <Text style={[styles.dayWeekLabel, isActive && styles.dayWeekLabelActive]}>
+          {day.weekday}
+        </Text>
+        <Text style={[styles.dayDateLabel, isActive && styles.dayDateLabelActive]}>
+          {day.fullLabel}
+        </Text>
+        <View style={[styles.dayBadge, isActive && styles.dayBadgeActive]}>
+          <Text style={[styles.dayBadgeText, isActive && styles.dayBadgeTextActive]}>
+            {appointmentsCount} consulta{appointmentsCount === 1 ? "" : "s"}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-      <DecorativeBackground />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerInner}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          </TouchableOpacity>
 
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Área do psicólogo</Text>
-          <Text style={styles.headerTitle}>Agenda profissional</Text>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerTitle}>Agenda</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.replace("/(psychologist)/dashboardP")}
+          >
+            <Ionicons name="home-outline" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.homeBtn}
-          onPress={() => router.replace("/(psychologist)/dashboardP")}
-        >
-          <Ionicons name="home-outline" size={20} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -416,33 +460,33 @@ export default function PsychologistAgendaScreen() {
           </View>
         ) : (
           <Animated.View
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
+            style={[
+              styles.container,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
           >
-            <View style={styles.heroCard}>
-              <Text style={styles.heroTitle}>Visualize sua semana clinica</Text>
-              <Text style={styles.heroSubtitle}>
-                Acompanhe consultas agendadas e veja o status de cada
-                atendimento.
-              </Text>
-            </View>
-
             <View style={styles.summaryRow}>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryValue}>{summary.todayCount}</Text>
-                <Text style={styles.summaryLabel}>Consultas no dia</Text>
+                <View style={[styles.summaryIcon, { backgroundColor: GREEN_LIGHT }]}>
+                  <Ionicons name="calendar-outline" size={18} color={GREEN} />
+                </View>
+                <View style={styles.summaryText}>
+                  <Text style={styles.summaryValue}>{summary.todayCount}</Text>
+                  <Text style={styles.summaryLabel}>Consultas no dia</Text>
+                </View>
               </View>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryValue}>
-                  {summary.completedCount}
-                </Text>
-                <Text style={styles.summaryLabel}>Realizadas</Text>
+                <View style={[styles.summaryIcon, { backgroundColor: BLUE_LIGHT }]}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#2d6cdf" />
+                </View>
+                <View style={styles.summaryText}>
+                  <Text style={styles.summaryValue}>{summary.completedCount}</Text>
+                  <Text style={styles.summaryLabel}>Realizadas</Text>
+                </View>
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Calendario semanal</Text>
+            <Text style={styles.sectionTitle}>Calendário semanal</Text>
             <View style={styles.weekNavigationContainer}>
               <TouchableOpacity
                 style={styles.weekNavButton}
@@ -465,15 +509,10 @@ export default function PsychologistAgendaScreen() {
                 onPress={handleNextWeek}
                 activeOpacity={0.7}
               >
-                <Ionicons
-                  name="chevron-forward-outline"
-                  size={20}
-                  color={GREEN}
-                />
+                <Ionicons name="chevron-forward-outline" size={20} color={GREEN} />
               </TouchableOpacity>
             </View>
 
-            {/* ─── FEATURE 3: Week interval label ─────────────────────────────────── */}
             {weekDays.length > 0 && (
               <View style={styles.weekLabelContainer}>
                 <View style={styles.weekLabelBadge}>
@@ -488,145 +527,102 @@ export default function PsychologistAgendaScreen() {
               </View>
             )}
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.weekRow}
-            >
-              {weekDays.map((day) => {
-                const isActive = day.key === selectedDay;
-                const appointmentsCount = appointments.filter(
-                  (item) => item.dayKey === day.key,
-                ).length;
-
-                return (
-                  <TouchableOpacity
-                    key={day.key}
-                    style={[styles.dayCard, isActive && styles.dayCardActive]}
-                    onPress={() => setSelectedDay(day.key)}
-                    activeOpacity={0.85}
-                  >
-                    <Text
-                      style={[
-                        styles.dayWeekLabel,
-                        isActive && styles.dayWeekLabelActive,
-                      ]}
-                    >
-                      {day.weekday}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.dayDateLabel,
-                        isActive && styles.dayDateLabelActive,
-                      ]}
-                    >
-                      {day.fullLabel}
-                    </Text>
-                    <View
-                      style={[
-                        styles.dayBadge,
-                        isActive && styles.dayBadgeActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.dayBadgeText,
-                          isActive && styles.dayBadgeTextActive,
-                        ]}
-                      >
-                        {appointmentsCount} consulta
-                        {appointmentsCount === 1 ? "" : "s"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {isDesktop ? (
+              <View style={styles.weekRowDesktop}>{weekDays.map(renderDay)}</View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.weekRow}
+              >
+                {weekDays.map(renderDay)}
+              </ScrollView>
+            )}
 
             <Text style={styles.sectionTitle}>Consultas agendadas</Text>
             {selectedDayAppointments.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons
-                  name="calendar-clear-outline"
-                  size={34}
-                  color="#9bbcaf"
-                />
+                <Ionicons name="calendar-clear-outline" size={34} color="#9bbcaf" />
                 <Text style={styles.emptyTitle}>Sem consultas nesse dia</Text>
                 <Text style={styles.emptyText}>
                   Nenhuma consulta agendada para este dia.
                 </Text>
                 <TouchableOpacity
                   style={styles.emptyBtn}
-                  onPress={() => router.push("/(psychologist)/agenda")}
+                  onPress={() => router.push("/(psychologist)/disponibilidade")}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="time-outline" size={15} color="#2e8b6e" />
-                  <Text style={styles.emptyBtnText}>
-                    Ver minha disponibilidade
-                  </Text>
+                  <Ionicons name="time-outline" size={15} color={GREEN} />
+                  <Text style={styles.emptyBtnText}>Ver minha disponibilidade</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              selectedDayAppointments.map((appointment) => {
-                const statusMeta = getStatusMeta(appointment.status);
+              <View style={styles.appointmentsWrap}>
+                {selectedDayAppointments.map((appointment) => {
+                  const statusMeta = getStatusMeta(appointment.status);
 
-                return (
-                  <TouchableOpacity
-                    key={appointment.id}
-                    style={styles.appointmentCard}
-                    activeOpacity={0.85}
-                    onPress={() => setSelectedAppointment(appointment)}
-                  >
-                    <View
+                  return (
+                    <TouchableOpacity
+                      key={appointment.id}
                       style={[
-                        styles.statusStripe,
-                        { backgroundColor: statusMeta.color },
+                        styles.appointmentCard,
+                        { flexBasis: isDesktop ? 360 : "100%" },
                       ]}
-                    />
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedAppointment(appointment)}
+                    >
+                      <View
+                        style={[
+                          styles.statusStripe,
+                          { backgroundColor: statusMeta.color },
+                        ]}
+                      />
 
-                    <View style={styles.appointmentBody}>
-                      <View style={styles.appointmentTopRow}>
-                        <View>
-                          <Text style={styles.appointmentTime}>
-                            {appointment.time}
-                          </Text>
-                          <Text style={styles.appointmentPatient}>
-                            {appointment.patientName}
-                          </Text>
-                        </View>
+                      <View style={styles.appointmentBody}>
+                        <View style={styles.appointmentTopRow}>
+                          <View style={styles.appointmentTimeBox}>
+                            <Text style={styles.appointmentTime}>
+                              {appointment.time}
+                            </Text>
+                            <Text style={styles.appointmentPatient}>
+                              {appointment.patientName}
+                            </Text>
+                          </View>
 
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: statusMeta.bg },
-                          ]}
-                        >
-                          <Ionicons
-                            name={statusMeta.icon as any}
-                            size={14}
-                            color={statusMeta.color}
-                          />
-                          <Text
+                          <View
                             style={[
-                              styles.statusText,
-                              { color: statusMeta.color },
+                              styles.statusBadge,
+                              { backgroundColor: statusMeta.bg },
                             ]}
                           >
-                            {statusMeta.label}
+                            <Ionicons
+                              name={statusMeta.icon as any}
+                              size={14}
+                              color={statusMeta.color}
+                            />
+                            <Text
+                              style={[styles.statusText, { color: statusMeta.color }]}
+                            >
+                              {statusMeta.label}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.appointmentFooter}>
+                          <Text style={styles.appointmentType}>
+                            {appointment.type}
                           </Text>
+                          <Ionicons
+                            name="chevron-forward-outline"
+                            size={18}
+                            color="#9db6ab"
+                          />
                         </View>
                       </View>
-
-                      <Text style={styles.appointmentType}>
-                        {appointment.type}
-                      </Text>
-                      <Text style={styles.appointmentHint}>
-                        Toque para abrir detalhes e atualizar o atendimento.
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             )}
           </Animated.View>
         )}
@@ -635,12 +631,19 @@ export default function PsychologistAgendaScreen() {
       <Modal
         visible={!!selectedAppointment}
         transparent
-        animationType="slide"
+        animationType={isDesktop ? "fade" : "slide"}
         onRequestClose={() => setSelectedAppointment(null)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
+        <View
+          style={[
+            styles.modalOverlay,
+            isDesktop && styles.modalOverlayDesktop,
+          ]}
+        >
+          <View
+            style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}
+          >
+            {!isDesktop && <View style={styles.modalHandle} />}
 
             {selectedAppointment && (
               <>
@@ -736,9 +739,7 @@ export default function PsychologistAgendaScreen() {
                         color="#c46a1a"
                       />
                     )}
-                    <Text style={styles.undoActionText}>
-                      Desfazer realizada
-                    </Text>
+                    <Text style={styles.undoActionText}>Desfazer realizada</Text>
                   </TouchableOpacity>
                 )}
 
@@ -760,11 +761,7 @@ export default function PsychologistAgendaScreen() {
                     {updatingStatus ? (
                       <ActivityIndicator size="small" color={GREEN} />
                     ) : (
-                      <Ionicons
-                        name="refresh-outline"
-                        size={18}
-                        color={GREEN}
-                      />
+                      <Ionicons name="refresh-outline" size={18} color={GREEN} />
                     )}
                     <Text style={styles.secondaryActionText}>
                       Reverter para agendada
@@ -800,167 +797,126 @@ export default function PsychologistAgendaScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
-  },
-  circle1: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "#27795f",
-    top: -110,
-    right: -70,
-    opacity: 0.45,
-  },
-  circle2: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: GREEN_DARK,
-    top: -55,
-    left: -70,
-    opacity: 0.28,
+    backgroundColor: PAGE_BG,
   },
   header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
     backgroundColor: GREEN,
+    paddingTop: 52,
+    paddingBottom: 20,
+  },
+  headerInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
-  backBtn: {
+  iconBtn: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  homeBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   headerTextBox: {
     flex: 1,
-    marginHorizontal: 14,
-  },
-  headerEyebrow: {
-    color: "#bce3d5",
-    fontSize: 13,
-    fontWeight: "600",
   },
   headerTitle: {
     color: WHITE,
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "800",
-    marginTop: 2,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 22,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 44,
   },
-  heroCard: {
-    backgroundColor: WHITE,
-    borderRadius: 28,
-    padding: 22,
-    marginTop: -18,
-    marginBottom: 20,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#173d31",
-  },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#5e7b70",
+  container: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
   },
   summaryRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 24,
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 26,
   },
   summaryCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 150,
+    minWidth: 140,
     backgroundColor: WHITE,
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    gap: 14,
+    ...CARD_SHADOW,
+  },
+  summaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryText: {
+    flex: 1,
   },
   summaryValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
-    color: GREEN,
+    color: TEXT_DARK,
+    letterSpacing: -0.5,
   },
   summaryLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    textAlign: "center",
-    color: "#648075",
+    marginTop: 2,
+    fontSize: 12.5,
+    color: TEXT_MUTED,
     fontWeight: "600",
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
-    color: "#173d31",
-    marginBottom: 14,
+    color: TEXT_DARK,
+    letterSpacing: -0.2,
+    marginBottom: 12,
   },
   weekNavigationContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   weekNavButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
     backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   todayButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
+    paddingVertical: 11,
+    paddingHorizontal: 20,
     borderRadius: 12,
     backgroundColor: GREEN,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
   },
   todayButtonText: {
     color: WHITE,
@@ -972,15 +928,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   weekLabelBadge: {
-    backgroundColor: "#e8f7f1",
+    backgroundColor: GREEN_LIGHT,
     borderRadius: 999,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 16,
   },
   weekLabelText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#2e8b6e",
+    color: GREEN,
     textAlign: "center",
   },
   weekRow: {
@@ -988,23 +944,34 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 20,
   },
+  weekRowDesktop: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 24,
+  },
   dayCard: {
-    width: 120,
     backgroundColor: WHITE,
-    borderRadius: 22,
-    padding: 16,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 14,
+    ...CARD_SHADOW,
+  },
+  dayCardMobile: {
+    width: 118,
+  },
+  dayCardDesktop: {
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 90,
   },
   dayCardActive: {
     backgroundColor: GREEN,
+    borderColor: GREEN,
   },
   dayWeekLabel: {
-    fontSize: 13,
-    color: "#648075",
+    fontSize: 12.5,
+    color: TEXT_MUTED,
     fontWeight: "700",
     textTransform: "uppercase",
   },
@@ -1012,24 +979,24 @@ const styles = StyleSheet.create({
     color: "#d9efe5",
   },
   dayDateLabel: {
-    marginTop: 8,
-    fontSize: 19,
-    color: "#173d31",
+    marginTop: 6,
+    fontSize: 17,
+    color: TEXT_DARK,
     fontWeight: "800",
   },
   dayDateLabelActive: {
     color: WHITE,
   },
   dayBadge: {
-    marginTop: 14,
+    marginTop: 12,
     alignSelf: "flex-start",
-    backgroundColor: "#f1f8f4",
+    backgroundColor: "#f2f9f5",
     borderRadius: 999,
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 10,
   },
   dayBadgeActive: {
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   dayBadgeText: {
     fontSize: 11,
@@ -1041,22 +1008,25 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 26,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 28,
     alignItems: "center",
     marginBottom: 24,
+    ...CARD_SHADOW,
   },
   emptyTitle: {
     marginTop: 12,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
-    color: "#173d31",
+    color: TEXT_DARK,
   },
   emptyText: {
     marginTop: 8,
     fontSize: 14,
     lineHeight: 20,
-    color: "#6d877d",
+    color: TEXT_MUTED,
     textAlign: "center",
   },
   emptyBtn: {
@@ -1065,7 +1035,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1.5,
-    borderColor: "#2e8b6e",
+    borderColor: GREEN,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -1073,26 +1043,29 @@ const styles = StyleSheet.create({
   emptyBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#2e8b6e",
+    color: GREEN,
+  },
+  appointmentsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
   },
   appointmentCard: {
+    flexGrow: 1,
     backgroundColor: WHITE,
-    borderRadius: 24,
-    marginBottom: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
     overflow: "hidden",
     flexDirection: "row",
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    ...CARD_SHADOW,
   },
   statusStripe: {
-    width: 6,
+    width: 5,
   },
   appointmentBody: {
     flex: 1,
-    padding: 18,
+    padding: 16,
   },
   appointmentTopRow: {
     flexDirection: "row",
@@ -1100,52 +1073,65 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  appointmentTimeBox: {
+    flex: 1,
+  },
   appointmentTime: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
-    color: "#173d31",
+    color: TEXT_DARK,
   },
   appointmentPatient: {
-    marginTop: 4,
-    fontSize: 16,
+    marginTop: 3,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#24463a",
+    color: "#274a3d",
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
   },
   statusText: {
     marginLeft: 6,
     fontSize: 12,
     fontWeight: "700",
   },
-  appointmentType: {
+  appointmentFooter: {
     marginTop: 12,
-    fontSize: 14,
-    color: "#617d72",
-    fontWeight: "600",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  appointmentHint: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#88a397",
-    lineHeight: 18,
+  appointmentType: {
+    fontSize: 13.5,
+    color: TEXT_MUTED,
+    fontWeight: "600",
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(10, 21, 17, 0.35)",
     justifyContent: "flex-end",
   },
+  modalOverlayDesktop: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
   modalSheet: {
     backgroundColor: WHITE,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 36,
+  },
+  modalSheetDesktop: {
+    width: "100%",
+    maxWidth: 460,
+    borderRadius: 20,
+    paddingBottom: 24,
   },
   modalHandle: {
     width: 42,
@@ -1156,27 +1142,27 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
-    color: "#173d31",
+    color: TEXT_DARK,
   },
   modalSubtitle: {
     marginTop: 6,
     fontSize: 14,
-    color: "#678076",
+    color: TEXT_MUTED,
     marginBottom: 18,
   },
   detailCard: {
-    backgroundColor: "#f8fcfa",
-    borderRadius: 18,
+    backgroundColor: "#f6faf8",
+    borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e8f2ed",
+    borderColor: BORDER,
   },
   detailLabel: {
     fontSize: 11,
-    color: "#769186",
+    color: LABEL,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -1184,13 +1170,13 @@ const styles = StyleSheet.create({
   detailValue: {
     marginTop: 6,
     fontSize: 15,
-    color: "#173d31",
+    color: TEXT_DARK,
     fontWeight: "700",
   },
   primaryAction: {
     marginTop: 10,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: GREEN,
     flexDirection: "row",
     alignItems: "center",
@@ -1205,10 +1191,10 @@ const styles = StyleSheet.create({
   secondaryAction: {
     marginTop: 10,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: "#cfe2d8",
-    backgroundColor: "#f8fcfa",
+    backgroundColor: "#f6faf8",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1222,7 +1208,7 @@ const styles = StyleSheet.create({
   undoAction: {
     marginTop: 10,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: "#f5d5b8",
     backgroundColor: ORANGE_LIGHT,
@@ -1242,12 +1228,12 @@ const styles = StyleSheet.create({
   closeAction: {
     marginTop: 10,
     height: 48,
-    borderRadius: 16,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   closeActionText: {
-    color: "#6f877d",
+    color: TEXT_MUTED,
     fontSize: 15,
     fontWeight: "700",
   },

@@ -80,6 +80,8 @@ export interface ChatMessageApiItem {
   content_encrypted?: string;
   text?: string;
   message_type?: string;
+  media_url?: string;
+  attachment?: string;
   created_at: string;
   read?: boolean;
 }
@@ -331,6 +333,15 @@ export const normalizeError = (data: any): string => {
     if (values.length) return String(values[0]);
   }
   return "Ocorreu um erro inesperado.";
+};
+
+// O backend devolve media_url relativo (ex.: "/media/chat/attachments/...").
+// Aqui montamos a URL absoluta usando a origem da API (API_BASE_URL sem o "/api").
+export const resolveMediaUrl = (url?: string | null): string => {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  const origin = API_BASE_URL.replace(/\/api\/?$/, "");
+  return `${origin}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
 // â”€â”€â”€ Token Storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1189,6 +1200,52 @@ export const sendChatMessage = async (
   });
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
+};
+
+// POST /api/chat/messages/ (multipart) â€” enviar anexo de imagem ou Ã¡udio.
+// NÃ£o enviamos message_type: o backend infere pela extensÃ£o do arquivo.
+export const sendChatAttachment = async (
+  receiverId: string, // user.id do outro lado
+  file: { uri: string; name: string; type: string },
+  appointmentId?: string,
+): Promise<ApiResult<ChatMessageApiItem>> => {
+  try {
+    const token = await getAccessToken();
+    if (!token) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+
+    const formData = new FormData();
+    formData.append("receiver", receiverId);
+    if (appointmentId) formData.append("appointment", appointmentId);
+
+    // No Expo Web o objeto { uri, name, type } do RN nÃ£o Ã© entendido pelo browser:
+    // Ã© preciso buscar o URI como Blob real antes de anexar (mesmo padrÃ£o do uploadDocument).
+    if (Platform.OS === "web") {
+      const blobRes = await fetch(file.uri);
+      const blob = await blobRes.blob();
+      const fileObj = new File([blob], file.name, {
+        type: blob.type || file.type || "application/octet-stream",
+      });
+      formData.append("attachment", fileObj);
+    } else {
+      formData.append("attachment", file as any);
+    }
+
+    const res = await fetchWithRefresh(`${API_BASE_URL}/chat/messages/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // âš ï¸ NÃ£o definir Content-Type manualmente com FormData â€” o boundary
+        // do multipart precisa ser gerado automaticamente.
+      },
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return { ok: false, error: normalizeError(data), data };
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: "NÃ£o foi possÃ­vel enviar o anexo." };
+  }
 };
 
 // GET /api/chat/contacts/ â€” listar contatos disponÃ­veis para nova conversa

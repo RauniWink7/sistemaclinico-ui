@@ -9,8 +9,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { getMe, getPatientsByClinic } from '../../services/api';
@@ -58,17 +58,17 @@ export default function AdminPacientesScreen() {
         setLoading(true);
         const meResult = await getMe();
         if (!meResult.ok || !meResult.data) {
-          Alert.alert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
+          showAlert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
           return;
         }
         const cId = meResult.data.clinic;
-        if (!cId) { Alert.alert('Erro', 'Nenhuma clínica associada.'); return; }
+        if (!cId) { showAlert('Erro', 'Nenhuma clínica associada.'); return; }
 
         const result = await getPatientsByClinic(cId);
-        if (!result.ok) { Alert.alert('Erro', result.error ?? 'Erro ao carregar pacientes.'); return; }
+        if (!result.ok) { showAlert('Erro', result.error ?? 'Erro ao carregar pacientes.'); return; }
         setPatients(result.data || []);
       } catch (err: any) {
-        Alert.alert('Erro', err?.message ?? 'Erro inesperado.');
+        showAlert('Erro', err?.message ?? 'Erro inesperado.');
       } finally {
         setLoading(false);
       }

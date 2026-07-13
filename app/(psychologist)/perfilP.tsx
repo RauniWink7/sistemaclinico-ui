@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   ScrollView,
   StatusBar,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { showAlert } from "../../services/feedback";
 import { getMe, getPsychologists, logout, updateMe, updateProfessionalProfile } from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
@@ -28,8 +28,10 @@ interface EditableFields {
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const GREEN = "#2e8b6e";
 const GREEN_LIGHT = "#e8f7f1";
-const BG = "#f0faf5";
+const BG = "#e8f1ec";
 const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const MAX_WIDTH = 1120;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 const SectionHeader = ({ icon, title }: { icon: string; title: string }) => (
@@ -105,7 +107,7 @@ export default function PsychologistProfileScreen() {
       setLoading(true);
       const meResult = await getMe();
       if (!meResult.ok || !meResult.data?.id) {
-        Alert.alert("Erro", meResult.error || "Não foi possível carregar o perfil.");
+        showAlert("Erro", meResult.error || "Não foi possível carregar o perfil.");
         setLoading(false);
         return;
       }
@@ -160,7 +162,7 @@ export default function PsychologistProfileScreen() {
     try {
       const meUpdate = await updateMe({ full_name: fields.name, phone: fields.phone });
       if (!meUpdate.ok) {
-        Alert.alert("Erro", meUpdate.error || "Não foi possível salvar nome/telefone.");
+        showAlert("Erro", meUpdate.error || "Não foi possível salvar nome/telefone.");
         return;
       }
 
@@ -171,16 +173,16 @@ export default function PsychologistProfileScreen() {
           bio: fields.bio || undefined,
         });
         if (!profUpdate.ok) {
-          Alert.alert("Erro", profUpdate.error || "Não foi possível salvar perfil profissional.");
+          showAlert("Erro", profUpdate.error || "Não foi possível salvar perfil profissional.");
           return;
         }
       }
 
       setOriginal({ ...fields });
       setEditing(false);
-      Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
+      showAlert("Sucesso", "Perfil atualizado com sucesso!");
     } catch {
-      Alert.alert("Erro", "Não foi possível salvar as alterações.");
+      showAlert("Erro", "Não foi possível salvar as alterações.");
     } finally {
       setSaving(false);
     }
@@ -215,20 +217,22 @@ export default function PsychologistProfileScreen() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Meu Perfil</Text>
-        {!editing ? (
-          <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
-            <Ionicons name="pencil-outline" size={18} color="#fff" />
-            <Text style={styles.editBtnText}>Editar</Text>
+        <View style={styles.headerInner}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={styles.cancelBtnText}>Cancelar</Text>
-          </TouchableOpacity>
-        )}
+          <Text style={styles.headerTitle}>Meu Perfil</Text>
+          {!editing ? (
+            <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
+              <Ionicons name="pencil-outline" size={18} color="#fff" />
+              <Text style={styles.editBtnText}>Editar</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* ── Avatar ── */}
@@ -323,6 +327,11 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     paddingTop: 52,
     paddingBottom: 16,
+  },
+  headerInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
     paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -366,12 +375,20 @@ const styles = StyleSheet.create({
   crpBadgeText: { fontSize: 12, fontWeight: "700", color: WHITE },
 
   scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 48 },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 48,
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+  },
 
   card: {
-    backgroundColor: WHITE, borderRadius: 20, padding: 18, marginBottom: 16,
-    shadowColor: GREEN, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
+    backgroundColor: WHITE, borderRadius: 16, padding: 18, marginBottom: 16,
+    borderWidth: 1, borderColor: BORDER,
+    shadowColor: "#1f5442", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05, shadowRadius: 14, elevation: 2,
   },
 
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
