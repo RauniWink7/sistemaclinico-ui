@@ -253,7 +253,7 @@ export default function AdminPacientesScreen() {
                     <TouchableOpacity
                       style={styles.secondaryButton}
                       activeOpacity={0.85}
-                      onPress={() => router.push({ pathname: '/(admin)/paciente/[id]', params: { id: p.id } })}
+                      onPress={() => router.push({ pathname: '/(admin)/paciente/[id]', params: { id: p.user.id } })}
                     >
                       <Ionicons name="document-text-outline" size={16} color={GREEN} />
                       <Text style={styles.secondaryButtonText}>Ver perfil</Text>
