@@ -12,6 +12,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    useWindowDimensions,
     View,
 } from "react-native";
 import { showAlert } from "../../services/feedback";
@@ -22,13 +23,32 @@ import {
     getPsychologists,
     updateAppointmentStatus,
 } from "../../services/api";
+import { partsToISO, toInputParts, todayISODate } from "../../services/dateInput";
+import { DateField, TimeField } from "../../components/DateTimeField";
 
-// ─── Tema ─────────────────────────────────────────────────────────────────────
+// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
 
 const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
-const BG = "#f0faf5";
+const GREEN_LIGHT = "#e8f7f1";
+const BLUE = "#2d6cdf";
+const ORANGE = "#c46a1a";
+const RED = "#d95c5c";
+
+const PAGE_BG = "#e8f1ec";
 const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const TEXT_DARK = "#173d31";
+
+const MAX_WIDTH = 1120;
+const DESKTOP_BREAKPOINT = 900;
+
+const CARD_SHADOW = {
+  shadowColor: "#1f5442",
+  shadowOpacity: 0.05,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+} as const;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -56,25 +76,25 @@ interface StatusConfig {
 const STATUS_MAP: Record<string, StatusConfig> = {
   scheduled: {
     label: "Agendada",
-    color: "#2d6cdf",
+    color: BLUE,
     bg: "#eaf1ff",
     icon: "time-outline",
   },
   completed: {
     label: "Concluída",
-    color: "#2e8b6e",
+    color: GREEN,
     bg: "#e8f7f1",
     icon: "checkmark-circle-outline",
   },
   cancelled: {
     label: "Cancelada",
-    color: "#d95c5c",
+    color: RED,
     bg: "#fdeeee",
     icon: "close-circle-outline",
   },
   no_show: {
     label: "Não compareceu",
-    color: "#c46a1a",
+    color: ORANGE,
     bg: "#fef3e8",
     icon: "alert-circle-outline",
   },
@@ -157,13 +177,6 @@ const normalize = (
 
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
-
 const StatusBadge = ({ status }: { status: string }) => {
   const cfg = STATUS_MAP[status] ?? {
     label: status,
@@ -181,17 +194,19 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 const AppointmentCard = ({
   item,
+  width,
   onChangeStatus,
   onCancel,
 }: {
   item: NormalizedAppointment;
+  width: number | string;
   onChangeStatus: (item: NormalizedAppointment) => void;
   onCancel: (item: NormalizedAppointment) => void;
 }) => {
   const canModify = item.status === "scheduled";
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { flexBasis: width as any }]}>
       <View style={styles.cardHeader}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getInitials(item.patientName)}</Text>
@@ -242,8 +257,8 @@ const AppointmentCard = ({
             onPress={() => onCancel(item)}
             activeOpacity={0.8}
           >
-            <Ionicons name="close-outline" size={14} color="#d95c5c" />
-            <Text style={[styles.actionBtnText, { color: "#d95c5c" }]}>
+            <Ionicons name="close-outline" size={14} color={RED} />
+            <Text style={[styles.actionBtnText, { color: RED }]}>
               Cancelar
             </Text>
           </TouchableOpacity>
@@ -275,8 +290,19 @@ export default function AdminAppointmentsScreen() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
+  // Modal remarcação (nova data)
+  const [rescheduleTarget, setRescheduleTarget] =
+    useState<NormalizedAppointment | null>(null);
+  const [reDate, setReDate] = useState("");
+  const [reTime, setReTime] = useState("");
+  const [rescheduling, setRescheduling] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
+
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
+  const cardWidth = isDesktop ? 420 : "100%";
 
   React.useEffect(() => {
     Animated.parallel([
@@ -291,7 +317,7 @@ export default function AdminAppointmentsScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   // ── Carregamento ────────────────────────────────────────────────────────────
   const loadData = useCallback(async (silent = false) => {
@@ -369,7 +395,7 @@ export default function AdminAppointmentsScreen() {
     no_show: appointments.filter((a) => a.status === "no_show").length,
   };
 
-  // ── Acao: alterar status ────────────────────────────────────────────────────
+  // ── Ação: alterar status ────────────────────────────────────────────────────
   const openStatusModal = (item: NormalizedAppointment) => {
     setSelectedItem(item);
     setStatusModalVisible(true);
@@ -377,6 +403,19 @@ export default function AdminAppointmentsScreen() {
 
   const confirmStatusChange = async (newStatus: AppointmentStatus) => {
     if (!selectedItem) return;
+
+    // Remarcar exige nova data — abre modal próprio em vez de aplicar direto.
+    if (newStatus === "rescheduled") {
+      const suggestion = new Date();
+      suggestion.setDate(suggestion.getDate() + 1);
+      const parts = toInputParts(suggestion);
+      setReDate(parts.date);
+      setReTime(parts.time);
+      setRescheduleTarget(selectedItem);
+      setStatusModalVisible(false);
+      return;
+    }
+
     setUpdatingStatus(true);
     try {
       const result = await updateAppointmentStatus(selectedItem.id, newStatus);
@@ -400,7 +439,52 @@ export default function AdminAppointmentsScreen() {
     }
   };
 
-  // ── Acao: cancelar ──────────────────────────────────────────────────────────
+  const confirmReschedule = async () => {
+    if (!rescheduleTarget) return;
+    const iso = partsToISO(reDate, reTime);
+    if (!iso) {
+      showAlert("Data inválida", "Selecione a nova data e horário.");
+      return;
+    }
+    if (new Date(iso).getTime() <= Date.now()) {
+      showAlert("Data inválida", "A nova data deve ser no futuro.");
+      return;
+    }
+    setRescheduling(true);
+    try {
+      const result = await updateAppointmentStatus(
+        rescheduleTarget.id,
+        "rescheduled",
+        { scheduled_at: iso },
+      );
+      if (!result.ok) {
+        showAlert(
+          "Erro",
+          result.error ?? "Não foi possível remarcar a consulta.",
+        );
+        return;
+      }
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === rescheduleTarget.id
+            ? {
+                ...a,
+                status: "rescheduled",
+                dateTime: iso,
+                dateFormatted: formatDateTime(iso),
+              }
+            : a,
+        ),
+      );
+      setRescheduleTarget(null);
+    } catch (err: any) {
+      showAlert("Erro", err?.message ?? "Erro inesperado.");
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
+  // ── Ação: cancelar ──────────────────────────────────────────────────────────
   const openCancelModal = (item: NormalizedAppointment) => {
     setCancelTarget(item);
     setCancelReason("");
@@ -433,29 +517,28 @@ export default function AdminAppointmentsScreen() {
     }
   };
 
+  const Header = () => (
+    <View style={styles.header}>
+      <View style={styles.headerInner}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerTextBox}>
+          <Text style={styles.headerTitle}>Consultas</Text>
+        </View>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.replace("/(admin)")}>
+          <Ionicons name="home-outline" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.screen}>
         <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.headerTextBox}>
-            <Text style={styles.headerEyebrow}>Área administrativa</Text>
-            <Text style={styles.headerTitle}>Consultas</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.homeBtn}
-            onPress={() => router.replace("/(admin)")}
-          >
-            <Ionicons name="grid-outline" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        <Header />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={GREEN} />
           <Text style={styles.loadingText}>Carregando consultas...</Text>
@@ -468,23 +551,7 @@ export default function AdminAppointmentsScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-      <DecorativeBackground />
-
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Área administrativa</Text>
-          <Text style={styles.headerTitle}>Consultas</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.homeBtn}
-          onPress={() => router.replace("/(admin)")}
-        >
-          <Ionicons name="grid-outline" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <Header />
 
       <ScrollView
         style={styles.scroll}
@@ -500,15 +567,10 @@ export default function AdminAppointmentsScreen() {
         }
       >
         <Animated.View
-          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+          style={[styles.container, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         >
-          {/* Hero */}
+          {/* Resumo */}
           <View style={styles.heroCard}>
-            <Text style={styles.heroEyebrow}>Supervisão</Text>
-            <Text style={styles.heroTitle}>Agenda de consultas</Text>
-            <Text style={styles.heroSubtitle}>
-              Visualize, filtre e atualize o status das consultas da clínica.
-            </Text>
             <View style={styles.countersRow}>
               <View style={styles.counter}>
                 <Text style={styles.counterValue}>{counts.scheduled}</Text>
@@ -516,21 +578,21 @@ export default function AdminAppointmentsScreen() {
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counter}>
-                <Text style={[styles.counterValue, { color: "#2d6cdf" }]}>
+                <Text style={[styles.counterValue, { color: BLUE }]}>
                   {counts.completed}
                 </Text>
-                <Text style={styles.counterLabel}>Concluidas</Text>
+                <Text style={styles.counterLabel}>Concluídas</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counter}>
-                <Text style={[styles.counterValue, { color: "#d95c5c" }]}>
+                <Text style={[styles.counterValue, { color: RED }]}>
                   {counts.cancelled}
                 </Text>
                 <Text style={styles.counterLabel}>Canceladas</Text>
               </View>
               <View style={styles.counterDivider} />
               <View style={styles.counter}>
-                <Text style={[styles.counterValue, { color: "#c46a1a" }]}>
+                <Text style={[styles.counterValue, { color: ORANGE }]}>
                   {counts.no_show}
                 </Text>
                 <Text style={styles.counterLabel}>Faltou</Text>
@@ -617,14 +679,17 @@ export default function AdminAppointmentsScreen() {
                 {filtered.length}{" "}
                 {filtered.length === 1 ? "consulta" : "consultas"}
               </Text>
-              {filtered.map((item) => (
-                <AppointmentCard
-                  key={item.id}
-                  item={item}
-                  onChangeStatus={openStatusModal}
-                  onCancel={openCancelModal}
-                />
-              ))}
+              <View style={styles.cardsWrap}>
+                {filtered.map((item) => (
+                  <AppointmentCard
+                    key={item.id}
+                    item={item}
+                    width={cardWidth}
+                    onChangeStatus={openStatusModal}
+                    onCancel={openCancelModal}
+                  />
+                ))}
+              </View>
             </>
           )}
         </Animated.View>
@@ -762,6 +827,71 @@ export default function AdminAppointmentsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Modal: Remarcar (nova data) ── */}
+      <Modal
+        visible={!!rescheduleTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !rescheduling && setRescheduleTarget(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Remarcar consulta</Text>
+            {rescheduleTarget && (
+              <Text style={styles.modalSubtitle}>
+                {rescheduleTarget.patientName}
+                {"\n"}
+                Nova data e horário (deve ser no futuro)
+              </Text>
+            )}
+
+            <View style={styles.dateFieldRow}>
+              <View style={styles.dateCol}>
+                <DateField
+                  value={reDate}
+                  onChange={setReDate}
+                  min={todayISODate()}
+                  disabled={rescheduling}
+                />
+              </View>
+              <View style={styles.timeCol}>
+                <TimeField
+                  value={reTime}
+                  onChange={setReTime}
+                  disabled={rescheduling}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setRescheduleTarget(null)}
+                disabled={rescheduling}
+              >
+                <Text style={styles.modalCancelText}>Voltar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalConfirmBtn,
+                  rescheduling && styles.disabledBtn,
+                ]}
+                onPress={confirmReschedule}
+                activeOpacity={0.85}
+                disabled={rescheduling}
+              >
+                {rescheduling ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalDangerText}>Salvar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -769,337 +899,141 @@ export default function AdminAppointmentsScreen() {
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
-  circle1: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "#27795f",
-    top: -110,
-    right: -70,
-    opacity: 0.45,
+  screen: { flex: 1, backgroundColor: PAGE_BG },
+  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+  headerInner: {
+    width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
   },
-  circle2: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: GREEN_DARK,
-    top: -55,
-    left: -70,
-    opacity: 0.28,
+  iconBtn: {
+    width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)",
+    alignItems: "center", justifyContent: "center",
   },
-  header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    backgroundColor: GREEN,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  homeBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTextBox: { flex: 1, marginHorizontal: 14 },
-  headerEyebrow: { color: "#bce3d5", fontSize: 13, fontWeight: "600" },
-  headerTitle: {
-    color: WHITE,
-    fontSize: 24,
-    fontWeight: "800",
-    marginTop: 2,
-    letterSpacing: -0.4,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-  },
+  headerTextBox: { flex: 1 },
+  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
+  container: { width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center" },
   heroCard: {
-    backgroundColor: WHITE,
-    borderRadius: 28,
-    padding: 22,
-    marginTop: -18,
-    marginBottom: 18,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    padding: 18, marginBottom: 16, ...CARD_SHADOW,
   },
-  heroEyebrow: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: GREEN,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  heroTitle: {
-    marginTop: 8,
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#173d31",
-    letterSpacing: -0.5,
-  },
-  heroSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#5e7b70",
-    marginBottom: 16,
-  },
-  countersRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#edf4f0",
-    paddingTop: 14,
-  },
+  countersRow: { flexDirection: "row", alignItems: "center" },
   counter: { flex: 1, alignItems: "center" },
-  counterValue: { fontSize: 20, fontWeight: "800", color: GREEN },
-  counterLabel: {
-    fontSize: 11,
-    color: "#7a9e90",
-    fontWeight: "600",
-    marginTop: 2,
-  },
+  counterValue: { fontSize: 22, fontWeight: "800", color: GREEN },
+  counterLabel: { fontSize: 11, color: "#7a9e90", fontWeight: "600", marginTop: 2 },
   counterDivider: { width: 1, height: 32, backgroundColor: "#e0ede7" },
   searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#d7ebe2",
-    paddingHorizontal: 14,
-    height: 50,
-    marginBottom: 14,
-    gap: 8,
+    flexDirection: "row", alignItems: "center", backgroundColor: WHITE, borderRadius: 12,
+    borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, height: 50, marginBottom: 14, gap: 8,
+    ...CARD_SHADOW,
   },
-  searchInput: { flex: 1, fontSize: 14, color: "#173d31", fontWeight: "500" },
+  searchInput: {
+    flex: 1, fontSize: 14, color: TEXT_DARK, fontWeight: "500",
+    // @ts-ignore — remove o contorno azul no web
+    outlineStyle: "none",
+  },
   filtersRow: { gap: 8, paddingBottom: 16 },
   filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: WHITE,
-    borderWidth: 1.5,
-    borderColor: "#d7ebe2",
+    flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, backgroundColor: WHITE, borderWidth: 1, borderColor: BORDER,
   },
   filterChipActive: { backgroundColor: GREEN, borderColor: GREEN },
   filterChipText: { fontSize: 13, fontWeight: "700", color: "#5e7b70" },
   filterChipTextActive: { color: WHITE },
   filterCount: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#edf4f0",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
+    minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#edf4f0",
+    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
   },
   filterCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
   filterCountText: { fontSize: 11, fontWeight: "700", color: "#5e7b70" },
   filterCountTextActive: { color: WHITE },
-  resultCount: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#7a9e90",
-    marginBottom: 12,
-  },
+  resultCount: { fontSize: 13, fontWeight: "700", color: "#7a9e90", marginBottom: 12 },
+  cardsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   card: {
-    backgroundColor: WHITE,
-    borderRadius: 22,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    flexGrow: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    padding: 16, ...CARD_SHADOW,
   },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: "#e8f7f1",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 46, height: 46, borderRadius: 15, backgroundColor: GREEN_LIGHT,
+    alignItems: "center", justifyContent: "center",
   },
   avatarText: { fontSize: 15, fontWeight: "800", color: GREEN },
   cardInfo: { flex: 1 },
-  patientName: { fontSize: 15, fontWeight: "800", color: "#173d31" },
-  professionalName: {
-    fontSize: 12,
-    color: "#7a9e90",
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
+  patientName: { fontSize: 15, fontWeight: "800", color: TEXT_DARK },
+  professionalName: { fontSize: 12, color: "#7a9e90", fontWeight: "600", marginTop: 2 },
+  badge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
   badgeText: { fontSize: 11, fontWeight: "700" },
   cardDetails: { gap: 6, marginBottom: 4 },
   detailItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   detailText: { fontSize: 12, color: "#6c8c80", fontWeight: "500" },
   cardActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#edf4f0",
-    paddingTop: 12,
+    flexDirection: "row", gap: 8, marginTop: 14, borderTopWidth: 1,
+    borderTopColor: "#edf4f0", paddingTop: 12,
   },
   actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#cfe7dc",
-    backgroundColor: "#f9fdfb",
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+    height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: "#cfe7dc", backgroundColor: "#f9fdfb",
   },
   actionBtnRed: { borderColor: "#f5d0d0", backgroundColor: "#fff8f8" },
   actionBtnText: { fontSize: 12, fontWeight: "700", color: GREEN },
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    backgroundColor: "#e8f7f1",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 72, height: 72, borderRadius: 24, backgroundColor: GREEN_LIGHT,
+    alignItems: "center", justifyContent: "center",
   },
-  emptyTitle: { fontSize: 17, fontWeight: "800", color: "#173d31" },
-  emptySubtitle: {
-    fontSize: 13,
-    color: "#7a9e90",
-    textAlign: "center",
-    lineHeight: 19,
-  },
+  emptyTitle: { fontSize: 17, fontWeight: "800", color: TEXT_DARK },
+  emptySubtitle: { fontSize: 13, color: "#7a9e90", textAlign: "center", lineHeight: 19 },
 
   // Modais
   modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
+    flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24,
   },
-  modalBox: {
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 24,
-    width: "100%",
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#173d31",
-    textAlign: "center",
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: "#6c8c80",
-    textAlign: "center",
-    marginTop: 6,
-    marginBottom: 20,
-    lineHeight: 19,
-  },
+  modalBox: { backgroundColor: WHITE, borderRadius: 20, padding: 24, width: "100%", maxWidth: 400 },
+  modalTitle: { fontSize: 19, fontWeight: "800", color: TEXT_DARK, textAlign: "center" },
+  modalSubtitle: { fontSize: 13, color: "#6c8c80", textAlign: "center", marginTop: 6, marginBottom: 20, lineHeight: 19 },
   modalLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#5f7d70",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8,
+    textTransform: "uppercase", letterSpacing: 0.5,
   },
   modalInput: {
-    minHeight: 80,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#d7ebe2",
-    backgroundColor: "#fbfefd",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#173d31",
-    marginBottom: 20,
+    minHeight: 80, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
+    backgroundColor: "#f6faf8", paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 14, color: TEXT_DARK, marginBottom: 20,
+    // @ts-ignore — remove o contorno azul no web
+    outlineStyle: "none",
+  },
+  dateFieldRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
+  dateCol: { flex: 1.4, minWidth: 0 },
+  timeCol: { flex: 1, minWidth: 0 },
+  modalConfirmBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: GREEN,
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalRow: { flexDirection: "row", gap: 10 },
   modalCancelBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#cfe7dc",
-    backgroundColor: "#f9fdfb",
-    alignItems: "center",
-    justifyContent: "center",
+    flex: 1, height: 46, borderRadius: 12, borderWidth: 1.5, borderColor: "#cfe7dc",
+    backgroundColor: "#f9fdfb", alignItems: "center", justifyContent: "center",
   },
   modalCancelText: { fontSize: 14, fontWeight: "700", color: "#5e7b70" },
   modalDangerBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: "#d95c5c",
-    alignItems: "center",
-    justifyContent: "center",
+    flex: 1, height: 46, borderRadius: 12, backgroundColor: RED,
+    alignItems: "center", justifyContent: "center",
   },
   modalDangerText: { fontSize: 14, fontWeight: "700", color: WHITE },
   disabledBtn: { opacity: 0.6 },
   modalOptions: { gap: 10, marginBottom: 16 },
   statusOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    backgroundColor: "#fbfefd",
+    flexDirection: "row", alignItems: "center", gap: 12, padding: 14,
+    borderRadius: 12, borderWidth: 1.5, backgroundColor: "#fbfefd",
   },
-  statusOptionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  statusOptionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   statusOptionText: { fontSize: 15, fontWeight: "700" },
 });

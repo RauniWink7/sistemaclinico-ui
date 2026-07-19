@@ -1,99 +1,233 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
-import { logout } from "../../services/api";
+import { showAlert } from "../../services/feedback";
+import { getClinicData, getClinicStats, getMe, logout } from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
+// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
 const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
-const BG = "#f0faf5";
-const WHITE = "#ffffff";
+const BLUE = "#2d6cdf";
+const BLUE_LIGHT = "#eaf1ff";
+const ORANGE = "#c46a1a";
+const ORANGE_LIGHT = "#fef3e8";
+const PURPLE = "#7c3aed";
+const PURPLE_LIGHT = "#f3eeff";
+const TEAL = "#0d9488";
+const TEAL_LIGHT = "#e3f4f1";
+const RED = "#d95c5c";
+const RED_LIGHT = "#fdeeee";
 
-const ADMIN_SECTIONS = [
+const PAGE_BG = "#e8f1ec";
+const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const TEXT_DARK = "#17352b";
+const TEXT_MUTED = "#5f7a6f";
+
+const MAX_WIDTH = 1120;
+const DESKTOP_BREAKPOINT = 900;
+
+const CARD_SHADOW = {
+  shadowColor: "#1f5442",
+  shadowOpacity: 0.05,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+} as const;
+
+// ─── Tipagens ─────────────────────────────────────────────────────────────────
+interface ClinicStats {
+  total_appointments: number;
+  completed_appointments: number;
+  cancelled_appointments: number;
+  total_patients: number;
+  total_professionals: number;
+}
+
+// ─── Atalhos administrativos ──────────────────────────────────────────────────
+const QUICK_ACTIONS = [
   {
-    id: "dashboard",
-    title: "Dashboard",
-    description:
-      "Visão geral da clínica com consultas, pacientes e psicólogos.",
-    icon: "speedometer-outline",
+    id: "consultas",
+    title: "Consultas",
+    description: "Supervisione a agenda e o status dos atendimentos.",
+    icon: "calendar-outline",
+    color: BLUE,
+    bg: BLUE_LIGHT,
+    route: "/(admin)/consultas",
+  },
+  {
+    id: "agendar",
+    title: "Agendar",
+    description: "Marque uma nova consulta para um paciente.",
+    icon: "add-circle-outline",
     color: GREEN,
     bg: GREEN_LIGHT,
-    action: () => router.push("/dashboard"),
+    route: "/(admin)/agendar",
   },
   {
-    id: "management",
-    title: "Gerenciamento",
-    description:
-      "Edição dos dados da clínica e configuração do horário de funcionamento.",
-    icon: "settings-outline",
-    color: "#2e8b6e",
-    bg: "#e8f7f1",
-    action: () => router.push("/gerenciamento"),
-  },
-  {
-    id: "patients",
+    id: "pacientes",
     title: "Pacientes",
-    description: "Espaço pronto para listar, buscar e acompanhar pacientes.",
+    description: "Liste, busque e acompanhe os pacientes da clínica.",
     icon: "people-outline",
-    color: "#2d6cdf",
-    bg: "#eaf1ff",
-    action: () => router.push("/pacientes"),
+    color: GREEN,
+    bg: GREEN_LIGHT,
+    route: "/(admin)/pacientes",
   },
   {
-    id: "user",
-    title: "Usuários",
-    description: "Espaço pronto para listar, buscar e acompanhar usuários.",
-    icon: "people-outline",
-    color: "#2d6cdf",
-    bg: "#eaf1ff",
-    action: () => router.push("/usuario"),
-  },
-  {
-    id: "psychologists",
-    title: "Psicologos",
-    description:
-      "Cadastro administrativo de psicólogos e orientação do fluxo interno.",
+    id: "psicologos",
+    title: "Psicólogos",
+    description: "Cadastro e acompanhamento dos profissionais.",
     icon: "medkit-outline",
-    color: "#c46a1a",
-    bg: "#fef3e8",
-    action: () => router.push("/psicologo"),
+    color: ORANGE,
+    bg: ORANGE_LIGHT,
+    route: "/(admin)/psicologo",
   },
   {
-    id: "appointments",
-    title: "Consultas",
-    description:
-      "Espaço ideal para supervisão de agenda e status dos atendimentos.",
-    icon: "calendar-outline",
-    color: "#8a55d9",
-    bg: "#f3ecff",
-    action: () => router.push("/agendar"),
+    id: "usuarios",
+    title: "Usuários",
+    description: "Gerencie contas, papéis e status de acesso.",
+    icon: "people-circle-outline",
+    color: PURPLE,
+    bg: PURPLE_LIGHT,
+    route: "/(admin)/usuario",
+  },
+  {
+    id: "documentos",
+    title: "Documentos",
+    description: "Documentos da clínica: avulsos, por paciente e de removidos.",
+    icon: "folder-outline",
+    color: BLUE,
+    bg: BLUE_LIGHT,
+    route: "/(admin)/documentos",
+  },
+  {
+    id: "relatorios",
+    title: "Relatórios",
+    description: "Indicadores, relatórios e exportações da clínica.",
+    icon: "stats-chart-outline",
+    color: TEAL,
+    bg: TEAL_LIGHT,
+    route: "/(admin)/relatorios",
+  },
+  {
+    id: "gerenciamento",
+    title: "Gerenciamento",
+    description: "Dados da clínica e horário de funcionamento.",
+    icon: "settings-outline",
+    color: PURPLE,
+    bg: PURPLE_LIGHT,
+    route: "/(admin)/gerenciamento",
   },
   {
     id: "chat",
     title: "Chat",
-    description: "Espaço ideal para conversar sobre dúvidas.",
-    icon: "chatbubble",
-    color: "#1055d9",
-    bg: "#f3ecff",
-    action: () => router.push("/(shared)/chat"),
+    description: "Converse com pacientes e profissionais.",
+    icon: "chatbubble-ellipses-outline",
+    color: ORANGE,
+    bg: ORANGE_LIGHT,
+    route: "/(shared)/chat",
   },
 ];
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+export default function AdminDashboardScreen() {
+  const [adminName, setAdminName] = useState("Administrador");
+  const [clinicName, setClinicName] = useState("");
+  const [stats, setStats] = useState<ClinicStats | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default function AdminHomeScreen() {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const meResult = await getMe();
+        if (!meResult.ok || !meResult.data) {
+          showAlert("Erro", meResult.error || "Erro ao carregar perfil.");
+          return;
+        }
+        setAdminName(
+          meResult.data.full_name || meResult.data.name || "Administrador",
+        );
+
+        const clinicId = meResult.data.clinic;
+        if (!clinicId) {
+          showAlert("Erro", "Nenhuma clínica associada ao usuário.");
+          return;
+        }
+
+        const [statsResult, clinicResult] = await Promise.all([
+          getClinicStats(clinicId),
+          getClinicData(clinicId),
+        ]);
+
+        if (statsResult.ok && statsResult.data) {
+          setStats(statsResult.data as ClinicStats);
+        } else {
+          showAlert(
+            "Erro",
+            statsResult.error || "Erro ao carregar indicadores.",
+          );
+        }
+        if (clinicResult.ok && clinicResult.data) {
+          setClinicName((clinicResult.data as { name?: string }).name || "");
+        }
+      } catch {
+        showAlert("Erro", "Erro inesperado ao carregar dados.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Bom dia";
+    if (hour < 18) return "Boa tarde";
+    return "Boa noite";
+  }, []);
+
+  const initials = useMemo(() => {
+    const parts = (adminName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "A";
+    const first = parts[0][0] ?? "";
+    const second = parts.length > 1 ? parts[parts.length - 1][0] : "";
+    return (first + second).toUpperCase();
+  }, [adminName]);
+
   const handleLogout = () => {
     confirmAction(
       "Deseja sair da sua conta?",
@@ -109,22 +243,79 @@ export default function AdminHomeScreen() {
     );
   };
 
+  const metrics = [
+    {
+      id: "total",
+      label: "Total de consultas",
+      value: stats?.total_appointments ?? 0,
+      icon: "calendar-outline",
+      color: GREEN,
+      bg: GREEN_LIGHT,
+    },
+    {
+      id: "done",
+      label: "Concluídas",
+      value: stats?.completed_appointments ?? 0,
+      icon: "checkmark-circle-outline",
+      color: BLUE,
+      bg: BLUE_LIGHT,
+    },
+    {
+      id: "cancel",
+      label: "Canceladas",
+      value: stats?.cancelled_appointments ?? 0,
+      icon: "close-circle-outline",
+      color: RED,
+      bg: RED_LIGHT,
+    },
+    {
+      id: "patients",
+      label: "Pacientes ativos",
+      value: stats?.total_patients ?? 0,
+      icon: "people-outline",
+      color: GREEN,
+      bg: GREEN_LIGHT,
+    },
+    {
+      id: "profs",
+      label: "Psicólogos ativos",
+      value: stats?.total_professionals ?? 0,
+      icon: "person-outline",
+      color: ORANGE,
+      bg: ORANGE_LIGHT,
+    },
+  ];
+
   return (
     <View style={styles.screen}>
-      <DecorativeBackground />
+      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
 
+      {/* ── Barra de identidade ── */}
       <View style={styles.header}>
-        <View style={styles.headerBadge}>
-          <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />
-        </View>
+        <View style={styles.headerInner}>
+          <View style={styles.identity}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+            <View style={styles.identityText}>
+              <Text style={styles.headerGreeting}>{greeting},</Text>
+              <Text style={styles.headerName} numberOfLines={1}>
+                {adminName || "Administrador"}
+              </Text>
+              <Text style={styles.headerSub} numberOfLines={1}>
+                {clinicName ? `Administrador · ${clinicName}` : "Administrador"}
+              </Text>
+            </View>
+          </View>
 
-        <View style={styles.headerTextBox}>
-          <Text style={styles.eyebrow}>Área administrativa</Text>
-          <Text style={styles.title}>Central de gestão da clínica</Text>
-          <Text style={styles.description}>
-            Use esse menu como base para crescer a área admin sem misturar com o
-            fluxo do paciente.
-          </Text>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={handleLogout}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="log-out-outline" size={19} color="#fff" />
+            {isDesktop && <Text style={styles.logoutText}>Sair</Text>}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -133,48 +324,84 @@ export default function AdminHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionTitle}>Módulos administrativos</Text>
-
-        {ADMIN_SECTIONS.map((section) => (
-          <TouchableOpacity
-            key={section.id}
-            style={styles.sectionCard}
-            onPress={section.action}
-            activeOpacity={0.85}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={GREEN} />
+            <Text style={styles.loadingText}>Carregando dados...</Text>
+          </View>
+        ) : (
+          <Animated.View
+            style={[
+              styles.container,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
           >
-            <View
-              style={[styles.sectionIconBox, { backgroundColor: section.bg }]}
-            >
-              <Ionicons
-                name={section.icon as any}
-                size={22}
-                color={section.color}
-              />
+            {/* ── Resumo da clínica ── */}
+            <Text style={styles.sectionTitle}>Resumo da clínica</Text>
+            <View style={styles.metricsGrid}>
+              {metrics.map((metric) => (
+                <View
+                  key={metric.id}
+                  style={[
+                    styles.metricCard,
+                    { flexBasis: isDesktop ? 200 : "47%" },
+                  ]}
+                >
+                  <View
+                    style={[styles.metricIcon, { backgroundColor: metric.bg }]}
+                  >
+                    <Ionicons
+                      name={metric.icon as any}
+                      size={20}
+                      color={metric.color}
+                    />
+                  </View>
+                  <Text style={styles.metricValue}>{metric.value}</Text>
+                  <Text style={styles.metricLabel}>{metric.label}</Text>
+                </View>
+              ))}
             </View>
 
-            <View style={styles.sectionTextBox}>
-              <Text style={styles.sectionCardTitle}>{section.title}</Text>
-              <Text style={styles.sectionCardDescription}>
-                {section.description}
-              </Text>
+            {/* ── Atalhos ── */}
+            <Text style={styles.sectionTitle}>Atalhos</Text>
+            <View style={styles.actionsGrid}>
+              {QUICK_ACTIONS.map((action) => (
+                <TouchableOpacity
+                  key={action.id}
+                  style={[
+                    styles.actionTile,
+                    { flexBasis: isDesktop ? 320 : "100%" },
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => router.push(action.route as any)}
+                >
+                  <View
+                    style={[styles.actionIcon, { backgroundColor: action.bg }]}
+                  >
+                    <Ionicons
+                      name={action.icon as any}
+                      size={20}
+                      color={action.color}
+                    />
+                  </View>
+
+                  <View style={styles.actionText}>
+                    <Text style={styles.actionTitle}>{action.title}</Text>
+                    <Text style={styles.actionDescription}>
+                      {action.description}
+                    </Text>
+                  </View>
+
+                  <Ionicons
+                    name="chevron-forward-outline"
+                    size={18}
+                    color="#9db6ab"
+                  />
+                </TouchableOpacity>
+              ))}
             </View>
-
-            <Ionicons
-              name="chevron-forward-outline"
-              size={20}
-              color="#6c8c80"
-            />
-          </TouchableOpacity>
-        ))}
-
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={handleLogout}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="log-out-outline" size={18} color={GREEN} />
-          <Text style={styles.secondaryButtonText}>Sair da conta</Text>
-        </TouchableOpacity>
+          </Animated.View>
+        )}
       </ScrollView>
     </View>
   );
@@ -183,168 +410,186 @@ export default function AdminHomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
-  },
-  circle1: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "#27795f",
-    top: -110,
-    right: -70,
-    opacity: 0.45,
-  },
-  circle2: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: GREEN_DARK,
-    top: -55,
-    left: -70,
-    opacity: 0.28,
+    backgroundColor: PAGE_BG,
   },
   header: {
-    paddingTop: 64,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
     backgroundColor: GREEN,
+    paddingTop: 52,
+    paddingBottom: 20,
   },
-  headerBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+  headerInner: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  identity: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
   },
-  headerTextBox: {
-    maxWidth: 540,
-  },
-  eyebrow: {
-    color: "#bce3d5",
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  title: {
-    marginTop: 8,
+  avatarText: {
     color: WHITE,
-    fontSize: 28,
+    fontSize: 18,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: 0.5,
   },
-  description: {
-    marginTop: 10,
-    color: "#d2ece2",
+  identityText: {
+    flex: 1,
+  },
+  headerGreeting: {
+    color: "#c6e6da",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  headerName: {
+    color: WHITE,
+    fontSize: 21,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    marginTop: 1,
+  },
+  headerSub: {
+    color: "#a9d6c6",
+    fontSize: 12.5,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  logoutBtn: {
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  logoutText: {
+    color: WHITE,
     fontSize: 14,
-    lineHeight: 21,
+    fontWeight: "700",
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 22,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 44,
   },
-  highlightCard: {
-    backgroundColor: WHITE,
-    borderRadius: 26,
-    padding: 22,
-    marginTop: -18,
-    marginBottom: 24,
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  highlightTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#173d31",
-  },
-  highlightText: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#5d7a6e",
-  },
-  primaryButton: {
-    marginTop: 18,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: GREEN,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  primaryButtonText: {
-    color: WHITE,
-    fontSize: 15,
-    fontWeight: "700",
+  container: {
+    width: "100%",
+    maxWidth: MAX_WIDTH,
+    alignSelf: "center",
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#173d31",
-    marginBottom: 14,
-  },
-  sectionCard: {
-    backgroundColor: WHITE,
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  sectionIconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  sectionTextBox: {
-    flex: 1,
-    marginRight: 12,
-  },
-  sectionCardTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#193f33",
+    color: TEXT_DARK,
+    letterSpacing: -0.2,
+    marginBottom: 12,
+    marginTop: 4,
   },
-  sectionCardDescription: {
-    marginTop: 5,
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#69857a",
-  },
-  secondaryButton: {
-    marginTop: 12,
-    height: 50,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#cfe7dc",
-    backgroundColor: "#f9fdfb",
+  // KPIs
+  metricsGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 26,
+  },
+  metricCard: {
+    flexGrow: 1,
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    ...CARD_SHADOW,
+  },
+  metricIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
   },
-  secondaryButtonText: {
+  metricValue: {
+    marginTop: 14,
+    fontSize: 26,
+    fontWeight: "800",
+    color: TEXT_DARK,
+    letterSpacing: -0.5,
+  },
+  metricLabel: {
+    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: TEXT_MUTED,
+    fontWeight: "600",
+  },
+  // Atalhos
+  actionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  actionTile: {
+    flexGrow: 1,
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    ...CARD_SHADOW,
+  },
+  actionIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionText: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: 15.5,
+    fontWeight: "800",
+    color: TEXT_DARK,
+  },
+  actionDescription: {
+    marginTop: 4,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: TEXT_MUTED,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     color: GREEN,
-    fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "600",
   },
 });

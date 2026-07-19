@@ -22,18 +22,22 @@ import {
   ReportPeriodQuery,
 } from "../../services/api";
 
+// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
 const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
 const GREEN_LIGHT = "#e8f7f1";
-const BG = "#f0faf5";
+const PAGE_BG = "#e8f1ec";
 const WHITE = "#ffffff";
+const BORDER = "#dfece5";
+const TEXT_DARK = "#173d31";
+const MAX_WIDTH = 1120;
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+const CARD_SHADOW = {
+  shadowColor: "#1f5442",
+  shadowOpacity: 0.05,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 2,
+} as const;
 
 export default function AdminReportsScreen() {
   const [report, setReport] = useState<AdminAppointmentsReportApi | null>(null);
@@ -62,7 +66,7 @@ export default function AdminReportsScreen() {
     if (result.ok && result.data) {
       setReport(result.data);
     } else {
-      showAlert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
+      showAlert("Erro", result.error || "Não foi possível carregar o relatório.");
     }
     setLoading(false);
   };
@@ -79,7 +83,7 @@ export default function AdminReportsScreen() {
       if (result.ok && result.data) {
         setReport(result.data);
       } else {
-        showAlert("Erro", result.error || "Nao foi possivel carregar o relatorio.");
+        showAlert("Erro", result.error || "Não foi possível carregar o relatório.");
       }
       setLoading(false);
     };
@@ -102,22 +106,25 @@ export default function AdminReportsScreen() {
       params,
       `relatorio-admin-consultas.${extension}`,
     );
-    if (!result.ok) showAlert("Exportacao", result.error || "Falha ao exportar.");
+    if (!result.ok) showAlert("Exportação", result.error || "Falha ao exportar.");
     setExporting(null);
   };
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-      <DecorativeBackground />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
-        </TouchableOpacity>
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerEyebrow}>Area administrativa</Text>
-          <Text style={styles.headerTitle}>Relatorios</Text>
+        <View style={styles.headerInner}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
+          </TouchableOpacity>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerTitle}>Relatórios</Text>
+          </View>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.replace("/(admin)")}>
+            <Ionicons name="home-outline" size={20} color={WHITE} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -125,14 +132,14 @@ export default function AdminReportsScreen() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={GREEN} />
-            <Text style={styles.loadingText}>Carregando relatorio...</Text>
+            <Text style={styles.loadingText}>Carregando relatório...</Text>
           </View>
         ) : (
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             <View style={styles.heroCard}>
-              <Text style={styles.heroTitle}>Consultas da clinica</Text>
+              <Text style={styles.heroTitle}>Consultas da clínica</Text>
               <Text style={styles.heroSubtitle}>
-                Acompanhe volume, status, profissionais e historico operacional.
+                Acompanhe volume, status, profissionais e histórico operacional.
               </Text>
             </View>
 
@@ -143,7 +150,7 @@ export default function AdminReportsScreen() {
                   style={styles.input}
                   value={startDate}
                   onChangeText={setStartDate}
-                  placeholder="Inicio YYYY-MM-DD"
+                  placeholder="Início YYYY-MM-DD"
                   placeholderTextColor="#8ba99d"
                 />
                 <TextInput
@@ -224,10 +231,10 @@ export default function AdminReportsScreen() {
               </View>
             ))}
 
-            <Text style={styles.sectionTitle}>Historico recente</Text>
+            <Text style={styles.sectionTitle}>Histórico recente</Text>
             {(report?.appointments ?? []).slice(0, 10).map((item) => (
               <View key={item.id} style={styles.appointmentCard}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{item.patient_name}</Text>
                   <Text style={styles.cardMeta}>
                     {item.professional_name} • {new Date(item.scheduled_at).toLocaleString("pt-BR")}
@@ -254,25 +261,31 @@ const Metric = ({ label, value }: { label: string; value: number | string }) => 
 );
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
-  circle1: { position: "absolute", width: 280, height: 280, borderRadius: 140, backgroundColor: "#27795f", top: -110, right: -70, opacity: 0.45 },
-  circle2: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: GREEN_DARK, top: -55, left: -70, opacity: 0.28 },
-  header: { paddingTop: 56, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: GREEN, flexDirection: "row", alignItems: "center", gap: 14 },
-  iconBtn: { width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
+  screen: { flex: 1, backgroundColor: PAGE_BG },
+  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+  headerInner: {
+    width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
+  },
+  iconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
   headerTextBox: { flex: 1 },
-  headerEyebrow: { color: "#bce3d5", fontSize: 13, fontWeight: "700" },
-  headerTitle: { color: WHITE, fontSize: 24, fontWeight: "800", marginTop: 2 },
+  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
   scroll: { flex: 1 },
-  scrollContent: { padding: 22, paddingBottom: 40, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44, maxWidth: MAX_WIDTH, alignSelf: "center" as const, width: "100%" as const },
   loadingContainer: { minHeight: 360, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { color: GREEN, fontWeight: "700" },
-  heroCard: { backgroundColor: WHITE, borderRadius: 22, padding: 22, marginBottom: 16, shadowColor: GREEN, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 4 },
-  heroTitle: { fontSize: 22, fontWeight: "800", color: "#173d31" },
+  heroCard: { backgroundColor: WHITE, borderRadius: 18, borderWidth: 1, borderColor: BORDER, padding: 20, marginBottom: 16, ...CARD_SHADOW },
+  heroTitle: { fontSize: 22, fontWeight: "800", color: TEXT_DARK },
   heroSubtitle: { marginTop: 8, fontSize: 14, lineHeight: 21, color: "#5d7a6e" },
-  filterCard: { backgroundColor: WHITE, borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#ddf0e8" },
-  sectionTitle: { fontSize: 17, fontWeight: "800", color: "#173d31", marginBottom: 12, marginTop: 4 },
+  filterCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER, ...CARD_SHADOW },
+  sectionTitle: { fontSize: 16, fontWeight: "800", color: TEXT_DARK, marginBottom: 12, marginTop: 4, letterSpacing: -0.2 },
   inputRow: { flexDirection: "row", gap: 10 },
-  input: { flex: 1, height: 44, borderRadius: 12, backgroundColor: "#f7fcfa", borderWidth: 1, borderColor: "#d7eee4", paddingHorizontal: 12, color: "#173d31", fontWeight: "600" },
+  input: {
+    flex: 1, height: 44, borderRadius: 12, backgroundColor: "#f6faf8", borderWidth: 1, borderColor: BORDER,
+    paddingHorizontal: 12, color: TEXT_DARK, fontWeight: "600",
+    // @ts-ignore — remove o contorno azul no web
+    outlineStyle: "none",
+  },
   profScroll: { marginTop: 12 },
   profChip: { height: 36, borderRadius: 10, backgroundColor: GREEN_LIGHT, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", marginRight: 8 },
   profChipActive: { backgroundColor: GREEN },
@@ -284,13 +297,13 @@ const styles = StyleSheet.create({
   exportBtn: { flex: 1, height: 46, borderRadius: 12, backgroundColor: GREEN_LIGHT, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   exportBtnText: { color: GREEN, fontWeight: "800" },
   metricsGrid: { flexDirection: "row", gap: 10, marginBottom: 22 },
-  metricCard: { flex: 1, backgroundColor: WHITE, borderRadius: 18, padding: 14, minHeight: 122, shadowColor: GREEN, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.07, shadowRadius: 14, elevation: 3 },
+  metricCard: { flex: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 14, minHeight: 122, ...CARD_SHADOW },
   metricIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: GREEN_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 10 },
-  metricValue: { fontSize: 22, fontWeight: "800", color: "#173d31" },
+  metricValue: { fontSize: 22, fontWeight: "800", color: TEXT_DARK },
   metricLabel: { fontSize: 12, color: "#6c8c80", fontWeight: "700", marginTop: 2 },
-  professionalCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  appointmentCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  cardTitle: { fontSize: 14, color: "#173d31", fontWeight: "800" },
+  professionalCard: { backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...CARD_SHADOW },
+  appointmentCard: { backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, ...CARD_SHADOW },
+  cardTitle: { fontSize: 14, color: TEXT_DARK, fontWeight: "800" },
   cardMeta: { marginTop: 3, fontSize: 12, color: "#7a9d8f", fontWeight: "600" },
   valuePill: { minWidth: 34, textAlign: "center", color: GREEN, backgroundColor: GREEN_LIGHT, overflow: "hidden", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, fontSize: 12, fontWeight: "800" },
   statusPill: { color: GREEN, backgroundColor: GREEN_LIGHT, overflow: "hidden", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, fontSize: 11, fontWeight: "800" },

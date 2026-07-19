@@ -18,11 +18,15 @@ import {
 } from "react-native";
 import { showAlert } from "../../services/feedback";
 import {
+  AppointmentApiItem,
   deleteDocument,
   getAccessToken,
+  getAppointments,
   getDocumentsByPatient,
   getPatientProfile,
+  getSessionNote,
   updatePatientProfile,
+  updateSessionNote,
 } from "../../services/api";
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -105,6 +109,18 @@ const formatDate = (iso: string): string => {
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm}/${d.getFullYear()} ${hh}:${mi}`;
 };
+
+// ─── Status das consultas (para o histórico) ──────────────────────────────────
+const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
+  scheduled: { label: "Agendada", color: GREEN, bg: GREEN_LIGHT },
+  completed: { label: "Realizada", color: "#2d6cdf", bg: BLUE_LIGHT },
+  rescheduled: { label: "Remarcada", color: "#c46a1a", bg: "#fef3e8" },
+  no_show: { label: "Não compareceu", color: "#b03030", bg: "#fdeaea" },
+  cancelled: { label: "Cancelada", color: "#888", bg: "#f2f2f2" },
+};
+
+const getStatusMeta = (status?: string) =>
+  STATUS_META[status ?? "scheduled"] ?? STATUS_META.scheduled;
 
 // ─── ReadOnly Row ─────────────────────────────────────────────────────────────
 const ReadOnlyRow = ({ label, value }: { label: string; value: string }) => (
@@ -395,6 +411,14 @@ export default function PsychologistPatientRecordScreen() {
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Histórico de consultas + notas de sessão
+  const [appointments, setAppointments] = useState<AppointmentApiItem[]>([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [noteModal, setNoteModal] = useState<AppointmentApiItem | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -478,6 +502,62 @@ export default function PsychologistPatientRecordScreen() {
     };
     loadPatientData();
   }, [params.patientId]);
+
+  // ── Carrega histórico de consultas do paciente ────────────────────────────
+  useEffect(() => {
+    const patientProfileId = patient?.id || params.patientProfileId;
+    if (!patientProfileId) return;
+
+    const carregarConsultas = async () => {
+      setLoadingAppointments(true);
+      const result = await getAppointments(patientProfileId);
+      if (result.ok && result.data) {
+        const ordenadas = [...result.data]
+          .filter((a) => a.scheduled_at)
+          // mais recentes primeiro
+          .sort(
+            (a, b) =>
+              new Date(b.scheduled_at!).getTime() -
+              new Date(a.scheduled_at!).getTime(),
+          );
+        setAppointments(ordenadas);
+      } else {
+        setAppointments([]);
+      }
+      setLoadingAppointments(false);
+    };
+    carregarConsultas();
+  }, [patient?.id, params.patientProfileId]);
+
+  // ── Abre/salva a nota de sessão de uma consulta ───────────────────────────
+  const openNote = async (appointment: AppointmentApiItem) => {
+    setNoteModal(appointment);
+    setNoteText("");
+    setLoadingNote(true);
+    const result = await getSessionNote(appointment.id);
+    setLoadingNote(false);
+    if (result.ok && result.data) {
+      setNoteText(result.data.notes || "");
+    } else {
+      showAlert(
+        "Erro",
+        result.error || "Não foi possível carregar a nota da sessão.",
+      );
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteModal) return;
+    setSavingNote(true);
+    const result = await updateSessionNote(noteModal.id, noteText);
+    setSavingNote(false);
+    if (result.ok) {
+      setNoteModal(null);
+      showSavedToast();
+    } else {
+      showAlert("Erro", result.error || "Não foi possível salvar a nota.");
+    }
+  };
 
   // ── Animação ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -790,6 +870,83 @@ export default function PsychologistPatientRecordScreen() {
               />
             </View>
 
+            {/* Histórico de consultas */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Histórico de consultas</Text>
+              <Text style={styles.sectionHint}>
+                Consultas deste paciente. Toque em uma consulta para ver ou
+                editar a nota da sessão.
+              </Text>
+
+              {loadingAppointments ? (
+                <ActivityIndicator
+                  size="small"
+                  color={GREEN}
+                  style={{ marginVertical: 20 }}
+                />
+              ) : appointments.length > 0 ? (
+                appointments.map((appt) => {
+                  const meta = getStatusMeta(appt.status);
+                  return (
+                    <TouchableOpacity
+                      key={appt.id}
+                      style={styles.histRow}
+                      onPress={() => openNote(appt)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.histIconBox}>
+                        <Ionicons
+                          name="calendar-outline"
+                          size={20}
+                          color={GREEN}
+                        />
+                      </View>
+                      <View style={styles.histInfo}>
+                        <Text style={styles.histDate}>
+                          {appt.scheduled_at
+                            ? formatDate(appt.scheduled_at)
+                            : "Data não informada"}
+                        </Text>
+                        {appt.status === "completed" && appt.completed_at && (
+                          <Text style={styles.histRealized}>
+                            Realizada em {formatDate(appt.completed_at)}
+                          </Text>
+                        )}
+                        <View
+                          style={[styles.histBadge, { backgroundColor: meta.bg }]}
+                        >
+                          <Text
+                            style={[styles.histBadgeText, { color: meta.color }]}
+                          >
+                            {appt.status_display || meta.label}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.histNoteBtn}>
+                        <Ionicons
+                          name="document-text-outline"
+                          size={14}
+                          color={GREEN}
+                        />
+                        <Text style={styles.histNoteBtnText}>Nota</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyDocBox}>
+                  <Ionicons
+                    name="calendar-clear-outline"
+                    size={40}
+                    color="#b2dfcf"
+                  />
+                  <Text style={styles.emptyDocTitle}>
+                    Nenhuma consulta registrada
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* Documentos */}
             <View style={styles.card}>
               <View style={styles.docSectionHeader}>
@@ -907,6 +1064,23 @@ export default function PsychologistPatientRecordScreen() {
               </Text>
             </TouchableOpacity>
 
+            {/* Agendar consulta para este paciente */}
+            <TouchableOpacity
+              style={styles.scheduleButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/(psychologist)/agendar",
+                  params: { patientId: patient?.id ?? params.patientProfileId },
+                })
+              }
+              activeOpacity={0.85}
+            >
+              <Ionicons name="calendar-outline" size={18} color={GREEN} />
+              <Text style={styles.scheduleButtonText}>
+                Agendar consulta para este paciente
+              </Text>
+            </TouchableOpacity>
+
             {/* Toast de sucesso */}
             {saved && (
               <Animated.View style={[styles.toastBox, { opacity: saveAnim }]}>
@@ -964,6 +1138,77 @@ export default function PsychologistPatientRecordScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal da nota de sessão */}
+      <Modal
+        visible={!!noteModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNoteModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Nota da sessão</Text>
+            <Text style={styles.modalSubtitle}>
+              {noteModal?.scheduled_at
+                ? `Consulta de ${formatDate(noteModal.scheduled_at)}`
+                : "Observações da sessão"}
+            </Text>
+
+            {loadingNote ? (
+              <ActivityIndicator
+                color={GREEN}
+                size="small"
+                style={{ marginVertical: 40 }}
+              />
+            ) : (
+              <>
+                <Text style={styles.modalLabel}>Observações</Text>
+                <TextInput
+                  style={styles.noteArea}
+                  value={noteText}
+                  onChangeText={setNoteText}
+                  multiline
+                  placeholder="Registre aqui as observações sobre esta sessão. Visível apenas para você."
+                  placeholderTextColor="#9bbfb0"
+                  textAlignVertical="top"
+                />
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={styles.cancelModalBtn}
+                    onPress={() => setNoteModal(null)}
+                    disabled={savingNote}
+                  >
+                    <Text style={styles.cancelModalBtnText}>Fechar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.uploadConfirmBtn,
+                      savingNote && { opacity: 0.7 },
+                    ]}
+                    onPress={handleSaveNote}
+                    disabled={savingNote}
+                    activeOpacity={0.85}
+                  >
+                    {savingNote ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="save-outline" size={16} color="#fff" />
+                        <Text style={styles.uploadConfirmBtnText}>
+                          Salvar nota
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1139,6 +1384,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButtonText: { color: WHITE, fontSize: 15, fontWeight: "700" },
+  scheduleButton: {
+    height: 52,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    backgroundColor: WHITE,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 12,
+  },
+  scheduleButtonText: { color: GREEN, fontSize: 15, fontWeight: "700" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1249,6 +1507,57 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   deleteBtnText: { fontSize: 11, fontWeight: "700", color: "#e05c5c" },
+  histRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#fafffe",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#edf4f0",
+    padding: 12,
+    marginBottom: 10,
+  },
+  histIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: GREEN_LIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  histInfo: { flex: 1, gap: 6 },
+  histDate: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
+  histRealized: { fontSize: 12, fontWeight: "600", color: "#2d6cdf" },
+  histBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  histBadgeText: { fontSize: 11, fontWeight: "700" },
+  histNoteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#e8f7f1",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  histNoteBtnText: { fontSize: 11, fontWeight: "700", color: GREEN },
+  noteArea: {
+    minHeight: 160,
+    borderRadius: 16,
+    backgroundColor: "#f4faf7",
+    borderWidth: 1,
+    borderColor: "#e3efe8",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: "#1f4036",
+    marginBottom: 20,
+  },
   emptyDocBox: { alignItems: "center", paddingVertical: 28, gap: 8 },
   emptyDocTitle: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
   emptyDocBtn: {

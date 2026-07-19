@@ -19,7 +19,6 @@ import {
     cancelAppointment,
     getAppointments,
     getPsychologists,
-    rateAppointment,
 } from "../../services/api";
 
 // Alias para evitar conflitos
@@ -34,7 +33,6 @@ interface Appointment {
   psychologist: string;
   specialty: string;
   status: AppointmentStatus;
-  hasReview: boolean;
 }
 
 // FIX 1: normalizeAppointment agora extrai data/hora pelo timezone local
@@ -81,7 +79,6 @@ const normalizeAppointment = (
     psychologist: psychologistName,
     specialty,
     status,
-    hasReview: item.hasReview ?? item.has_review ?? false,
   };
 };
 
@@ -141,12 +138,6 @@ export default function ConsultasScreen() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Estados do modal de avaliação
-  const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [reviewAppointmentId, setReviewAppointmentId] = useState<string>("");
-  const [reviewScore, setReviewScore] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
 
   // Filtro de status
   const [activeFilter, setActiveFilter] = useState<AppointmentStatus | "todas">(
@@ -279,9 +270,6 @@ export default function ConsultasScreen() {
       ).length,
       finished: appointments.filter((item) => item.status === "realizada")
         .length,
-      pendingReview: appointments.filter(
-        (item) => item.status === "realizada" && !item.hasReview,
-      ).length,
     };
   }, [appointments]);
 
@@ -294,37 +282,9 @@ export default function ConsultasScreen() {
     }).format(new Date(`${date}T12:00:00`));
 
   const canCancel = (appointment: Appointment) => {
-    if (appointment.status !== "agendada") return false;
-    const appointmentDate = new Date(
-      `${appointment.date}T${appointment.time}:00`,
-    );
-    return appointmentDate.getTime() - Date.now() > 24 * 60 * 60 * 1000;
-  };
-
-  const canReview = (appointment: Appointment) =>
-    appointment.status === "realizada" && !appointment.hasReview;
-
-  // FIX 1: submitReview permanece igual
-  const submitReview = async () => {
-    const result = await rateAppointment(
-      reviewAppointmentId,
-      reviewScore,
-      reviewComment.trim() || undefined,
-    );
-    if (result.ok) {
-      setAppointments((current) =>
-        current.map((item) =>
-          item.id === reviewAppointmentId ? { ...item, hasReview: true } : item,
-        ),
-      );
-      setReviewModalVisible(false);
-      showAlert("Sucesso", "Avaliação registrada com sucesso.");
-    } else {
-      showAlert(
-        "Erro",
-        result.error || "Não foi possível registrar a avaliação.",
-      );
-    }
+    // Cancelamento liberado para qualquer consulta ainda agendada
+    // (a antiga trava de 24h de antecedência foi removida).
+    return appointment.status === "agendada";
   };
 
   // FIX 1: handleCancelAppointment agora abre modal em vez de Alert.prompt
@@ -360,13 +320,6 @@ export default function ConsultasScreen() {
         result.error || "Não foi possível cancelar a consulta.",
       );
     }
-  };
-
-  const handleReviewAppointment = (appointmentId: string) => {
-    setReviewAppointmentId(appointmentId);
-    setReviewScore(5);
-    setReviewComment("");
-    setReviewModalVisible(true);
   };
 
   return (
@@ -421,16 +374,12 @@ export default function ConsultasScreen() {
                 <Text style={styles.summaryValue}>{summary.finished}</Text>
                 <Text style={styles.summaryLabel}>Realizadas</Text>
               </View>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryValue}>{summary.pendingReview}</Text>
-                <Text style={styles.summaryLabel}>Sem avaliacao</Text>
-              </View>
             </View>
           </View>
 
           <SectionTitle
             title="Historico completo"
-            subtitle="Cancelamento disponivel apenas quando faltarem mais de 24 horas."
+            subtitle="Voce pode cancelar qualquer consulta ainda agendada."
           />
 
           {/* Filtros de status */}
@@ -553,25 +502,6 @@ export default function ConsultasScreen() {
                       </View>
 
                       <View style={styles.actionsRow}>
-                        {canReview(appointment) && (
-                          <TouchableOpacity
-                            style={styles.secondaryAction}
-                            activeOpacity={0.85}
-                            onPress={() =>
-                              handleReviewAppointment(appointment.id)
-                            }
-                          >
-                            <Ionicons
-                              name="star-outline"
-                              size={14}
-                              color={GREEN}
-                            />
-                            <Text style={styles.secondaryActionText}>
-                              Avaliar
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-
                         {canCancel(appointment) && (
                           <TouchableOpacity
                             style={styles.primaryAction}
@@ -599,60 +529,6 @@ export default function ConsultasScreen() {
           )}
         </Animated.View>
       </ScrollView>
-
-      {/* Modal de Avaliação */}
-      <Modal
-        visible={reviewModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setReviewModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Avaliar consulta</Text>
-            <Text style={styles.modalSubtitle}>Como foi sua experiência?</Text>
-
-            <View style={styles.starsContainer}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => setReviewScore(star)}
-                >
-                  <Ionicons
-                    name={star <= reviewScore ? "star" : "star-outline"}
-                    size={32}
-                    color="#f4b942"
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Comentário opcional..."
-              value={reviewComment}
-              onChangeText={setReviewComment}
-              multiline
-              numberOfLines={3}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setReviewModalVisible(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={submitReview}
-              >
-                <Text style={styles.modalConfirmBtnText}>Avaliar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* FIX 1: Modal de Cancelamento — substitui Alert.prompt (iOS only) */}
       <Modal
@@ -1004,20 +880,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-  secondaryAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: GREEN_LIGHT,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  secondaryActionText: {
-    marginLeft: 6,
-    color: GREEN,
-    fontSize: 13,
-    fontWeight: "700",
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -1042,12 +904,6 @@ const styles = StyleSheet.create({
     color: "#5a756a",
     textAlign: "center",
     marginTop: 8,
-    marginBottom: 20,
-  },
-  starsContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
     marginBottom: 20,
   },
   commentInput: {
@@ -1076,13 +932,6 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 16,
     fontWeight: "600",
-  },
-  modalConfirmBtn: {
-    flex: 1,
-    backgroundColor: GREEN,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
   },
   modalDangerBtn: {
     flex: 1,

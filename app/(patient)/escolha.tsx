@@ -28,25 +28,9 @@ interface Psychologist {
   initials: string;
   color: string;
   bg: string;
-  rating: number;
   sessions: number;
   available: boolean;
 }
-
-// ─── Stars ────────────────────────────────────────────────────────────────────
-const Stars = ({ rating }: { rating: number }) => (
-  <View style={styles.starsRow}>
-    {[1, 2, 3, 4, 5].map((i) => (
-      <Ionicons
-        key={i}
-        name={i <= Math.floor(rating) ? "star" : "star-outline"}
-        size={11}
-        color="#f4b942"
-      />
-    ))}
-    <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
-  </View>
-);
 
 // ─── Psychologist Card ────────────────────────────────────────────────────────
 const PsychologistCard = ({
@@ -119,21 +103,11 @@ const PsychologistCard = ({
 
       {/* Stats */}
       <View style={styles.statsRow}>
-        {/* ─── UX 1: Show "Novo profissional" if no rating ──────────────────── */}
-        {item.rating && item.rating > 0 ? (
-          <>
-            <Stars rating={item.rating ?? 0} />
-            <View style={styles.statDivider} />
-          </>
-        ) : (
-          <>
-            <View style={styles.newProfessionalBadge}>
-              <Ionicons name="sparkles-outline" size={13} color="#c46a1a" />
-              <Text style={styles.newProfessionalText}>Novo profissional</Text>
-            </View>
-            <View style={styles.statDivider} />
-          </>
-        )}
+        <View style={styles.newProfessionalBadge}>
+          <Ionicons name="sparkles-outline" size={13} color="#c46a1a" />
+          <Text style={styles.newProfessionalText}>Novo profissional</Text>
+        </View>
+        <View style={styles.statDivider} />
 
         {/* ─── UX 1: Only show sessions if > 0 ────────────────────────────── */}
         {item.sessions && item.sessions > 0 && (
@@ -524,17 +498,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginBottom: 12,
-  },
-  starsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-  },
-  ratingText: {
-    fontSize: 12,
-    color: "#4a7a66",
-    fontWeight: "700",
-    marginLeft: 4,
   },
   statDivider: {
     width: 1,

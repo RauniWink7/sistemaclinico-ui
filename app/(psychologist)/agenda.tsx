@@ -9,6 +9,7 @@ import {
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     useWindowDimensions,
     View,
@@ -18,8 +19,12 @@ import {
     AppointmentApiItem,
     getAppointments,
     getMe,
+    getSessionNote,
     updateAppointmentStatus,
+    updateSessionNote,
 } from "../../services/api";
+import { partsToISO, toInputParts, todayISODate } from "../../services/dateInput";
+import { DateField, TimeField } from "../../components/DateTimeField";
 
 type AppointmentStatus =
   | "scheduled"
@@ -163,6 +168,22 @@ export default function PsychologistAgendaScreen() {
     useState<WeeklyAppointment | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
+
+  // Modal de conclusão (data realizada + nota do que aconteceu)
+  const [completing, setCompleting] = useState<WeeklyAppointment | null>(null);
+  const [completeDate, setCompleteDate] = useState("");
+  const [completeTime, setCompleteTime] = useState("");
+  const [completeNote, setCompleteNote] = useState("");
+  const [loadingCompleteNote, setLoadingCompleteNote] = useState(false);
+
+  // Modal de remarcação (nova data)
+  const [rescheduling, setRescheduling] = useState<WeeklyAppointment | null>(
+    null,
+  );
+  const [reDate, setReDate] = useState("");
+  const [reTime, setReTime] = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -357,14 +378,112 @@ export default function PsychologistAgendaScreen() {
     }
   };
 
-  const handleMarkCompleted = () =>
-    handleStatusChange("completed", "Consulta marcada como realizada.");
+  // Abre o modal de conclusão: prefill com "agora" e carrega a nota existente.
+  const handleMarkCompleted = async () => {
+    if (!selectedAppointment) return;
+    const target = selectedAppointment;
+    const now = toInputParts();
+    setCompleteDate(now.date);
+    setCompleteTime(now.time);
+    setCompleteNote("");
+    setCompleting(target);
+    setLoadingCompleteNote(true);
+    const noteResult = await getSessionNote(target.id);
+    setLoadingCompleteNote(false);
+    if (noteResult.ok && noteResult.data) {
+      setCompleteNote(noteResult.data.notes || "");
+    }
+  };
+
+  const confirmCompletion = async () => {
+    if (!completing) return;
+    const iso = partsToISO(completeDate, completeTime);
+    if (!iso) {
+      showAlert("Data inválida", "Selecione a data e o horário da realização.");
+      return;
+    }
+    if (new Date(iso).getTime() > Date.now()) {
+      showAlert(
+        "Data inválida",
+        "A data de realização não pode ser no futuro.",
+      );
+      return;
+    }
+    setSubmitting(true);
+    const result = await updateAppointmentStatus(completing.id, "completed", {
+      completed_at: iso,
+    });
+    if (!result.ok) {
+      setSubmitting(false);
+      showAlert("Erro", result.error || "Não foi possível concluir a consulta.");
+      return;
+    }
+    // Salva a nota da sessão (o que aconteceu), se preenchida.
+    if (completeNote.trim()) {
+      await updateSessionNote(completing.id, completeNote);
+    }
+    setSubmitting(false);
+    const doneId = completing.id;
+    setAppointments((current) =>
+      current.map((item) =>
+        item.id === doneId ? { ...item, status: "completed" } : item,
+      ),
+    );
+    setCompleting(null);
+    setSelectedAppointment(null);
+    showAlert("Consulta concluída", "A consulta foi marcada como realizada.");
+  };
 
   const handleUndoCompleted = () =>
     handleStatusChange("scheduled", "Consulta revertida para agendada.");
 
-  const handleMarkRescheduled = () =>
-    handleStatusChange("rescheduled", "A consulta foi marcada como remarcada.");
+  // Abre o modal de remarcação com sugestão de nova data (amanhã, mesmo horário).
+  const handleMarkRescheduled = () => {
+    if (!selectedAppointment) return;
+    const suggestion = new Date();
+    suggestion.setDate(suggestion.getDate() + 1);
+    const parts = toInputParts(suggestion);
+    setReDate(parts.date);
+    setReTime(selectedAppointment.time || parts.time);
+    setRescheduling(selectedAppointment);
+  };
+
+  const confirmReschedule = async () => {
+    if (!rescheduling) return;
+    const iso = partsToISO(reDate, reTime);
+    if (!iso) {
+      showAlert("Data inválida", "Selecione a nova data e horário.");
+      return;
+    }
+    if (new Date(iso).getTime() <= Date.now()) {
+      showAlert("Data inválida", "A nova data deve ser no futuro.");
+      return;
+    }
+    setSubmitting(true);
+    const result = await updateAppointmentStatus(rescheduling.id, "rescheduled", {
+      scheduled_at: iso,
+    });
+    setSubmitting(false);
+    if (!result.ok) {
+      showAlert("Erro", result.error || "Não foi possível remarcar a consulta.");
+      return;
+    }
+    setRescheduling(null);
+    setSelectedAppointment(null);
+    // Recarrega a semana atual para refletir a nova data.
+    const appointmentsResult = await getAppointments();
+    if (appointmentsResult.ok && appointmentsResult.data) {
+      const currentWeekDays = getCurrentWeekDays(weekOffset);
+      const weekly = appointmentsResult.data
+        .filter((item) => item.scheduled_at)
+        .map(toWeeklyAppointment)
+        .filter((item) =>
+          currentWeekDays.some((day) => day.key === item.dayKey),
+        );
+      setAppointments(weekly);
+    }
+    showAlert("Consulta remarcada", "A nova data foi salva.");
+  };
 
   const handlePreviousWeek = () => {
     const newOffset = weekOffset - 1;
@@ -790,6 +909,137 @@ export default function PsychologistAgendaScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal: concluir consulta (data realizada + o que aconteceu) */}
+      <Modal
+        visible={!!completing}
+        transparent
+        animationType={isDesktop ? "fade" : "slide"}
+        onRequestClose={() => !submitting && setCompleting(null)}
+      >
+        <View
+          style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}
+        >
+          <View style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}>
+            {!isDesktop && <View style={styles.modalHandle} />}
+            <Text style={styles.modalTitle}>Concluir consulta</Text>
+            <Text style={styles.modalSubtitle}>
+              Informe quando a consulta foi realizada. Não pode ser no futuro.
+            </Text>
+
+            <Text style={styles.fieldLabel}>Data realizada</Text>
+            <View style={styles.dateRow}>
+              <View style={styles.dateCol}>
+                <DateField
+                  value={completeDate}
+                  onChange={setCompleteDate}
+                  max={todayISODate()}
+                />
+              </View>
+              <View style={styles.timeCol}>
+                <TimeField value={completeTime} onChange={setCompleteTime} />
+              </View>
+            </View>
+
+            <Text style={styles.fieldLabel}>O que aconteceu (opcional)</Text>
+            {loadingCompleteNote ? (
+              <ActivityIndicator
+                size="small"
+                color={GREEN}
+                style={{ marginVertical: 20 }}
+              />
+            ) : (
+              <TextInput
+                style={styles.noteInput}
+                value={completeNote}
+                onChangeText={setCompleteNote}
+                multiline
+                placeholder="Anote as observações da sessão. Visível apenas para você."
+                placeholderTextColor="#9db6ab"
+                textAlignVertical="top"
+              />
+            )}
+
+            <TouchableOpacity
+              style={[styles.primaryAction, submitting && styles.actionDisabled]}
+              onPress={confirmCompletion}
+              disabled={submitting}
+              activeOpacity={0.85}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+              )}
+              <Text style={styles.primaryActionText}>Confirmar conclusão</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.closeAction}
+              onPress={() => setCompleting(null)}
+              disabled={submitting}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.closeActionText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: remarcar consulta (nova data) */}
+      <Modal
+        visible={!!rescheduling}
+        transparent
+        animationType={isDesktop ? "fade" : "slide"}
+        onRequestClose={() => !submitting && setRescheduling(null)}
+      >
+        <View
+          style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}
+        >
+          <View style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}>
+            {!isDesktop && <View style={styles.modalHandle} />}
+            <Text style={styles.modalTitle}>Remarcar consulta</Text>
+            <Text style={styles.modalSubtitle}>
+              Escolha a nova data e horário. Deve ser no futuro.
+            </Text>
+
+            <Text style={styles.fieldLabel}>Nova data</Text>
+            <View style={styles.dateRow}>
+              <View style={styles.dateCol}>
+                <DateField
+                  value={reDate}
+                  onChange={setReDate}
+                  min={todayISODate()}
+                />
+              </View>
+              <View style={styles.timeCol}>
+                <TimeField value={reTime} onChange={setReTime} />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryAction, submitting && styles.actionDisabled]}
+              onPress={confirmReschedule}
+              disabled={submitting}
+              activeOpacity={0.85}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="swap-horizontal-outline" size={18} color="#fff" />
+              )}
+              <Text style={styles.primaryActionText}>Salvar nova data</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.closeAction}
+              onPress={() => setRescheduling(null)}
+              disabled={submitting}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.closeActionText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1172,6 +1422,37 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: TEXT_DARK,
     fontWeight: "700",
+  },
+  fieldLabel: {
+    fontSize: 11,
+    color: LABEL,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  dateRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 6,
+  },
+  // flex + minWidth:0 permite que o campo de hora encolha e não estoure a telinha.
+  dateCol: { flex: 1.4, minWidth: 0 },
+  timeCol: { flex: 1, minWidth: 0 },
+  noteInput: {
+    minHeight: 120,
+    borderRadius: 14,
+    backgroundColor: "#f6faf8",
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: TEXT_DARK,
+    marginBottom: 6,
+    // @ts-ignore — remove o contorno azul no web
+    outlineStyle: "none",
   },
   primaryAction: {
     marginTop: 10,

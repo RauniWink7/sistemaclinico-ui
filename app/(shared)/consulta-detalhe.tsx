@@ -19,8 +19,9 @@ import {
   getPsychologists,
   cancelAppointment,
   updateAppointmentStatus,
-  rateAppointment,
 } from '../../services/api';
+import { partsToISO, toInputParts, todayISODate } from '../../services/dateInput';
+import { DateField, TimeField } from '../../components/DateTimeField';
 
 const GREEN = '#2e8b6e';
 const GREEN_DARK = '#1f684f';
@@ -91,11 +92,11 @@ export default function ConsultaDetalheScreen() {
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Rating modal
-  const [ratingModalVisible, setRatingModalVisible] = useState(false);
-  const [ratingScore, setRatingScore] = useState(0);
-  const [ratingComment, setRatingComment] = useState('');
-  const [submittingRating, setSubmittingRating] = useState(false);
+  // Reschedule modal
+  const [rescheduleVisible, setRescheduleVisible] = useState(false);
+  const [reDate, setReDate] = useState('');
+  const [reTime, setReTime] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -165,12 +166,9 @@ export default function ConsultaDetalheScreen() {
       : 'Paciente');
 
   const cancelReasonfromApi = appointment?.cancel_reason ?? '';
-  const hasRating = appointment?.has_review || appointment?.hasReview || appointment?.rating;
-  const ratingData = appointment?.rating;
   const sessionNotes = appointment?.session_notes ?? appointment?.notes ?? '';
 
   const isScheduled = status === 'scheduled';
-  const isCompleted = status === 'completed';
   const isCancelled = status === 'cancelled';
 
   // ─── Actions ───────────────────────────────────────────────────────────────
@@ -192,6 +190,19 @@ export default function ConsultaDetalheScreen() {
 
   const handleStatusChange = async (newStatus: 'completed' | 'no_show' | 'rescheduled') => {
     if (!appointment) return;
+
+    // Remarcar exige nova data — abre modal próprio.
+    if (newStatus === 'rescheduled') {
+      const suggestion = new Date();
+      suggestion.setDate(suggestion.getDate() + 1);
+      const parts = toInputParts(suggestion);
+      setReDate(parts.date);
+      setReTime(parts.time);
+      setStatusModalVisible(false);
+      setRescheduleVisible(true);
+      return;
+    }
+
     setUpdatingStatus(true);
     const result = await updateAppointmentStatus(appointment.id, newStatus);
     setUpdatingStatus(false);
@@ -204,24 +215,28 @@ export default function ConsultaDetalheScreen() {
     }
   };
 
-  const handleSubmitRating = async () => {
-    if (!appointment || ratingScore === 0) {
-      showAlert('Erro', 'Selecione uma nota de 1 a 5.');
+  const confirmReschedule = async () => {
+    if (!appointment) return;
+    const iso = partsToISO(reDate, reTime);
+    if (!iso) {
+      showAlert('Data invalida', 'Selecione a nova data e horario.');
       return;
     }
-    setSubmittingRating(true);
-    const result = await rateAppointment(
-      appointment.id,
-      ratingScore,
-      ratingComment.trim() || undefined,
-    );
-    setSubmittingRating(false);
+    if (new Date(iso).getTime() <= Date.now()) {
+      showAlert('Data invalida', 'A nova data deve ser no futuro.');
+      return;
+    }
+    setRescheduling(true);
+    const result = await updateAppointmentStatus(appointment.id, 'rescheduled', {
+      scheduled_at: iso,
+    });
+    setRescheduling(false);
     if (result.ok) {
-      setAppointment({ ...appointment, has_review: true, rating: { score: ratingScore, comment: ratingComment } });
-      setRatingModalVisible(false);
-      showAlert('Sucesso', 'Avaliacao enviada.');
+      setAppointment({ ...appointment, status: 'rescheduled', scheduled_at: iso });
+      setRescheduleVisible(false);
+      showAlert('Sucesso', 'Consulta remarcada.');
     } else {
-      showAlert('Erro', result.error ?? 'Nao foi possivel enviar a avaliacao.');
+      showAlert('Erro', result.error ?? 'Nao foi possivel remarcar.');
     }
   };
 
@@ -370,28 +385,6 @@ export default function ConsultaDetalheScreen() {
             </View>
           ) : null}
 
-          {/* Rating display */}
-          {hasRating && ratingData ? (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Avaliacao</Text>
-              <View style={styles.ratingDisplay}>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Ionicons
-                      key={star}
-                      name={star <= (ratingData.score ?? 0) ? 'star' : 'star-outline'}
-                      size={24}
-                      color={star <= (ratingData.score ?? 0) ? '#f5a623' : '#d4ede3'}
-                    />
-                  ))}
-                </View>
-                {ratingData.comment ? (
-                  <Text style={styles.ratingComment}>"{ratingData.comment}"</Text>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-
           {/* Actions */}
           <View style={styles.actionsCard}>
             <Text style={styles.cardTitle}>Acoes</Text>
@@ -430,28 +423,11 @@ export default function ConsultaDetalheScreen() {
               </>
             )}
 
-            {isCompleted && !hasRating && (
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => { setRatingScore(0); setRatingComment(''); setRatingModalVisible(true); }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: '#fef8e8' }]}>
-                  <Ionicons name="star-outline" size={20} color="#f5a623" />
-                </View>
-                <View style={styles.actionTextBox}>
-                  <Text style={styles.actionLabel}>Avaliar consulta</Text>
-                  <Text style={styles.actionDescription}>Deixe uma nota e comentario</Text>
-                </View>
-                <Ionicons name="chevron-forward-outline" size={18} color="#94b3a6" />
-              </TouchableOpacity>
-            )}
-
-            {!isScheduled && !isCompleted && (
+            {!isScheduled && (
               <View style={styles.noActionsBox}>
                 <Ionicons name="information-circle-outline" size={20} color="#94b3a6" />
                 <Text style={styles.noActionsText}>
-                  Nenhuma acao disponivel para consultas com status "{statusCfg.label}".
+                  Nenhuma acao disponivel para consultas com status &quot;{statusCfg.label}&quot;.
                 </Text>
               </View>
             )}
@@ -552,68 +528,58 @@ export default function ConsultaDetalheScreen() {
         </View>
       </Modal>
 
-      {/* ── Rating Modal ── */}
-      <Modal visible={ratingModalVisible} transparent animationType="fade" onRequestClose={() => !submittingRating && setRatingModalVisible(false)}>
+      {/* ── Reschedule Modal ── */}
+      <Modal visible={rescheduleVisible} transparent animationType="fade" onRequestClose={() => !rescheduling && setRescheduleVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <View style={styles.modalIconBox}>
-              <Ionicons name="star" size={32} color="#f5a623" />
-            </View>
-            <Text style={styles.modalTitle}>Avaliar consulta</Text>
-            <Text style={styles.modalSubtitle}>Como foi sua experiencia?</Text>
+            <Text style={styles.modalTitle}>Remarcar consulta</Text>
+            <Text style={styles.modalSubtitle}>
+              Nova data e horario (deve ser no futuro)
+            </Text>
 
-            <View style={styles.starsInputRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity key={star} onPress={() => setRatingScore(star)} activeOpacity={0.7}>
-                  <Ionicons
-                    name={star <= ratingScore ? 'star' : 'star-outline'}
-                    size={36}
-                    color={star <= ratingScore ? '#f5a623' : '#d4ede3'}
-                  />
-                </TouchableOpacity>
-              ))}
+            <View style={styles.dateFieldRow}>
+              <View style={styles.dateCol}>
+                <DateField
+                  value={reDate}
+                  onChange={setReDate}
+                  min={todayISODate()}
+                  disabled={rescheduling}
+                />
+              </View>
+              <View style={styles.timeCol}>
+                <TimeField
+                  value={reTime}
+                  onChange={setReTime}
+                  disabled={rescheduling}
+                />
+              </View>
             </View>
-
-            <Text style={styles.modalLabel}>Comentario (opcional)</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Conte como foi a consulta..."
-              placeholderTextColor="#94b3a6"
-              value={ratingComment}
-              onChangeText={setRatingComment}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              editable={!submittingRating}
-            />
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setRatingModalVisible(false)}
-                disabled={submittingRating}
+                onPress={() => setRescheduleVisible(false)}
+                disabled={rescheduling}
               >
-                <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+                <Text style={styles.modalCancelBtnText}>Voltar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalPrimaryBtn, submittingRating && styles.disabledBtn]}
-                onPress={handleSubmitRating}
-                disabled={submittingRating}
+                style={[styles.modalConfirmBtn, rescheduling && { opacity: 0.6 }]}
+                onPress={confirmReschedule}
+                disabled={rescheduling}
                 activeOpacity={0.85}
               >
-                {submittingRating ? (
+                {rescheduling ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <>
-                    <Ionicons name="send-outline" size={16} color="#fff" />
-                    <Text style={styles.modalPrimaryBtnText}>Enviar</Text>
-                  </>
+                  <Text style={styles.modalConfirmBtnText}>Salvar</Text>
                 )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
     </View>
   );
 }
@@ -697,11 +663,6 @@ const styles = StyleSheet.create({
   noteBox: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, backgroundColor: '#f8fcfa' },
   noteText: { flex: 1, fontSize: 14, color: '#1f4036', lineHeight: 21 },
 
-  // Rating
-  ratingDisplay: { alignItems: 'center', gap: 10, paddingVertical: 8 },
-  starsRow: { flexDirection: 'row', gap: 4 },
-  ratingComment: { fontSize: 14, color: '#5d7c71', fontStyle: 'italic', textAlign: 'center', lineHeight: 20 },
-
   // Actions
   actionsCard: {
     backgroundColor: WHITE, borderRadius: 22, padding: 20, marginBottom: 14,
@@ -745,14 +706,15 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   modalDangerBtnText: { fontSize: 14, fontWeight: '700', color: WHITE },
-  modalPrimaryBtn: {
+  modalConfirmBtn: {
     flex: 1, height: 48, borderRadius: 14, backgroundColor: GREEN,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    alignItems: 'center', justifyContent: 'center',
   },
-  modalPrimaryBtnText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  modalConfirmBtnText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  dateFieldRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  dateCol: { flex: 1.4, minWidth: 0 },
+  timeCol: { flex: 1, minWidth: 0 },
   disabledBtn: { opacity: 0.6 },
-
-  starsInputRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 20 },
 
   statusOption: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

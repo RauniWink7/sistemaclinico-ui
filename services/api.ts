@@ -42,10 +42,10 @@ export interface AppointmentApiItem {
   time?: string;
   scheduled_at?: string;
   status?: string;
+  status_display?: string;
+  completed_at?: string | null;
   psychologist?: string;
   specialty?: string;
-  has_review?: boolean;
-  hasReview?: boolean;
   professional?: string;
   patient?: string;
   duration_minutes?: number;
@@ -57,6 +57,16 @@ export interface AppointmentApiItem {
       phone?: string;
     };
   };
+}
+
+// Nota de sessão do psicólogo sobre uma consulta.
+// Visível APENAS ao profissional dono da consulta (regra do backend).
+export interface SessionNoteApi {
+  id: string;
+  appointment: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ConversationApiItem {
@@ -202,7 +212,6 @@ export interface ProfessionalApiItem {
   initials?: string;
   color?: string;
   bg?: string;
-  rating?: number;
   sessions?: number;
   available?: boolean;
 }
@@ -581,6 +590,24 @@ export const changeUserRole = async (
   return { ok: true, data };
 };
 
+// DELETE /api/auth/admin/users/<id>/ — excluir usuário
+// preserveClinicalData=true  → arquiva/anonimiza (mantém documentos e consultas)
+// preserveClinicalData=false → apaga o usuário e seus dados em cascata
+export const deleteAdminUser = async (
+  userId: string,
+  preserveClinicalData: boolean,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const query = `?preserve_clinical_data=${preserveClinicalData ? "true" : "false"}`;
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/admin/users/${encodeURIComponent(userId)}/${query}`,
+    { method: "DELETE", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 // POST /api/auth/admin/users/professionals/ â€” criar profissional via admin
 export const createProfessionalAsAdmin = async (payload: {
   email: string;
@@ -939,19 +966,63 @@ export const getAppointmentDetail = async (
   return { ok: true, data };
 };
 
-export const getAppointments = async (): Promise<
-  ApiResult<AppointmentApiItem[]>
-> => {
+// GET /api/appointments/  (opcionalmente ?patient=<PatientProfile.id>)
+// Sem filtro: todas as consultas do usuário logado.
+// Com patientProfileId: só as consultas daquele paciente — usado pela ficha
+// do paciente para montar o histórico de consultas.
+export const getAppointments = async (
+  patientProfileId?: string,
+): Promise<ApiResult<AppointmentApiItem[]>> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
-  const { response, data } = await fetchJson(`${API_BASE_URL}/appointments/`, {
-    method: "GET",
-    headers,
-  });
+  const query = patientProfileId
+    ? `?patient=${encodeURIComponent(patientProfileId)}`
+    : "";
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/${query}`,
+    {
+      method: "GET",
+      headers,
+    },
+  );
   const results = extractList<AppointmentApiItem>(data);
   if (!response.ok)
     return { ok: false, error: normalizeError(data), data: results };
   return { ok: true, data: results };
+};
+
+// GET /api/appointments/<id>/notes/ — nota de sessão do psicólogo.
+// O backend faz get_or_create, então sempre retorna uma nota (notes vazio se nova).
+export const getSessionNote = async (
+  appointmentId: string,
+): Promise<ApiResult<SessionNoteApi>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/notes/`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/appointments/<id>/notes/ — salva a nota de sessão.
+export const updateSessionNote = async (
+  appointmentId: string,
+  notes: string,
+): Promise<ApiResult<SessionNoteApi>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/notes/`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ notes }),
+    },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
 };
 
 // GET /api/appointments/summary/
@@ -980,7 +1051,11 @@ export const createAppointment = async (
   professionalId: string, // item.id do ProfessionalProfile â€” UUID obrigatÃ³rio
   scheduledAt: string, // ex: "2025-06-15T10:00:00-03:00" â€” formato ISO 8601 com timezone obrigatÃ³rio
   durationMinutes = 50,
-  options: { patientId?: string; clinicId?: string } = {},
+  options: {
+    patientId?: string;
+    clinicId?: string;
+    ignoreAvailability?: boolean;
+  } = {},
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
@@ -1003,6 +1078,11 @@ export const createAppointment = async (
 
   if (clinicId) {
     payload.clinic = clinicId;
+  }
+
+  // Agendamento excepcional ignorando a disponibilidade do profissional.
+  if (options.ignoreAvailability) {
+    payload.ignore_availability = true;
   }
 
   if (__DEV__) {
@@ -1031,9 +1111,10 @@ export const createAppointment = async (
   return { ok: true, data };
 };
 
+// POST /api/appointments/<id>/cancel/  — motivo é opcional (staff pode cancelar sem justificar).
 export const cancelAppointment = async (
   appointmentId: string,
-  reason: string,
+  reason?: string,
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
@@ -1042,38 +1123,29 @@ export const cancelAppointment = async (
     {
       method: "POST",
       headers,
-      body: JSON.stringify({ cancel_reason: reason }),
+      body: JSON.stringify({ cancel_reason: reason ?? "" }),
     },
   );
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
 
-export const rateAppointment = async (
-  appointmentId: string,
-  score: number,
-  comment?: string,
-): Promise<ApiResult> => {
-  const headers = await createAuthHeaders();
-  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
-  const { response, data } = await fetchJson(
-    `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/rating/`,
-    { method: "POST", headers, body: JSON.stringify({ score, comment }) },
-  );
-  if (!response.ok) return { ok: false, error: normalizeError(data), data };
-  return { ok: true, data };
-};
-
-// PATCH /api/appointments/<id>/   { status: 'completed' | 'rescheduled' | 'scheduled' | 'no_show' }
+// PATCH /api/appointments/<id>/   { status, completed_at?, scheduled_at? }
+// - completed_at: data real de realização (obrigatória p/ concluir consulta futura; não pode ser no futuro)
+// - scheduled_at: nova data (obrigatória ao remarcar — status 'rescheduled')
 export const updateAppointmentStatus = async (
   appointmentId: string,
   status: "completed" | "rescheduled" | "scheduled" | "no_show",
+  extra?: { completed_at?: string; scheduled_at?: string },
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
 
   const url = `${API_BASE_URL}/appointments/${encodeURIComponent(appointmentId)}/`;
-  const body = JSON.stringify({ status });
+  const payload: Record<string, any> = { status };
+  if (extra?.completed_at) payload.completed_at = extra.completed_at;
+  if (extra?.scheduled_at) payload.scheduled_at = extra.scheduled_at;
+  const body = JSON.stringify(payload);
 
   if (__DEV__) {
     console.log(`ðŸ“¤ API PATCH ${url}`, { status });
@@ -1431,15 +1503,30 @@ export const getUnreadCount = async (): Promise<
 
 // â”€â”€â”€ Documentos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export const getDocuments = async () => {
+// GET /api/records/documents/  (opcional: scope=avulsos|com_paciente|arquivados, search, patient)
+// Retorna a lista já desempacotada (aceita array puro ou paginado { results }).
+export const getDocuments = async (params?: {
+  scope?: "avulsos" | "com_paciente" | "arquivados";
+  search?: string;
+  patient?: string;
+}) => {
   try {
     const token = await getAccessToken();
 
-    const res = await fetchWithRefresh(`${API_BASE_URL}/records/documents/`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const query = new URLSearchParams();
+    if (params?.scope) query.set("scope", params.scope);
+    if (params?.search) query.set("search", params.search);
+    if (params?.patient) query.set("patient", params.patient);
+    const qs = query.toString();
+
+    const res = await fetchWithRefresh(
+      `${API_BASE_URL}/records/documents/${qs ? `?${qs}` : ""}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
 
     const data = await res.json();
 
@@ -1447,7 +1534,7 @@ export const getDocuments = async () => {
       return { ok: false, error: normalizeError(data) };
     }
 
-    return { ok: true, data };
+    return { ok: true, data: extractList<any>(data) };
   } catch (e) {
     return { ok: false, error: "Erro ao buscar documentos" };
   }
