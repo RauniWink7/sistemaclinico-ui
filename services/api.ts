@@ -1363,14 +1363,27 @@ export const getNotifications = async (): Promise<
 > => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
-  const { response, data } = await fetchJson(`${API_BASE_URL}/notifications/`, {
-    method: "GET",
-    headers,
-  });
-  const results = extractList<NotificationApiItem>(data);
-  if (!response.ok)
-    return { ok: false, error: normalizeError(data), data: results };
-  return { ok: true, data: results };
+
+  // A lista de notificacoes e paginada (DRF PageNumberPagination, PAGE_SIZE=20).
+  // Buscar apenas a primeira pagina deixava avisos antigos nao lidos invisiveis:
+  // eles nao apareciam na tela, o "marcar todas" nao os alcancava e o contador
+  // do sino (que conta TODOS os nao lidos no servidor) ficava travado. Por isso
+  // seguimos o campo `next` ate esgotar as paginas e montamos a lista completa.
+  const all: NotificationApiItem[] = [];
+  let url: string | null = `${API_BASE_URL}/notifications/`;
+  let guard = 0;
+  while (url && guard < 50) {
+    guard += 1;
+    const { response, data } = await fetchJson(url, { method: "GET", headers });
+    if (!response.ok)
+      return { ok: false, error: normalizeError(data), data: all };
+    all.push(...extractList<NotificationApiItem>(data));
+    url =
+      data && typeof data === "object" && typeof data.next === "string"
+        ? data.next
+        : null;
+  }
+  return { ok: true, data: all };
 };
 
 export const markNotificationRead = async (

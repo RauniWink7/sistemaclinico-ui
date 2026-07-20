@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -13,7 +13,13 @@ import {
   View,
 } from "react-native";
 import { showAlert } from "../../services/feedback";
-import { getClinicData, getClinicStats, getMe, logout } from "../../services/api";
+import {
+  getClinicData,
+  getClinicStats,
+  getMe,
+  getUnreadNotifications,
+  logout,
+} from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
 // ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
@@ -146,6 +152,7 @@ export default function AdminDashboardScreen() {
   const [clinicName, setClinicName] = useState("");
   const [stats, setStats] = useState<ClinicStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -197,6 +204,18 @@ export default function AdminDashboardScreen() {
 
     void loadData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadUnread = async () => {
+        const result = await getUnreadNotifications();
+        if (result.ok && result.data) {
+          setUnreadCount(result.data.unread_count);
+        }
+      };
+      void loadUnread();
+    }, []),
+  );
 
   useEffect(() => {
     Animated.parallel([
@@ -308,14 +327,31 @@ export default function AdminDashboardScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={handleLogout}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="log-out-outline" size={19} color="#fff" />
-            {isDesktop && <Text style={styles.logoutText}>Sair</Text>}
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.notifBtn}
+              onPress={() => router.push("/(admin)/notificacoes" as any)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="notifications-outline" size={20} color="#fff" />
+              {unreadCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="log-out-outline" size={19} color="#fff" />
+              {isDesktop && <Text style={styles.logoutText}>Sair</Text>}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -467,6 +503,36 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: "600",
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  notifBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notifBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: "#f87171",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notifBadgeText: {
+    color: WHITE,
+    fontSize: 10,
+    fontWeight: "800",
   },
   logoutBtn: {
     height: 40,

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     Animated,
@@ -13,7 +13,12 @@ import {
     View,
 } from "react-native";
 import { showAlert } from "../../services/feedback";
-import { getAppointments, getMe, getPsychologists } from "../../services/api";
+import {
+  getAppointments,
+  getMe,
+  getPsychologists,
+  getUnreadNotifications,
+} from "../../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -117,6 +122,7 @@ export default function HomeP() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingAppointment, setLoadingAppointment] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -216,10 +222,25 @@ export default function HomeP() {
     }
   }, []);
 
+  const fetchUnread = useCallback(async () => {
+    const result = await getUnreadNotifications();
+    if (result.ok && result.data) {
+      setUnreadCount(result.data.unread_count);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchProfile();
     void fetchAppointments();
   }, [fetchProfile, fetchAppointments]);
+
+  // Recarrega a contagem de nao lidas sempre que a home ganha foco (ex.: ao
+  // voltar da tela de notificacoes), para o indicador do sino nunca ficar preso.
+  useFocusEffect(
+    useCallback(() => {
+      void fetchUnread();
+    }, [fetchUnread]),
+  );
 
   React.useEffect(() => {
     Animated.parallel([
@@ -240,7 +261,7 @@ export default function HomeP() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fetchProfile(), fetchAppointments()]);
+      await Promise.all([fetchProfile(), fetchAppointments(), fetchUnread()]);
     } catch (error) {
       if (__DEV__) {
         console.error("Erro ao atualizar dados:", error);
@@ -278,7 +299,13 @@ export default function HomeP() {
           onPress={() => router.push("/(patient)/notificacoes")}
         >
           <Ionicons name="notifications-outline" size={22} color="#fff" />
-          <View style={styles.notifDot} />
+          {unreadCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -494,16 +521,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  notifDot: {
+  notifBadge: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 3,
+    right: 3,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 3,
     backgroundColor: "#f87171",
     borderWidth: 1.5,
     borderColor: GREEN,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notifBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
   },
 
   // Scroll
