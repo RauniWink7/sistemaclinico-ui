@@ -4,6 +4,8 @@ import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -79,6 +81,8 @@ interface Psychologist {
   name: string;
   crp: string;
   specialty: string;
+  bio: string;
+  photo: string | null;
   initials: string;
   color: string;
   bg: string;
@@ -113,6 +117,8 @@ const normalizeProfessional = (item: ProfessionalApiItem): Psychologist => {
     name,
     crp: item.crp || "",
     specialty: item.specialty || "Psicologia",
+    bio: item.bio?.trim() || "",
+    photo: item.photo || null,
     initials: item.initials || formatInitials(name),
     color: item.color || "#2e8b6e",
     bg: item.bg || "#e8f7f1",
@@ -155,6 +161,9 @@ export default function ScheduleScreen() {
   const [patientProfileId, setPatientProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(true);
+  const [infoPsychologist, setInfoPsychologist] = useState<Psychologist | null>(
+    null,
+  );
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -359,7 +368,7 @@ export default function ScheduleScreen() {
 
       showAlert(
         "Consulta agendada! 🎉",
-        `${activePsychologist?.name ?? ""} — ${formatDate(selectedDate)} às ${selectedTime}. Um e-mail de confirmação foi enviado.`,
+        `${activePsychologist?.name ?? ""} — ${formatDate(selectedDate)} às ${selectedTime}. Você pode acompanhá-la em "Minhas consultas".`,
         [{ text: "OK", onPress: () => router.back() }],
       );
     } catch {
@@ -458,14 +467,21 @@ export default function ScheduleScreen() {
                           { backgroundColor: item.bg },
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.professionalAvatarText,
-                            { color: item.color },
-                          ]}
-                        >
-                          {item.initials}
-                        </Text>
+                        {item.photo ? (
+                          <Image
+                            source={{ uri: item.photo }}
+                            style={styles.professionalAvatarImg}
+                          />
+                        ) : (
+                          <Text
+                            style={[
+                              styles.professionalAvatarText,
+                              { color: item.color },
+                            ]}
+                          >
+                            {item.initials}
+                          </Text>
+                        )}
                       </View>
                       <View style={styles.professionalInfo}>
                         <Text style={styles.professionalNameSmall}>
@@ -475,6 +491,18 @@ export default function ScheduleScreen() {
                           {item.specialty}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        style={styles.infoBtn}
+                        onPress={() => setInfoPsychologist(item)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={22}
+                          color={GREEN}
+                        />
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 })
@@ -492,14 +520,21 @@ export default function ScheduleScreen() {
                     { backgroundColor: activePsychologist.bg },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.psychAvatarText,
-                      { color: activePsychologist.color },
-                    ]}
-                  >
-                    {activePsychologist.initials}
-                  </Text>
+                  {activePsychologist.photo ? (
+                    <Image
+                      source={{ uri: activePsychologist.photo }}
+                      style={styles.psychAvatarImg}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.psychAvatarText,
+                        { color: activePsychologist.color },
+                      ]}
+                    >
+                      {activePsychologist.initials}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.psychInfo}>
                   <Text style={styles.psychName}>
@@ -733,9 +768,9 @@ export default function ScheduleScreen() {
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryRow}>
-                <Ionicons name="mail-outline" size={15} color={GREEN} />
+                <Ionicons name="notifications-outline" size={15} color={GREEN} />
                 <Text style={styles.summaryText}>
-                  Confirmação por e-mail será enviada
+                  Você receberá um aviso nas notificações
                 </Text>
               </View>
             </View>
@@ -775,6 +810,103 @@ export default function ScheduleScreen() {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+
+      {/* ── Modal: perfil completo do psicólogo ── */}
+      <Modal
+        visible={!!infoPsychologist}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoPsychologist(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setInfoPsychologist(null)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-outline" size={22} color="#4c7f6d" />
+            </TouchableOpacity>
+
+            {infoPsychologist && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeader}>
+                  <View
+                    style={[
+                      styles.modalAvatar,
+                      { backgroundColor: infoPsychologist.bg },
+                    ]}
+                  >
+                    {infoPsychologist.photo ? (
+                      <Image
+                        source={{ uri: infoPsychologist.photo }}
+                        style={styles.modalAvatarImg}
+                      />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.modalAvatarText,
+                          { color: infoPsychologist.color },
+                        ]}
+                      >
+                        {infoPsychologist.initials}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={styles.modalName}>{infoPsychologist.name}</Text>
+                  {infoPsychologist.crp ? (
+                    <Text style={styles.modalCrp}>{infoPsychologist.crp}</Text>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.specialtyBadge,
+                      { backgroundColor: infoPsychologist.bg, marginTop: 8 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.specialtyText,
+                        { color: infoPsychologist.color },
+                      ]}
+                    >
+                      {infoPsychologist.specialty}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalInfoRow}>
+                  <Ionicons name="time-outline" size={16} color={GREEN} />
+                  <Text style={styles.modalInfoText}>
+                    Duração da sessão: {infoPsychologist.sessionDuration} min
+                  </Text>
+                </View>
+
+                <View style={styles.modalDivider} />
+
+                <Text style={styles.modalSectionTitle}>Sobre</Text>
+                <Text style={styles.modalBio}>
+                  {infoPsychologist.bio ||
+                    "Este profissional ainda não adicionou uma descrição."}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.modalPrimaryBtn}
+                  onPress={() => {
+                    setActivePsychologist(infoPsychologist);
+                    setInfoPsychologist(null);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#fff" />
+                  <Text style={styles.modalPrimaryBtnText}>
+                    Agendar com {infoPsychologist.name.split(" ")[0]}
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -857,6 +989,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
   },
+  professionalAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+  },
+  infoBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#e8f7f1",
+  },
   professionalInfo: {
     flex: 1,
     minWidth: 0,
@@ -896,6 +1041,11 @@ const styles = StyleSheet.create({
   psychAvatarText: {
     fontSize: 18,
     fontWeight: "800",
+  },
+  psychAvatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
   },
   psychInfo: { flex: 1, gap: 3 },
   psychName: {
@@ -1157,5 +1307,111 @@ const styles = StyleSheet.create({
   },
   confirmBtnTextDisabled: {
     color: "#aaa",
+  },
+
+  // Modal — perfil do psicólogo
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(20,45,37,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 440,
+    maxHeight: "85%",
+    backgroundColor: WHITE,
+    borderRadius: 24,
+    padding: 24,
+  },
+  modalClose: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    zIndex: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#f0f8f4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalHeader: {
+    alignItems: "center",
+    paddingTop: 8,
+  },
+  modalAvatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  modalAvatarImg: {
+    width: "100%",
+    height: "100%",
+  },
+  modalAvatarText: {
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  modalName: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#1a3d31",
+    textAlign: "center",
+  },
+  modalCrp: {
+    fontSize: 13,
+    color: "#7aab96",
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  modalInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 18,
+  },
+  modalInfoText: {
+    fontSize: 14,
+    color: "#1a3d31",
+    fontWeight: "600",
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: "#eaf4ef",
+    marginVertical: 16,
+  },
+  modalSectionTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#4c7f6d",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  modalBio: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: "#3d5b50",
+  },
+  modalPrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: GREEN,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 24,
+  },
+  modalPrimaryBtnText: {
+    color: WHITE,
+    fontSize: 15,
+    fontWeight: "800",
   },
 });

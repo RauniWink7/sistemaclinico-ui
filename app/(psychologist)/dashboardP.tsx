@@ -125,6 +125,7 @@ export default function PsychologistDashboardScreen() {
     total_pacientes: number;
   } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const firstFocusRef = useRef(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -171,6 +172,10 @@ export default function PsychologistDashboardScreen() {
     void loadData();
   }, []);
 
+  // A cada foco (ex.: ao voltar de agendar/cancelar uma consulta), atualiza o
+  // contador do sino e o resumo — que inclui a "proxima consulta". O primeiro
+  // foco so busca o sino, pois a montagem ja carregou o resumo com loader; os
+  // focos seguintes atualizam o resumo em silencio, sem piscar a tela toda.
   useFocusEffect(
     useCallback(() => {
       const loadUnread = async () => {
@@ -179,7 +184,18 @@ export default function PsychologistDashboardScreen() {
           setUnreadCount(result.data.unread_count);
         }
       };
+      const refreshSummary = async () => {
+        const result = await getProfessionalSummary();
+        if (result.ok && result.data) {
+          setSummary(result.data);
+        }
+      };
       void loadUnread();
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false;
+        return;
+      }
+      void refreshSummary();
     }, []),
   );
 

@@ -19,6 +19,8 @@ import {
   getPsychologists,
   cancelAppointment,
   updateAppointmentStatus,
+  getAccessToken,
+  getRoleFromToken,
 } from '../../services/api';
 import { partsToISO, toInputParts, todayISODate } from '../../services/dateInput';
 import { DateField, TimeField } from '../../components/DateTimeField';
@@ -98,8 +100,22 @@ export default function ConsultaDetalheScreen() {
   const [reTime, setReTime] = useState('');
   const [rescheduling, setRescheduling] = useState(false);
 
+  // Papel do usuario logado: o paciente pode cancelar a propria consulta, mas
+  // NAO pode alterar o status (concluir/remarcar/marcar falta) — o backend
+  // rejeita com 403. Por isso escondemos a acao "Alterar status" para pacientes.
+  const [userRole, setUserRole] = useState('');
+  const isPatient = userRole === 'patient';
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
+
+  useEffect(() => {
+    const loadRole = async () => {
+      const token = await getAccessToken();
+      if (token) setUserRole(getRoleFromToken(token));
+    };
+    void loadRole();
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -391,20 +407,22 @@ export default function ConsultaDetalheScreen() {
 
             {isScheduled && (
               <>
-                <TouchableOpacity
-                  style={styles.actionRow}
-                  onPress={() => setStatusModalVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.actionIcon, { backgroundColor: GREEN_LIGHT }]}>
-                    <Ionicons name="create-outline" size={20} color={GREEN} />
-                  </View>
-                  <View style={styles.actionTextBox}>
-                    <Text style={styles.actionLabel}>Alterar status</Text>
-                    <Text style={styles.actionDescription}>Concluir, remarcar ou marcar falta</Text>
-                  </View>
-                  <Ionicons name="chevron-forward-outline" size={18} color="#94b3a6" />
-                </TouchableOpacity>
+                {!isPatient && (
+                  <TouchableOpacity
+                    style={styles.actionRow}
+                    onPress={() => setStatusModalVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.actionIcon, { backgroundColor: GREEN_LIGHT }]}>
+                      <Ionicons name="create-outline" size={20} color={GREEN} />
+                    </View>
+                    <View style={styles.actionTextBox}>
+                      <Text style={styles.actionLabel}>Alterar status</Text>
+                      <Text style={styles.actionDescription}>Concluir, remarcar ou marcar falta</Text>
+                    </View>
+                    <Ionicons name="chevron-forward-outline" size={18} color="#94b3a6" />
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.actionRow}

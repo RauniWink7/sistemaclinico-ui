@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -38,6 +40,7 @@ const DURATIONS = ['30', '45', '50', '60', '90'];
 export default function CadastrarPsicologoScreen() {
   const [loading, setLoading] = useState(false);
   const [sessionDuration, setSessionDuration] = useState('50');
+  const [photo, setPhoto] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -49,6 +52,25 @@ export default function CadastrarPsicologoScreen() {
 
   const patch = (field: keyof typeof form) => (val: string) =>
     setForm((f) => ({ ...f, [field]: val }));
+
+  const handlePickPhoto = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets?.length > 0) {
+        const f = result.assets[0];
+        setPhoto({
+          uri: f.uri,
+          name: f.name || 'foto.jpg',
+          type: f.mimeType || 'image/jpeg',
+        });
+      }
+    } catch {
+      showAlert('Erro', 'Não foi possível selecionar a foto.');
+    }
+  };
 
   const handleSubmit = async () => {
     if (!form.fullName || !form.email)
@@ -64,6 +86,7 @@ export default function CadastrarPsicologoScreen() {
       crp: form.crp,
       specialty: form.specialty || undefined,
       send_invite: true,
+      photo: photo ?? undefined,
     });
     setLoading(false);
 
@@ -91,6 +114,38 @@ export default function CadastrarPsicologoScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.container}>
+
+          {/* Foto (opcional) */}
+          <View style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardIcon}>
+                <Ionicons name="camera-outline" size={16} color={GREEN} />
+              </View>
+              <Text style={styles.cardTitle}>Foto (opcional)</Text>
+            </View>
+
+            <View style={styles.photoRow}>
+              <View style={styles.photoPreview}>
+                {photo ? (
+                  <Image source={{ uri: photo.uri }} style={styles.photoImg} />
+                ) : (
+                  <Ionicons name="person-outline" size={32} color="#94b3a6" />
+                )}
+              </View>
+              <View style={styles.photoActions}>
+                <TouchableOpacity style={styles.photoBtn} onPress={handlePickPhoto} activeOpacity={0.85}>
+                  <Ionicons name="image-outline" size={16} color={GREEN} />
+                  <Text style={styles.photoBtnText}>{photo ? 'Trocar foto' : 'Selecionar foto'}</Text>
+                </TouchableOpacity>
+                {photo && (
+                  <TouchableOpacity style={styles.photoRemove} onPress={() => setPhoto(null)} activeOpacity={0.85}>
+                    <Ionicons name="trash-outline" size={15} color="#d95c5c" />
+                    <Text style={styles.photoRemoveText}>Remover</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
 
           {/* Dados de acesso */}
           <View style={styles.card}>
@@ -209,6 +264,25 @@ const styles = StyleSheet.create({
   cardIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: GREEN_LIGHT, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 15.5, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.2 },
   cardSubtitle: { marginTop: 6, fontSize: 13, color: TEXT_MUTED, lineHeight: 20 },
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 14 },
+  photoPreview: {
+    width: 76, height: 76, borderRadius: 38, backgroundColor: '#f6faf8',
+    borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  photoImg: { width: '100%', height: '100%' },
+  photoActions: { flex: 1, gap: 8 },
+  photoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: 12, borderWidth: 1.5, borderColor: GREEN, backgroundColor: GREEN_LIGHT,
+    paddingVertical: 11, paddingHorizontal: 14, alignSelf: 'flex-start',
+  },
+  photoBtnText: { fontSize: 14, fontWeight: '700', color: GREEN },
+  photoRemove: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    paddingVertical: 4, paddingHorizontal: 4,
+  },
+  photoRemoveText: { fontSize: 13, fontWeight: '600', color: '#d95c5c' },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6a887d', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
   input: {
     borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,

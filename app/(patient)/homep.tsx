@@ -123,6 +123,7 @@ export default function HomeP() {
   const [loadingAppointment, setLoadingAppointment] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const firstFocusRef = useRef(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -149,8 +150,8 @@ export default function HomeP() {
     }
   }, []);
 
-  const fetchAppointments = useCallback(async () => {
-    setLoadingAppointment(true);
+  const fetchAppointments = useCallback(async (silent = false) => {
+    if (!silent) setLoadingAppointment(true);
     try {
       // ── FIX BUG 1: carregar profissionais primeiro para montar o mapa UUID→nome
       const profsResult = await getPsychologists();
@@ -209,9 +210,9 @@ export default function HomeP() {
             (item) => new Date(`${item.date}T${item.time}:00`) > new Date(),
           );
 
-        if (upcoming) {
-          setNextAppointment(upcoming);
-        }
+        // Sempre reflete o estado atual: se a consulta foi cancelada/remarcada
+        // e nao ha mais uma proxima, o card precisa sumir (nao manter a antiga).
+        setNextAppointment(upcoming ?? null);
       }
     } catch (error) {
       if (__DEV__) {
@@ -234,12 +235,20 @@ export default function HomeP() {
     void fetchAppointments();
   }, [fetchProfile, fetchAppointments]);
 
-  // Recarrega a contagem de nao lidas sempre que a home ganha foco (ex.: ao
-  // voltar da tela de notificacoes), para o indicador do sino nunca ficar preso.
+  // Sempre que a home ganha foco (ex.: ao voltar de agendar/cancelar ou da tela
+  // de notificacoes), recarrega a contagem de nao lidas e a proxima consulta —
+  // assim o card "Proxima consulta" e o sino nunca ficam presos em dados antigos.
+  // O primeiro foco e ignorado para a consulta porque a montagem ja a carregou
+  // (com loader); os focos seguintes atualizam em silencio, sem piscar a tela.
   useFocusEffect(
     useCallback(() => {
       void fetchUnread();
-    }, [fetchUnread]),
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false;
+        return;
+      }
+      void fetchAppointments(true);
+    }, [fetchUnread, fetchAppointments]),
   );
 
   React.useEffect(() => {

@@ -616,14 +616,53 @@ export const createProfessionalAsAdmin = async (payload: {
   crp?: string;
   specialty?: string;
   send_invite?: boolean;
+  // Foto opcional do psicologo. Quando presente, o cadastro vai como
+  // multipart/form-data (o backend salva em ProfessionalProfile.photo).
+  photo?: { uri: string; name: string; type: string };
 }): Promise<ApiResult> => {
-  const headers = await createAuthHeaders();
-  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
-  const { response, data } = await fetchJson(
+  const { photo, ...rest } = payload;
+
+  // Sem foto: mantem o envio JSON simples de sempre.
+  if (!photo) {
+    const headers = await createAuthHeaders();
+    if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+    const { response, data } = await fetchJson(
+      `${API_BASE_URL}/auth/admin/users/professionals/`,
+      { method: "POST", headers, body: JSON.stringify(rest) },
+    );
+    if (!response.ok) return { ok: false, error: normalizeError(data), data };
+    return { ok: true, data };
+  }
+
+  // Com foto: multipart. Nunca definir Content-Type manualmente — o boundary
+  // precisa ser gerado automaticamente (mesmo padrao de uploadDocument).
+  const token = await getAccessToken();
+  if (!token) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+
+  const formData = new FormData();
+  Object.entries(rest).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, String(value));
+    }
+  });
+
+  if (Platform.OS === "web") {
+    const blobRes = await fetch(photo.uri);
+    const blob = await blobRes.blob();
+    const fileObj = new File([blob], photo.name, {
+      type: blob.type || photo.type || "image/jpeg",
+    });
+    formData.append("photo", fileObj);
+  } else {
+    formData.append("photo", photo as any);
+  }
+
+  const res = await fetchWithRefresh(
     `${API_BASE_URL}/auth/admin/users/professionals/`,
-    { method: "POST", headers, body: JSON.stringify(payload) },
+    { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData },
   );
-  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  const data = await res.json().catch(() => null);
+  if (!res.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
 
