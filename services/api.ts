@@ -1484,6 +1484,13 @@ export const unregisterDeviceToken = async (): Promise<ApiResult> => {
   return { ok: true };
 };
 
+// Estado atual do push neste aparelho: ha um token registrado guardado?
+// Usado pela tela de Configuracoes para refletir o toggle de notificacoes.
+export const isPushEnabled = async (): Promise<boolean> => {
+  const token = await AsyncStorage.getItem(STORAGE_KEYS.pushToken);
+  return !!token;
+};
+
 const createQueryString = (params: ReportPeriodQuery = {}): string => {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -1780,6 +1787,22 @@ export const confirmPasswordReset = async (payload: {
     },
   );
 
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// POST /api/auth/password/change/ â€” troca a senha do usuario logado (autenticado).
+// Recebe a senha atual + a nova; sem e-mail. A sessao atual continua valida.
+export const changePassword = async (payload: {
+  current_password: string;
+  new_password: string;
+}): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuario nao autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/auth/password/change/`,
+    { method: "POST", headers, body: JSON.stringify(payload) },
+  );
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };

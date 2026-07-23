@@ -303,19 +303,27 @@ export default function HomeP() {
           </Text>
         </Animated.View>
 
-        <TouchableOpacity
-          style={styles.notifBtn}
-          onPress={() => router.push("/(patient)/notificacoes")}
-        >
-          <Ionicons name="notifications-outline" size={22} color="#fff" />
-          {unreadCount > 0 && (
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.notifBtn}
+            onPress={() => router.push("/(patient)/notificacoes")}
+          >
+            <Ionicons name="notifications-outline" size={22} color="#fff" />
+            {unreadCount > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.notifBtn}
+            onPress={() => router.push("/(shared)/configuracoes" as any)}
+          >
+            <Ionicons name="settings-outline" size={21} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -520,6 +528,11 @@ const styles = StyleSheet.create({
     color: WHITE,
     letterSpacing: -0.5,
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   notifBtn: {
     width: 42,

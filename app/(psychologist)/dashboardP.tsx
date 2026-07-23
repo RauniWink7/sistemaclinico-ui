@@ -285,6 +285,14 @@ export default function PsychologistDashboardScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={styles.notifBtn}
+              onPress={() => router.push("/(shared)/configuracoes" as any)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="settings-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.logoutBtn}
               onPress={handleLogout}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
