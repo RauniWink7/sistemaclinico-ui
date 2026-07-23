@@ -8,10 +8,10 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { DateField } from "../../components/DateTimeField";
 import { showAlert } from "../../services/feedback";
 import {
   AdminAppointmentsReportApi,
@@ -146,20 +146,22 @@ export default function AdminReportsScreen() {
             <View style={styles.filterCard}>
               <Text style={styles.sectionTitle}>Filtros</Text>
               <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.input}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="Início YYYY-MM-DD"
-                  placeholderTextColor="#8ba99d"
-                />
-                <TextInput
-                  style={styles.input}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="Fim YYYY-MM-DD"
-                  placeholderTextColor="#8ba99d"
-                />
+                <View style={styles.dateField}>
+                  <Text style={styles.inputLabel}>Início</Text>
+                  <DateField
+                    value={startDate}
+                    onChange={setStartDate}
+                    max={endDate || undefined}
+                  />
+                </View>
+                <View style={styles.dateField}>
+                  <Text style={styles.inputLabel}>Fim</Text>
+                  <DateField
+                    value={endDate}
+                    onChange={setEndDate}
+                    min={startDate || undefined}
+                  />
+                </View>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.profScroll}>
                 <TouchableOpacity
@@ -215,7 +217,7 @@ export default function AdminReportsScreen() {
             <View style={styles.metricsGrid}>
               <Metric label="Consultas" value={report?.summary.total_appointments ?? 0} />
               <Metric label="Realizadas" value={report?.summary.completed ?? 0} />
-              <Metric label="Cancel." value={`${report?.summary.cancellation_rate_percent ?? 0}%`} />
+              <Metric label="Cancelamento" value={`${report?.summary.cancellation_rate_percent ?? 0}%`} />
             </View>
 
             <Text style={styles.sectionTitle}>Por profissional</Text>
@@ -280,12 +282,8 @@ const styles = StyleSheet.create({
   filterCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER, ...CARD_SHADOW },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: TEXT_DARK, marginBottom: 12, marginTop: 4, letterSpacing: -0.2 },
   inputRow: { flexDirection: "row", gap: 10 },
-  input: {
-    flex: 1, height: 44, borderRadius: 12, backgroundColor: "#f6faf8", borderWidth: 1, borderColor: BORDER,
-    paddingHorizontal: 12, color: TEXT_DARK, fontWeight: "600",
-    // @ts-ignore — remove o contorno azul no web
-    outlineStyle: "none",
-  },
+  dateField: { flex: 1, gap: 6 },
+  inputLabel: { fontSize: 12, fontWeight: "700", color: "#6c8c80", marginLeft: 2 },
   profScroll: { marginTop: 12 },
   profChip: { height: 36, borderRadius: 10, backgroundColor: GREEN_LIGHT, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", marginRight: 8 },
   profChipActive: { backgroundColor: GREEN },

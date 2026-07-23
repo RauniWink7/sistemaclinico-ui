@@ -8,10 +8,10 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { DateField } from "../../components/DateTimeField";
 import { showAlert } from "../../services/feedback";
 import {
   downloadReportFile,
@@ -136,22 +136,24 @@ export default function ProfessionalReportsScreen() {
             </View>
 
             <View style={styles.filterCard}>
-              <Text style={styles.sectionTitle}>Periodo</Text>
+              <Text style={styles.sectionTitle}>Período</Text>
               <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.input}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="Inicio YYYY-MM-DD"
-                  placeholderTextColor="#8ba99d"
-                />
-                <TextInput
-                  style={styles.input}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="Fim YYYY-MM-DD"
-                  placeholderTextColor="#8ba99d"
-                />
+                <View style={styles.dateField}>
+                  <Text style={styles.inputLabel}>Início</Text>
+                  <DateField
+                    value={startDate}
+                    onChange={setStartDate}
+                    max={endDate || undefined}
+                  />
+                </View>
+                <View style={styles.dateField}>
+                  <Text style={styles.inputLabel}>Fim</Text>
+                  <DateField
+                    value={endDate}
+                    onChange={setEndDate}
+                    min={startDate || undefined}
+                  />
+                </View>
               </View>
               <TouchableOpacity style={styles.applyBtn} onPress={() => void loadReport()}>
                 <Ionicons name="filter-outline" size={17} color={WHITE} />
@@ -270,7 +272,8 @@ const styles = StyleSheet.create({
   filterCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: "#173d31", marginBottom: 12 },
   inputRow: { flexDirection: "row", gap: 10 },
-  input: { flex: 1, height: 44, borderRadius: 12, backgroundColor: "#f7fcfa", borderWidth: 1, borderColor: "#d7eee4", paddingHorizontal: 12, color: "#173d31", fontWeight: "600" },
+  dateField: { flex: 1, gap: 6 },
+  inputLabel: { fontSize: 12, fontWeight: "700", color: "#6c8c80", marginLeft: 2 },
   applyBtn: { marginTop: 12, height: 46, borderRadius: 12, backgroundColor: GREEN, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   applyBtnText: { color: WHITE, fontWeight: "800" },
   actionRow: { flexDirection: "row", gap: 10, marginBottom: 16 },

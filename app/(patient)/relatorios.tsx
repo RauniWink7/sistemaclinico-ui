@@ -8,10 +8,10 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { DateField } from "../../components/DateTimeField";
 import { showAlert } from "../../services/feedback";
 import {
   downloadReportFile,
@@ -79,27 +79,15 @@ const PeriodPicker = ({
   onApply: () => void;
 }) => (
   <View style={styles.filterCard}>
-    <Text style={styles.sectionTitle}>Periodo</Text>
+    <Text style={styles.sectionTitle}>Período</Text>
     <View style={styles.inputRow}>
       <View style={styles.inputBox}>
-        <Text style={styles.inputLabel}>Inicio</Text>
-        <TextInput
-          value={startDate}
-          onChangeText={onStartChange}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#8ba99d"
-          style={styles.input}
-        />
+        <Text style={styles.inputLabel}>Início</Text>
+        <DateField value={startDate} onChange={onStartChange} max={endDate || undefined} />
       </View>
       <View style={styles.inputBox}>
         <Text style={styles.inputLabel}>Fim</Text>
-        <TextInput
-          value={endDate}
-          onChangeText={onEndChange}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#8ba99d"
-          style={styles.input}
-        />
+        <DateField value={endDate} onChange={onEndChange} min={startDate || undefined} />
       </View>
     </View>
     <TouchableOpacity style={styles.applyBtn} onPress={onApply} activeOpacity={0.85}>
@@ -353,16 +341,6 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: "row", gap: 10 },
   inputBox: { flex: 1 },
   inputLabel: { fontSize: 12, color: "#6c8c80", fontWeight: "700", marginBottom: 6 },
-  input: {
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#f7fcfa",
-    borderWidth: 1,
-    borderColor: "#d7eee4",
-    paddingHorizontal: 12,
-    color: "#173d31",
-    fontWeight: "600",
-  },
   applyBtn: {
     marginTop: 12,
     height: 46,

@@ -15,6 +15,7 @@ import {
   View
 } from "react-native";
 import { getRouteForRole, login } from "../../services/api";
+import { registerForPushNotifications } from "../../services/push";
 
 // ─── Decorative Background ───────────────────────────────────────────────────
 const DecorativeBackground = () => (
@@ -226,6 +227,9 @@ export default function LoginScreen() {
       if (!result.ok) {
         setApiError(result.error || "E-mail ou senha incorretos.");
       } else {
+        // Registra o push deste aparelho (mobile). Fire-and-forget: nao atrasa
+        // nem bloqueia a navegacao; falha silenciosa (push e um extra).
+        void registerForPushNotifications();
         const route = getRouteForRole(result.role ?? "");
         router.replace(route);
       }

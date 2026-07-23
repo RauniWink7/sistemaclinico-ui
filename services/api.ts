@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   accessToken: "@clinica:accessToken",
   refreshToken: "@clinica:refreshToken",
   clinicId: "@clinica:clinicId",
+  pushToken: "@clinica:pushToken",
 };
 
 export interface JwtPayload {
@@ -388,6 +389,7 @@ export const clearTokens = async (): Promise<void> => {
     STORAGE_KEYS.accessToken,
     STORAGE_KEYS.refreshToken,
     STORAGE_KEYS.clinicId,
+    STORAGE_KEYS.pushToken,
   ]);
 };
 
@@ -497,6 +499,10 @@ export const login = async (
 export const logout = async (): Promise<ApiResult> => {
   const refreshToken = await getRefreshToken();
   const accessToken = await getAccessToken();
+
+  // Desativa o device token de push ANTES de limpar a sessao (ainda ha token de
+  // acesso valido). Assim o aparelho deslogado para de receber push.
+  await unregisterDeviceToken();
 
   try {
     if (refreshToken && accessToken) {
@@ -1436,6 +1442,46 @@ export const markNotificationRead = async (
   );
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
+};
+
+// POST /api/notifications/devices/ — registra (upsert) o ExpoPushToken deste
+// aparelho para o usuario logado. Guarda o token localmente para desativa-lo no
+// logout (unregisterDeviceToken).
+export const registerDeviceToken = async (
+  token: string,
+  platform: "android" | "ios" | "web",
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuario nao autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/notifications/devices/`,
+    { method: "POST", headers, body: JSON.stringify({ token, platform }) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  await AsyncStorage.setItem(STORAGE_KEYS.pushToken, token);
+  return { ok: true, data };
+};
+
+// DELETE /api/notifications/devices/<token>/ — desativa o token deste aparelho.
+// Usa o token guardado no registro; silencioso se nao houver token salvo.
+export const unregisterDeviceToken = async (): Promise<ApiResult> => {
+  const token = await AsyncStorage.getItem(STORAGE_KEYS.pushToken);
+  if (!token) return { ok: true };
+  const headers = await createAuthHeaders();
+  if (!headers) {
+    await AsyncStorage.removeItem(STORAGE_KEYS.pushToken);
+    return { ok: true };
+  }
+  try {
+    await fetchWithRefresh(
+      `${API_BASE_URL}/notifications/devices/${encodeURIComponent(token)}/`,
+      { method: "DELETE", headers },
+    );
+  } catch {
+    // Sem conexao: removemos o token local mesmo assim.
+  }
+  await AsyncStorage.removeItem(STORAGE_KEYS.pushToken);
+  return { ok: true };
 };
 
 const createQueryString = (params: ReportPeriodQuery = {}): string => {
