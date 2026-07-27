@@ -19,6 +19,8 @@ import {
     cancelAppointment,
     getAppointments,
     getPsychologists,
+    isAppointmentOverdue,
+    OVERDUE_STATUS_LABEL,
 } from "../../services/api";
 
 // Alias para evitar conflitos
@@ -30,6 +32,7 @@ interface Appointment {
   id: string;
   date: string;
   time: string;
+  scheduledAt: string; // ISO original — usado para saber se o dia já passou
   psychologist: string;
   specialty: string;
   status: AppointmentStatus;
@@ -76,6 +79,7 @@ const normalizeAppointment = (
     id: item.id,
     date,
     time,
+    scheduledAt,
     psychologist: psychologistName,
     specialty,
     status,
@@ -108,7 +112,18 @@ const SectionTitle = ({
   </View>
 );
 
-const getStatusMeta = (status: AppointmentStatus) => {
+const getStatusMeta = (status: AppointmentStatus, scheduledAt?: string) => {
+  // Consulta em aberto cujo dia já passou: rótulo automático, sem ação do
+  // usuário. Não aparece antes nem durante o dia da consulta.
+  if (isAppointmentOverdue(status, scheduledAt)) {
+    return {
+      label: OVERDUE_STATUS_LABEL,
+      icon: "hourglass-outline",
+      color: "#c46a1a",
+      bg: "#fdf1e3",
+    };
+  }
+
   switch (status) {
     case "agendada":
       return {
@@ -422,7 +437,10 @@ export default function ConsultasScreen() {
             <Text style={styles.emptyText}>Nenhuma consulta encontrada.</Text>
           ) : (
             filteredAppointments.map((appointment) => {
-              const status = getStatusMeta(appointment.status);
+              const status = getStatusMeta(
+                appointment.status,
+                appointment.scheduledAt,
+              );
               const initials = appointment.psychologist
                 .split(" ")
                 .filter((part) => part.length > 2)

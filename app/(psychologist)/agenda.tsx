@@ -20,6 +20,8 @@ import {
     getAppointments,
     getMe,
     getSessionNote,
+    isAppointmentOverdue,
+    OVERDUE_STATUS_LABEL,
     updateAppointmentStatus,
     updateSessionNote,
 } from "../../services/api";
@@ -42,6 +44,7 @@ interface WeeklyAppointment {
   patientName: string;
   type: string;
   status: AppointmentStatus;
+  scheduledAt: string; // ISO original — usado para saber se o dia já passou
 }
 
 const GREEN = "#2e8b6e";
@@ -117,10 +120,22 @@ const toWeeklyAppointment = (item: AppointmentApiItem): WeeklyAppointment => {
     patientName: extractPatientName(item),
     type: "Sessão individual",
     status: (item.status as AppointmentStatus) ?? "scheduled",
+    scheduledAt: item.scheduled_at!,
   };
 };
 
-const getStatusMeta = (status: AppointmentStatus) => {
+const getStatusMeta = (status: AppointmentStatus, scheduledAt?: string) => {
+  // Consulta em aberto cujo dia já passou: rótulo automático, sem ação do
+  // usuário. Não aparece antes nem durante o dia da consulta.
+  if (isAppointmentOverdue(status, scheduledAt)) {
+    return {
+      label: OVERDUE_STATUS_LABEL,
+      icon: "hourglass-outline",
+      color: "#c46a1a",
+      bg: ORANGE_LIGHT,
+    };
+  }
+
   switch (status) {
     case "completed":
       return {
@@ -678,7 +693,10 @@ export default function PsychologistAgendaScreen() {
             ) : (
               <View style={styles.appointmentsWrap}>
                 {selectedDayAppointments.map((appointment) => {
-                  const statusMeta = getStatusMeta(appointment.status);
+                  const statusMeta = getStatusMeta(
+                    appointment.status,
+                    appointment.scheduledAt,
+                  );
 
                   return (
                     <TouchableOpacity
@@ -789,7 +807,12 @@ export default function PsychologistAgendaScreen() {
                 <View style={styles.detailCard}>
                   <Text style={styles.detailLabel}>Status atual</Text>
                   <Text style={styles.detailValue}>
-                    {getStatusMeta(selectedAppointment.status).label}
+                    {
+                      getStatusMeta(
+                        selectedAppointment.status,
+                        selectedAppointment.scheduledAt,
+                      ).label
+                    }
                   </Text>
                 </View>
 

@@ -44,10 +44,14 @@ import {
     useChatAudioRecorder,
     type RecordedAudio,
 } from "../../services/chatAudio";
-import { showAlert } from "../../services/feedback";
+import { showAlert, showConfirm } from "../../services/feedback";
 import {
+    clearChatConversation,
+    deleteChatMessage,
+    DOCUMENT_MIME_TYPES,
     getAccessToken,
     getChatContacts,
+    getContactPresence,
     getConversations,
     getMe,
     getMessagesWithPsychologist,
@@ -108,13 +112,33 @@ const dashboardForRole = (role: string): string => {
 };
 
 // ─── WS_BASE_URL ──────────────────────────────────────────────────────────────
-// TODO: definir EXPO_PUBLIC_WS_URL no .env de produção
-const WS_BASE_URL =
-  process.env.EXPO_PUBLIC_WS_URL ??
-  (Platform.select({
+// Ordem de preferência:
+//   1. EXPO_PUBLIC_WS_URL (override explícito).
+//   2. Derivar da EXPO_PUBLIC_API_URL (http→ws, https→wss, remove /api, +/ws/chat).
+//      Sem isto, no deploy (Vercel) o WS caía em ws://127.0.0.1 e nunca conectava
+//      → chat só via REST e presença sempre "Ausente".
+//   3. Fallback localhost por plataforma (dev).
+const deriveWsBaseUrl = (): string => {
+  const explicit = process.env.EXPO_PUBLIC_WS_URL?.trim();
+  if (explicit) return explicit;
+
+  const api = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (api) {
+    return (
+      api
+        .replace(/^http/i, "ws") // http→ws e https→wss
+        .replace(/\/api\/?$/i, "") // remove o sufixo /api
+        .replace(/\/$/, "") + "/ws/chat"
+    );
+  }
+
+  return Platform.select({
     android: "ws://10.0.2.2:8000/ws/chat",
     default: "ws://127.0.0.1:8000/ws/chat",
-  }) as string);
+  }) as string;
+};
+
+const WS_BASE_URL = deriveWsBaseUrl();
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Conversation {
@@ -128,14 +152,16 @@ interface Conversation {
   online: boolean;
 }
 
-type MessageType = "text" | "image" | "audio";
+type MessageType = "text" | "image" | "audio" | "file";
 
 interface Message {
   id: string;
   senderId: string; // user.id de quem enviou
   text: string;
   type: MessageType;
-  mediaUrl?: string; // URL absoluta da mídia (imagem/áudio)
+  mediaUrl?: string; // URL absoluta da mídia (imagem/áudio/documento)
+  mediaName?: string; // nome original do arquivo (documentos)
+  durationMs?: number; // duração real do áudio (persistida no backend)
   createdAt: string;
   read: boolean;
   pending?: boolean; // mensagem otimista ainda não confirmada pelo backend
@@ -143,7 +169,33 @@ interface Message {
 
 // message_type do backend → tipo interno da mensagem
 const mediaTypeOf = (t?: string): MessageType =>
-  t === "image" ? "image" : t === "audio" ? "audio" : "text";
+  t === "image"
+    ? "image"
+    : t === "audio"
+      ? "audio"
+      : t === "file"
+        ? "file"
+        : "text";
+
+// ─── Anexos aceitos ───────────────────────────────────────────────────────────
+// Mesmos tipos permitidos no módulo de documentos (PDF/DOC/DOCX) + todas as
+// imagens que o chat já aceitava (webp/gif inclusive, por isso o "image/*").
+// O backend revalida extensão, conteúdo e tamanho.
+const ATTACHMENT_MIME_TYPES = ["image/*", ...DOCUMENT_MIME_TYPES];
+
+const DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx"];
+const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif"];
+
+const extensionOf = (name?: string): string =>
+  (name || "").split(".").pop()?.toLowerCase() || "";
+
+// Ícone do card de documento conforme a extensão.
+const documentIconFor = (name?: string): keyof typeof Ionicons.glyphMap => {
+  const ext = extensionOf(name);
+  if (ext === "pdf") return "document-text-outline";
+  if (ext === "doc" || ext === "docx") return "document-outline";
+  return "document-attach-outline";
+};
 
 // Normaliza uma mensagem vinda do REST (sent_at/sender_id) ou do WS (sent_at/sender).
 const mapApiMessage = (msg: any): Message => ({
@@ -152,13 +204,37 @@ const mapApiMessage = (msg: any): Message => ({
   text: msg.content_encrypted || msg.text || "",
   type: mediaTypeOf(msg.message_type),
   mediaUrl: resolveMediaUrl(msg.media_url),
+  mediaName: msg.media_name || undefined,
+  durationMs:
+    msg.media_duration_ms != null ? Number(msg.media_duration_ms) : undefined,
   createdAt: msg.created_at || msg.sent_at || "",
   read: msg.read ?? true,
 });
 
 // Texto curto para o snippet da lista de conversas.
 const snippetFor = (m: Message): string =>
-  m.type === "image" ? "📷 Imagem" : m.type === "audio" ? "🎤 Áudio" : m.text;
+  m.type === "image"
+    ? "📷 Imagem"
+    : m.type === "audio"
+      ? "🎤 Áudio"
+      : m.type === "file"
+        ? `📎 ${m.mediaName || "Documento"}`
+        : m.text;
+
+// Prévia da última mensagem vinda de /chat/conversations/ (objeto cru da API).
+const summarySnippet = (lastMsg: any, fallbackText?: string): string => {
+  const type = mediaTypeOf(lastMsg?.message_type);
+  if (type === "text") return fallbackText || lastMsg?.content_encrypted || "";
+  return snippetFor({
+    id: "",
+    senderId: "",
+    text: "",
+    type,
+    mediaName: lastMsg?.media_name || undefined,
+    createdAt: "",
+    read: true,
+  });
+};
 
 // Abre a mídia fora da bolha (nova aba na web, navegador no nativo).
 const openMedia = (uri?: string) => {
@@ -259,14 +335,15 @@ export default function ChatScreen() {
                 contact.initials ||
                 getInitials(contact.full_name || item.user_name || ""),
               unread: item.unread_count ?? item.unread ?? 0,
-              lastText:
-                item.last_message_text || lastMsg.content_encrypted || "",
+              // Mídia não tem texto: usa o mesmo snippet das bolhas
+              // (📷/🎤/📎) para a prévia não ficar vazia na lista.
+              lastText: summarySnippet(lastMsg, item.last_message_text),
               lastAt: item.last_message_at
                 ? String(item.last_message_at)
                 : lastMsg.sent_at
                   ? String(lastMsg.sent_at)
                   : "",
-              online: false,
+              online: Boolean(contact.online),
             };
           });
 
@@ -327,6 +404,20 @@ export default function ChatScreen() {
           c.contactUserId === activeContactId ? { ...c, unread: 0 } : c,
         ),
       );
+
+      // 2.5. Presença confiável via REST (não depende do handshake WS de presença,
+      // que pode não rotear no cloud). O outro lado marca-se online no banco ao
+      // conectar o WS, então esta leitura reflete o estado real.
+      const presence = await getContactPresence(activeContactId).catch(() => null);
+      if (presence?.ok && presence.data) {
+        const isOnline = Boolean(presence.data.online);
+        setContactOnline(isOnline);
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.contactUserId === activeContactId ? { ...c, online: isOnline } : c,
+          ),
+        );
+      }
 
       // 3. Conecta WebSocket
       connectWs(activeContactId);
@@ -481,6 +572,12 @@ export default function ChatScreen() {
         return;
       }
 
+      if (type === "message.deleted") {
+        // O remetente apagou "para todos": remove a bolha em tempo real.
+        setMessages((prev) => prev.filter((m) => m.id !== payload.id));
+        return;
+      }
+
       if (type === "typing") {
         if (payload.user !== myUserId) {
           setIsTyping(payload.is_typing ?? true);
@@ -532,7 +629,23 @@ export default function ChatScreen() {
       });
     };
 
-    const id = setInterval(syncMessages, 5000);
+    // Mantém o indicador Online/Ausente atualizado via REST (robusto no cloud).
+    const syncPresence = async () => {
+      const presence = await getContactPresence(activeContactId).catch(() => null);
+      if (!presence?.ok || !presence.data) return;
+      const isOnline = Boolean(presence.data.online);
+      setContactOnline(isOnline);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.contactUserId === activeContactId ? { ...c, online: isOnline } : c,
+        ),
+      );
+    };
+
+    const id = setInterval(() => {
+      void syncMessages();
+      void syncPresence();
+    }, 5000);
     return () => clearInterval(id);
   }, [activeContactId, myUserId]);
 
@@ -614,11 +727,12 @@ export default function ChatScreen() {
     }
   }, []);
 
-  // ─── Enviar anexo (imagem ou áudio) ─────────────────────────────────────────
+  // ─── Enviar anexo (imagem, áudio ou documento) ──────────────────────────────
   const sendAttachment = useCallback(
     async (
       file: { uri: string; name: string; type: string },
       msgType: MessageType,
+      durationMs?: number, // duração real (áudio) medida na gravação
     ) => {
       if (!activeContactId) return;
 
@@ -633,6 +747,8 @@ export default function ChatScreen() {
         text: "",
         type: msgType,
         mediaUrl: file.uri,
+        mediaName: file.name,
+        durationMs,
         createdAt: now,
         read: false,
         pending: true,
@@ -648,7 +764,12 @@ export default function ChatScreen() {
       scrollToBottom(true);
 
       setSendingAttachment(true);
-      const result = await sendChatAttachment(activeContactId, file);
+      const result = await sendChatAttachment(
+        activeContactId,
+        file,
+        undefined,
+        durationMs,
+      );
       setSendingAttachment(false);
 
       if (!result.ok || !result.data) {
@@ -665,25 +786,41 @@ export default function ChatScreen() {
     [activeContactId, myUserId],
   );
 
-  // ─── Selecionar imagem ──────────────────────────────────────────────────────
-  const handlePickImage = useCallback(async () => {
+  // ─── Selecionar anexo (imagem ou documento) ─────────────────────────────────
+  const handlePickAttachment = useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "image/*",
+        type: ATTACHMENT_MIME_TYPES,
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.length) return;
+
       const asset = result.assets[0];
+      const name = asset.name || `anexo-${Date.now()}`;
+      const ext = extensionOf(name);
+
+      // Barreira local só para dar feedback imediato — o backend revalida.
+      if (![...IMAGE_EXTENSIONS, ...DOCUMENT_EXTENSIONS].includes(ext)) {
+        showAlert(
+          "Anexo",
+          "Formato não permitido. Envie imagem, PDF, DOC ou DOCX.",
+        );
+        return;
+      }
+
+      const isDocument = DOCUMENT_EXTENSIONS.includes(ext);
       await sendAttachment(
         {
           uri: asset.uri,
-          name: asset.name || `imagem-${Date.now()}.jpg`,
-          type: asset.mimeType || "image/jpeg",
+          name,
+          type:
+            asset.mimeType ||
+            (isDocument ? "application/octet-stream" : "image/jpeg"),
         },
-        "image",
+        isDocument ? "file" : "image",
       );
     } catch {
-      showAlert("Erro", "Não foi possível selecionar a imagem.");
+      showAlert("Erro", "Não foi possível selecionar o anexo.");
     }
   }, [sendAttachment]);
 
@@ -713,6 +850,7 @@ export default function ChatScreen() {
     await sendAttachment(
       { uri: recorded.uri, name: recorded.name, type: recorded.type },
       "audio",
+      recorded.durationMs,
     );
   }, [recorder, sendAttachment]);
 
@@ -749,11 +887,88 @@ export default function ChatScreen() {
       if (contactId === activeContactId) return;
       setMessages([]);
       setIsTyping(false);
-      setContactOnline(false);
+      // Semeia com o status já conhecido (do REST) para não piscar "Ausente".
+      const conv = conversations.find((c) => c.contactUserId === contactId);
+      setContactOnline(Boolean(conv?.online));
       setActiveContactId(contactId);
     },
-    [activeContactId],
+    [activeContactId, conversations],
   );
+
+  // ─── Apagar mensagem / conversa ──────────────────────────────────────────────
+  const removeMessageFromState = useCallback((messageId: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+  }, []);
+
+  const doDeleteMessage = useCallback(
+    async (messageId: string, forEveryone: boolean) => {
+      const result = await deleteChatMessage(messageId, forEveryone);
+      if (!result.ok) {
+        showAlert("Erro", result.error || "Não foi possível apagar a mensagem.");
+        return;
+      }
+      removeMessageFromState(messageId);
+    },
+    [removeMessageFromState],
+  );
+
+  // Long-press numa bolha: oferece "para todos" (só se for minha e ainda não
+  // lida pelo outro lado) e "para mim".
+  const confirmDeleteMessage = useCallback(
+    (msg: Message) => {
+      if (msg.pending) return; // ainda não confirmada pelo servidor
+      const isMine = msg.senderId === myUserId;
+      const canDeleteForEveryone = isMine && !msg.read;
+
+      const buttons: {
+        text: string;
+        style: "default" | "cancel" | "destructive";
+        onPress?: () => void;
+      }[] = [];
+
+      if (canDeleteForEveryone) {
+        buttons.push({
+          text: "Apagar para todos",
+          style: "destructive",
+          onPress: () => void doDeleteMessage(msg.id, true),
+        });
+      }
+      buttons.push({
+        text: "Apagar para mim",
+        style: "destructive",
+        onPress: () => void doDeleteMessage(msg.id, false),
+      });
+      buttons.push({ text: "Cancelar", style: "cancel" });
+
+      showAlert("Apagar mensagem", undefined, buttons);
+    },
+    [myUserId, doDeleteMessage],
+  );
+
+  const handleDeleteConversation = useCallback(() => {
+    if (!activeContactId) return;
+    const conv = conversations.find((c) => c.contactUserId === activeContactId);
+    const name = conv?.contactName || "esta conversa";
+    showConfirm({
+      title: "Apagar conversa?",
+      message: `As mensagens com ${name} serão apagadas apenas para você. O outro participante continuará vendo a conversa.`,
+      confirmText: "Apagar",
+      destructive: true,
+      onConfirm: async () => {
+        const result = await clearChatConversation(activeContactId);
+        if (!result.ok) {
+          showAlert("Erro", result.error || "Não foi possível apagar a conversa.");
+          return;
+        }
+        setMessages([]);
+        setConversations((prev) =>
+          prev.filter((c) => c.contactUserId !== activeContactId),
+        );
+        setActiveContactId("");
+        showAlert("Conversa apagada.");
+      },
+    });
+  }, [activeContactId, conversations]);
 
   // ─── Scroll automático ───────────────────────────────────────────────────────
   const scrollToBottom = (animated: boolean) => {
@@ -1014,32 +1229,43 @@ export default function ChatScreen() {
                 </View>
               </View>
 
-              <View
-                style={[
-                  styles.presencePill,
-                  contactOnline
-                    ? styles.presencePillOnline
-                    : styles.presencePillOffline,
-                ]}
-              >
+              <View style={styles.chatHeaderRight}>
                 <View
                   style={[
-                    styles.presenceDot,
+                    styles.presencePill,
                     contactOnline
-                      ? styles.presenceDotOnline
-                      : styles.presenceDotOffline,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.presenceText,
-                    contactOnline
-                      ? styles.presenceTextOnline
-                      : styles.presenceTextOffline,
+                      ? styles.presencePillOnline
+                      : styles.presencePillOffline,
                   ]}
                 >
-                  {contactOnline ? "Online" : "Ausente"}
-                </Text>
+                  <View
+                    style={[
+                      styles.presenceDot,
+                      contactOnline
+                        ? styles.presenceDotOnline
+                        : styles.presenceDotOffline,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.presenceText,
+                      contactOnline
+                        ? styles.presenceTextOnline
+                        : styles.presenceTextOffline,
+                    ]}
+                  >
+                    {contactOnline ? "Online" : "Ausente"}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.deleteConvBtn}
+                  onPress={handleDeleteConversation}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Apagar conversa"
+                >
+                  <Ionicons name="trash-outline" size={19} color="#c0392b" />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1080,7 +1306,10 @@ export default function ChatScreen() {
                             isMine ? styles.msgRowOut : styles.msgRowIn,
                           ]}
                         >
-                          <View
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            onLongPress={() => confirmDeleteMessage(msg)}
+                            delayLongPress={350}
                             style={[
                               styles.bubble,
                               isMine ? styles.bubbleOut : styles.bubbleIn,
@@ -1092,6 +1321,8 @@ export default function ChatScreen() {
                               <TouchableOpacity
                                 activeOpacity={0.9}
                                 onPress={() => openMedia(msg.mediaUrl)}
+                                onLongPress={() => confirmDeleteMessage(msg)}
+                                delayLongPress={350}
                               >
                                 <ExpoImage
                                   source={{ uri: msg.mediaUrl }}
@@ -1104,7 +1335,56 @@ export default function ChatScreen() {
                               <AudioMessage
                                 uri={msg.mediaUrl || ""}
                                 mine={isMine}
+                                durationMs={msg.durationMs}
                               />
+                            ) : msg.type === "file" ? (
+                              <TouchableOpacity
+                                activeOpacity={0.85}
+                                onPress={() => openMedia(msg.mediaUrl)}
+                                onLongPress={() => confirmDeleteMessage(msg)}
+                                delayLongPress={350}
+                                style={styles.fileCard}
+                              >
+                                <View
+                                  style={[
+                                    styles.fileIconWrap,
+                                    isMine
+                                      ? styles.fileIconWrapOut
+                                      : styles.fileIconWrapIn,
+                                  ]}
+                                >
+                                  <Ionicons
+                                    name={documentIconFor(msg.mediaName)}
+                                    size={20}
+                                    color={isMine ? "#fff" : GREEN}
+                                  />
+                                </View>
+                                <View style={styles.fileInfo}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[
+                                      styles.fileName,
+                                      isMine
+                                        ? styles.bubbleTextOut
+                                        : styles.bubbleTextIn,
+                                    ]}
+                                  >
+                                    {msg.mediaName || "Documento"}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.fileHint,
+                                      isMine
+                                        ? styles.fileHintOut
+                                        : styles.fileHintIn,
+                                    ]}
+                                  >
+                                    {extensionOf(msg.mediaName).toUpperCase() ||
+                                      "ARQUIVO"}{" "}
+                                    · toque para abrir
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
                             ) : (
                               <Text
                                 style={[
@@ -1147,7 +1427,7 @@ export default function ChatScreen() {
                                 />
                               )}
                             </View>
-                          </View>
+                          </TouchableOpacity>
                         </View>
                       );
                     })}
@@ -1204,11 +1484,11 @@ export default function ChatScreen() {
               <View style={styles.composer}>
                 <TouchableOpacity
                   style={styles.attachBtn}
-                  onPress={handlePickImage}
+                  onPress={handlePickAttachment}
                   disabled={sendingAttachment}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="image-outline" size={22} color={GREEN} />
+                  <Ionicons name="attach-outline" size={24} color={GREEN} />
                 </TouchableOpacity>
                 <TextInput
                   style={styles.input}
@@ -1624,6 +1904,15 @@ const styles = StyleSheet.create({
   chatAvatarText: { fontSize: 16, fontWeight: "800", color: GREEN },
   chatName: { fontSize: 16, fontWeight: "800", color: "#183d32" },
   chatSub: { marginTop: 2, fontSize: 13, color: "#6f877d" },
+  chatHeaderRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  deleteConvBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#fbeae8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // Presence pill
   presencePill: {
@@ -1757,7 +2046,7 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: "#8fbbaa" },
 
-  // Botão de anexo (imagem)
+  // Botão de anexo (imagem ou documento)
   attachBtn: {
     width: 48,
     height: 48,
@@ -1805,6 +2094,28 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: "#e6f0eb",
   },
+
+  // Card de documento (PDF/DOC/DOCX) dentro da bolha
+  fileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    maxWidth: 240,
+  },
+  fileIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fileIconWrapIn: { backgroundColor: GREEN_LIGHT },
+  fileIconWrapOut: { backgroundColor: "rgba(255,255,255,0.22)" },
+  fileInfo: { flexShrink: 1 },
+  fileName: { fontSize: 14.5, fontWeight: "700" },
+  fileHint: { fontSize: 11.5, fontWeight: "600", marginTop: 2 },
+  fileHintIn: { color: "#7c958b" },
+  fileHintOut: { color: "rgba(255,255,255,0.8)" },
 
   // Empty state (sem conversa selecionada)
   noChatCard: {

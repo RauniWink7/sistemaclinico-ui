@@ -20,11 +20,14 @@ import { showAlert } from "../../services/feedback";
 import {
   AppointmentApiItem,
   deleteDocument,
+  DOCUMENT_MIME_TYPES,
   getAccessToken,
   getAppointments,
   getDocumentsByPatient,
   getPatientProfile,
   getSessionNote,
+  isAppointmentOverdue,
+  OVERDUE_STATUS_LABEL,
   updatePatientProfile,
   updateSessionNote,
 } from "../../services/api";
@@ -119,8 +122,18 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string }> 
   cancelled: { label: "Cancelada", color: "#888", bg: "#f2f2f2" },
 };
 
-const getStatusMeta = (status?: string) =>
-  STATUS_META[status ?? "scheduled"] ?? STATUS_META.scheduled;
+// Consulta em aberto cujo dia já passou vira "Dia Ultrapassado" — rótulo
+// automático, sem ação do usuário e nunca antes/durante o dia da consulta.
+const OVERDUE_META = {
+  label: OVERDUE_STATUS_LABEL,
+  color: "#c46a1a",
+  bg: "#fdf1e3",
+};
+
+const getStatusMeta = (status?: string, scheduledAt?: string) => {
+  if (isAppointmentOverdue(status, scheduledAt)) return OVERDUE_META;
+  return STATUS_META[status ?? "scheduled"] ?? STATUS_META.scheduled;
+};
 
 // ─── ReadOnly Row ─────────────────────────────────────────────────────────────
 const ReadOnlyRow = ({ label, value }: { label: string; value: string }) => (
@@ -209,7 +222,10 @@ const UploadModal = ({ visible, onClose, onUpload }: UploadModalProps) => {
 
   const handleSelectFile = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "*/*" });
+      // Só os formatos que o backend aceita (PDF, PNG, JPG, DOC, DOCX).
+      const result = await DocumentPicker.getDocumentAsync({
+        type: DOCUMENT_MIME_TYPES,
+      });
       if (!result.canceled && result.assets?.length > 0) {
         const file = result.assets[0];
         setSelectedFile({
@@ -886,7 +902,7 @@ export default function PsychologistPatientRecordScreen() {
                 />
               ) : appointments.length > 0 ? (
                 appointments.map((appt) => {
-                  const meta = getStatusMeta(appt.status);
+                  const meta = getStatusMeta(appt.status, appt.scheduled_at);
                   return (
                     <TouchableOpacity
                       key={appt.id}

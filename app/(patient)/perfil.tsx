@@ -28,11 +28,11 @@ const TODAY_STR = new Date().toLocaleDateString("en-CA");
 
 // Campos enviados no PATCH /api/auth/patients/{id}/profile/
 // phone e full_name NÃO ficam aqui — pertencem ao User, salvos via updateMe
+// medical_history/anamnesis NÃO ficam aqui — são clínicos, editáveis só pelo
+// profissional; o paciente nem visualiza nem envia esses campos.
 interface ProfilePayload {
   birth_date?: string;
   cpf?: string;
-  medical_history?: string;
-  anamnesis?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
 }
@@ -43,8 +43,6 @@ interface EditableFields {
   phone: string;
   birthDate: string;
   cpf: string;
-  medicalHistory: string;
-  anamnesis: string;
   emergencyName: string;
   emergencyPhone: string;
 }
@@ -134,8 +132,6 @@ export default function ProfileScreen() {
     phone: "",
     birthDate: "",
     cpf: "",
-    medicalHistory: "",
-    anamnesis: "",
     emergencyName: "",
     emergencyPhone: "",
   });
@@ -173,8 +169,6 @@ export default function ProfileScreen() {
         phone: profile.user.phone || "",
         birthDate: profile.birth_date || "",
         cpf: profile.cpf || "",
-        medicalHistory: profile.medical_history || "",
-        anamnesis: profile.anamnesis || "",
         emergencyName: profile.emergency_contact_name || "",
         emergencyPhone: profile.emergency_contact_phone || "",
       });
@@ -184,8 +178,6 @@ export default function ProfileScreen() {
         phone: profile.user.phone || "",
         birthDate: profile.birth_date || "",
         cpf: profile.cpf || "",
-        medicalHistory: profile.medical_history || "",
-        anamnesis: profile.anamnesis || "",
         emergencyName: profile.emergency_contact_name || "",
         emergencyPhone: profile.emergency_contact_phone || "",
       });
@@ -274,8 +266,6 @@ export default function ProfileScreen() {
       const profilePayload: ProfilePayload = {
         birth_date: fields.birthDate || undefined,
         cpf: fields.cpf || undefined,
-        medical_history: fields.medicalHistory || undefined,
-        anamnesis: fields.anamnesis || undefined,
         emergency_contact_name: fields.emergencyName || undefined,
         emergency_contact_phone: fields.emergencyPhone || undefined,
       };
@@ -393,34 +383,25 @@ export default function ProfileScreen() {
             />
           </View>
 
-          {/* ── Histórico Médico ── */}
-          <View style={styles.card}>
-            <SectionHeader
-              icon="document-text-outline"
-              title="Histórico Médico"
-            />
-
-            <EditableRow
-              label="Histórico Médico"
-              value={fields.medicalHistory}
-              onChangeText={set("medicalHistory")}
-              editable={editing}
-              multiline
-              numberOfLines={4}
-              minHeight={80}
-            />
-            <View style={styles.rowDivider} />
-
-            <EditableRow
-              label="Anamnese"
-              value={fields.anamnesis}
-              onChangeText={set("anamnesis")}
-              editable={editing}
-              multiline
-              numberOfLines={4}
-              minHeight={80}
-            />
-          </View>
+          {/* ── Clínica (somente leitura) ── */}
+          {!editing && (
+            <TouchableOpacity
+              style={styles.clinicBtn}
+              onPress={() => router.push("/(patient)/clinica" as any)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.clinicIconBox}>
+                <Ionicons name="business-outline" size={18} color={GREEN} />
+              </View>
+              <View style={styles.clinicBtnTextBox}>
+                <Text style={styles.clinicBtnTitle}>Informações da clínica</Text>
+                <Text style={styles.clinicBtnHint}>
+                  Endereço, contato e horários
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#b5cabf" />
+            </TouchableOpacity>
+          )}
 
           {/* ── Contato de Emergência ── */}
           <View style={styles.card}>
@@ -708,6 +689,33 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.2,
   },
+
+  // Clinic (read-only) button
+  clinicBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: GREEN,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  clinicIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#e8f7f1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clinicBtnTextBox: { flex: 1 },
+  clinicBtnTitle: { fontSize: 15, fontWeight: "700", color: "#1a3d31" },
+  clinicBtnHint: { fontSize: 12, color: "#7aab96", fontWeight: "500", marginTop: 2 },
 
   // Logout button
   logoutBtn: {

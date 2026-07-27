@@ -106,12 +106,25 @@ export function useChatAudioRecorder(): ChatAudioRecorder {
 }
 
 // ─── Player inline (nativo) ────────────────────────────────────────────────────
-export function AudioMessage({ uri, mine }: { uri: string; mine: boolean }) {
+export function AudioMessage({
+  uri,
+  mine,
+  durationMs: knownDurationMs,
+}: {
+  uri: string;
+  mine: boolean;
+  durationMs?: number;
+}) {
   const player = useAudioPlayer(uri ? { uri } : undefined);
   const status = useAudioPlayerStatus(player);
 
   const playing = status?.playing ?? false;
-  const durationMs = (status?.duration ?? 0) * 1000;
+  // Prefere a duração persistida no backend; usa a do player como fallback.
+  const statusDurationMs = (status?.duration ?? 0) * 1000;
+  const durationMs =
+    knownDurationMs != null && knownDurationMs > 0
+      ? knownDurationMs
+      : statusDurationMs;
   const positionMs = (status?.currentTime ?? 0) * 1000;
   const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
 

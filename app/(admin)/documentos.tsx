@@ -19,6 +19,7 @@ import {
 import { showAlert } from "../../services/feedback";
 import {
   deleteDocument,
+  DOCUMENT_MIME_TYPES,
   getClinicPatients,
   getDocuments,
   getMe,
@@ -454,7 +455,10 @@ function UploadModal({
 
   const handlePick = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "*/*" });
+      // Só os formatos que o backend aceita (PDF, PNG, JPG, DOC, DOCX).
+      const result = await DocumentPicker.getDocumentAsync({
+        type: DOCUMENT_MIME_TYPES,
+      });
       if (!result.canceled && result.assets?.length > 0) {
         const f = result.assets[0];
         setFile({ uri: f.uri, name: f.name || "documento", mimeType: f.mimeType });

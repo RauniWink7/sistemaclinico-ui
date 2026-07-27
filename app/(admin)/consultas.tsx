@@ -21,6 +21,8 @@ import {
     cancelAppointment,
     getAppointments,
     getPsychologists,
+    isAppointmentOverdue,
+    OVERDUE_STATUS_LABEL,
     updateAppointmentStatus,
 } from "../../services/api";
 import { partsToISO, toInputParts, todayISODate } from "../../services/dateInput";
@@ -106,6 +108,15 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
 };
 
+// Exibição da consulta em aberto cujo dia já passou (estado derivado —
+// o status gravado continua "scheduled"/"rescheduled").
+const OVERDUE_CONFIG: StatusConfig = {
+  label: OVERDUE_STATUS_LABEL,
+  color: ORANGE,
+  bg: "#fdf1e3",
+  icon: "hourglass-outline",
+};
+
 const FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "Todas" },
   { key: "scheduled", label: "Agendadas" },
@@ -177,13 +188,22 @@ const normalize = (
 
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
 
-const StatusBadge = ({ status }: { status: string }) => {
-  const cfg = STATUS_MAP[status] ?? {
-    label: status,
-    color: "#6c8c80",
-    bg: "#edf4f0",
-    icon: "ellipse-outline",
-  };
+const StatusBadge = ({
+  status,
+  scheduledAt,
+}: {
+  status: string;
+  scheduledAt?: string;
+}) => {
+  const overdue = isAppointmentOverdue(status, scheduledAt);
+  const cfg = overdue
+    ? OVERDUE_CONFIG
+    : (STATUS_MAP[status] ?? {
+        label: status,
+        color: "#6c8c80",
+        bg: "#edf4f0",
+        icon: "ellipse-outline",
+      });
   return (
     <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
       <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
@@ -219,7 +239,7 @@ const AppointmentCard = ({
             {item.professionalName}
           </Text>
         </View>
-        <StatusBadge status={item.status} />
+        <StatusBadge status={item.status} scheduledAt={item.dateTime} />
       </View>
 
       <View style={styles.cardDetails}>

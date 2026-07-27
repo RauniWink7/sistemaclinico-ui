@@ -14,7 +14,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getMe, isPushEnabled, logout, unregisterDeviceToken } from "../../services/api";
+import {
+  clearAllChatMessages,
+  deleteAllNotifications,
+  getMe,
+  isPushEnabled,
+  logout,
+  unregisterDeviceToken,
+} from "../../services/api";
 import { showConfirm, showToast } from "../../services/feedback";
 import { registerForPushNotifications } from "../../services/push";
 
@@ -106,6 +113,39 @@ export default function SettingsScreen() {
     });
   };
 
+  const handleClearNotifications = () => {
+    showConfirm({
+      title: "Apagar todas as notificações?",
+      message: "Todas as suas notificações serão removidas. Esta ação não pode ser desfeita.",
+      confirmText: "Apagar",
+      destructive: true,
+      onConfirm: async () => {
+        const result = await deleteAllNotifications();
+        showToast(
+          result.ok ? "Notificações apagadas." : result.error || "Não foi possível apagar.",
+          result.ok ? "success" : "error",
+        );
+      },
+    });
+  };
+
+  const handleClearChat = () => {
+    showConfirm({
+      title: "Apagar todas as mensagens?",
+      message:
+        "Todas as mensagens de todas as suas conversas serão removidas apenas para você. Os outros participantes continuarão vendo as mensagens.",
+      confirmText: "Apagar",
+      destructive: true,
+      onConfirm: async () => {
+        const result = await clearAllChatMessages();
+        showToast(
+          result.ok ? "Mensagens apagadas." : result.error || "Não foi possível apagar.",
+          result.ok ? "success" : "error",
+        );
+      },
+    });
+  };
+
   const openSupportEmail = () => {
     Linking.openURL(
       `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Suporte - Sistema Clínico")}`,
@@ -188,6 +228,26 @@ export default function SettingsScreen() {
                 />
               )}
             </View>
+          </View>
+
+          {/* ── Dados ── */}
+          <Text style={styles.sectionTitle}>Dados</Text>
+          <View style={styles.card}>
+            <Row
+              icon="notifications-off-outline"
+              label="Apagar todas as notificações"
+              onPress={handleClearNotifications}
+              danger
+              hideChevron
+            />
+            <Row
+              icon="trash-outline"
+              label="Apagar todas as mensagens"
+              onPress={handleClearChat}
+              danger
+              hideChevron
+              last
+            />
           </View>
 
           {/* ── Privacidade e Termos ── */}

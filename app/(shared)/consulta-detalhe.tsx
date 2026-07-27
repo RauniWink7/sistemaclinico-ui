@@ -21,6 +21,8 @@ import {
   updateAppointmentStatus,
   getAccessToken,
   getRoleFromToken,
+  isAppointmentOverdue,
+  OVERDUE_STATUS_LABEL,
 } from '../../services/api';
 import { partsToISO, toInputParts, todayISODate } from '../../services/dateInput';
 import { DateField, TimeField } from '../../components/DateTimeField';
@@ -44,6 +46,14 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   cancelled:   { label: 'Cancelada',      color: '#d95c5c', bg: '#fdeeee', icon: 'close-circle-outline' },
   no_show:     { label: 'Nao compareceu', color: '#c46a1a', bg: '#fef3e8', icon: 'alert-circle-outline' },
   rescheduled: { label: 'Remarcada',      color: '#8a55d9', bg: '#f3ecff', icon: 'refresh-circle-outline' },
+};
+
+// Estado derivado: consulta em aberto cujo dia ja passou.
+const OVERDUE_CONFIG: StatusConfig = {
+  label: OVERDUE_STATUS_LABEL,
+  color: '#c46a1a',
+  bg: '#fdf1e3',
+  icon: 'hourglass-outline',
 };
 
 const formatDate = (iso: string): string => {
@@ -159,8 +169,13 @@ export default function ConsultaDetalheScreen() {
   // ─── Derived data ──────────────────────────────────────────────────────────
 
   const status = appointment?.status ?? 'scheduled';
-  const statusCfg = STATUS_MAP[status] ?? STATUS_MAP.scheduled;
   const scheduledAt = appointment?.scheduled_at ?? '';
+  // Consulta em aberto cujo dia ja passou: rotulo automatico, sem acao do
+  // usuario e nunca antes/durante o dia da consulta. As acoes disponiveis
+  // continuam sendo as do status real (agendada/remarcada).
+  const statusCfg = isAppointmentOverdue(status, scheduledAt)
+    ? OVERDUE_CONFIG
+    : (STATUS_MAP[status] ?? STATUS_MAP.scheduled);
   const durationMinutes = appointment?.duration_minutes;
 
   const professionalId = appointment?.professional ?? '';

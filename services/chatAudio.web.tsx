@@ -159,19 +159,35 @@ export function useChatAudioRecorder(): ChatAudioRecorder {
 }
 
 // ─── Player inline (web) ───────────────────────────────────────────────────────
-export function AudioMessage({ uri, mine }: { uri: string; mine: boolean }) {
+// durationMs (opcional): duração real persistida no backend, medida na gravação.
+// Quando presente, é a fonte de verdade — evita o `audio.duration` do webm de
+// MediaRecorder, que o navegador reporta como Infinity/valor-lixo (causava, ex.,
+// um áudio de 5s aparecer como 40 min).
+export function AudioMessage({
+  uri,
+  mine,
+  durationMs: knownDurationMs,
+}: {
+  uri: string;
+  mine: boolean;
+  durationMs?: number;
+}) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
-  const [durationMs, setDurationMs] = useState(0);
+  const [detectedDurationMs, setDetectedDurationMs] = useState(0);
+
+  const hasKnownDuration = knownDurationMs != null && knownDurationMs > 0;
 
   useEffect(() => {
     if (!uri || typeof Audio === "undefined") return undefined;
     const audio = new Audio(uri);
     audioRef.current = audio;
 
+    // Só detecta a duração pelo navegador quando ela NÃO veio do backend.
     // O Chrome reporta duration=Infinity para webm de MediaRecorder até um seek
-    // forçado. Enquanto "consertamos", ignoramos os timeupdate intermediários.
+    // forçado; esse "hack" às vezes devolve um valor-lixo enorme, então só o
+    // usamos como último recurso (mensagens antigas, sem duração persistida).
     let fixingDuration = false;
 
     const onTime = () => {
@@ -179,8 +195,9 @@ export function AudioMessage({ uri, mine }: { uri: string; mine: boolean }) {
       setPositionMs(audio.currentTime * 1000);
     };
     const onLoaded = () => {
+      if (hasKnownDuration) return;
       if (Number.isFinite(audio.duration)) {
-        setDurationMs(audio.duration * 1000);
+        setDetectedDurationMs(audio.duration * 1000);
         return;
       }
       if (fixingDuration) return;
@@ -188,7 +205,7 @@ export function AudioMessage({ uri, mine }: { uri: string; mine: boolean }) {
       const resolveDuration = () => {
         if (!Number.isFinite(audio.duration)) return;
         audio.removeEventListener("timeupdate", resolveDuration);
-        setDurationMs(audio.duration * 1000);
+        setDetectedDurationMs(audio.duration * 1000);
         audio.currentTime = 0;
         fixingDuration = false;
       };
@@ -203,8 +220,10 @@ export function AudioMessage({ uri, mine }: { uri: string; mine: boolean }) {
     const onPause = () => setPlaying(false);
 
     audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("durationchange", onLoaded);
+    if (!hasKnownDuration) {
+      audio.addEventListener("loadedmetadata", onLoaded);
+      audio.addEventListener("durationchange", onLoaded);
+    }
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
@@ -219,7 +238,9 @@ export function AudioMessage({ uri, mine }: { uri: string; mine: boolean }) {
       audio.removeEventListener("pause", onPause);
       audioRef.current = null;
     };
-  }, [uri]);
+  }, [uri, hasKnownDuration]);
+
+  const durationMs = hasKnownDuration ? knownDurationMs! : detectedDurationMs;
 
   const toggle = useCallback(() => {
     const audio = audioRef.current;

@@ -44,6 +44,9 @@ export interface AppointmentApiItem {
   scheduled_at?: string;
   status?: string;
   status_display?: string;
+  // Derivado no backend: consulta ainda em aberto cujo DIA ja passou.
+  // Nunca e gravado nem forcado pelo usuario — so muda a exibicao.
+  is_overdue?: boolean;
   completed_at?: string | null;
   psychologist?: string;
   specialty?: string;
@@ -92,6 +95,8 @@ export interface ChatMessageApiItem {
   text?: string;
   message_type?: string;
   media_url?: string;
+  media_name?: string;
+  media_duration_ms?: number | null;
   attachment?: string;
   created_at: string;
   read?: boolean;
@@ -1319,12 +1324,14 @@ export const sendChatMessage = async (
   return { ok: true, data };
 };
 
-// POST /api/chat/messages/ (multipart) â€” enviar anexo de imagem ou Ã¡udio.
+// POST /api/chat/messages/ (multipart) â€” enviar anexo de imagem, Ã¡udio ou
+// documento (PDF/DOC/DOCX, os mesmos tipos aceitos no mÃ³dulo de documentos).
 // NÃ£o enviamos message_type: o backend infere pela extensÃ£o do arquivo.
 export const sendChatAttachment = async (
   receiverId: string, // user.id do outro lado
   file: { uri: string; name: string; type: string },
   appointmentId?: string,
+  durationMs?: number, // duraÃ§Ã£o real do Ã¡udio medida na gravaÃ§Ã£o
 ): Promise<ApiResult<ChatMessageApiItem>> => {
   try {
     const token = await getAccessToken();
@@ -1333,6 +1340,9 @@ export const sendChatAttachment = async (
     const formData = new FormData();
     formData.append("receiver", receiverId);
     if (appointmentId) formData.append("appointment", appointmentId);
+    if (durationMs != null && durationMs > 0) {
+      formData.append("media_duration_ms", String(Math.round(durationMs)));
+    }
 
     // No Expo Web o objeto { uri, name, type } do RN nÃ£o Ã© entendido pelo browser:
     // Ã© preciso buscar o URI como Blob real antes de anexar (mesmo padrÃ£o do uploadDocument).
@@ -1377,6 +1387,22 @@ export const getChatContacts = async (): Promise<ApiResult> => {
   return { ok: true, data };
 };
 
+// GET /api/chat/presence/?with=<user_id> â€” saber se o outro usuÃ¡rio estÃ¡ online.
+// Fonte confiÃ¡vel (modelo Presence no banco): funciona mesmo quando o handshake
+// de presenÃ§a em tempo real do WebSocket nÃ£o chega.
+export const getContactPresence = async (
+  userId: string,
+): Promise<ApiResult<{ online: boolean }>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/chat/presence/?with=${encodeURIComponent(userId)}`,
+    { method: "GET", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 // PATCH /api/chat/messages/read/?with=<user_id> â€” marcar mensagens como lidas
 export const markMessagesRead = async (userId: string): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
@@ -1385,6 +1411,63 @@ export const markMessagesRead = async (userId: string): Promise<ApiResult> => {
     `${API_BASE_URL}/chat/messages/read/?with=${encodeURIComponent(userId)}`,
     { method: "PATCH", headers },
   );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// DELETE /api/chat/messages/<id>/?for_everyone=<bool> â€” apagar uma mensagem.
+// forEveryone=true: sÃ³ o remetente e sÃ³ enquanto nÃ£o lida (apaga dos dois lados).
+// forEveryone=false: oculta apenas para o usuÃ¡rio logado.
+export const deleteChatMessage = async (
+  messageId: string,
+  forEveryone: boolean,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/chat/messages/${encodeURIComponent(messageId)}/?for_everyone=${forEveryone ? "true" : "false"}`,
+    { method: "DELETE", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// DELETE /api/chat/messages/clear/?with=<user_id> â€” apagar a conversa apenas
+// para o usuÃ¡rio logado (o outro lado mantÃ©m as mensagens).
+export const clearChatConversation = async (
+  userId: string,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/chat/messages/clear/?with=${encodeURIComponent(userId)}`,
+    { method: "DELETE", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// DELETE /api/chat/messages/clear-all/ â€” apagar todas as mensagens de todas as
+// conversas apenas para o usuÃ¡rio logado.
+export const clearAllChatMessages = async (): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/chat/messages/clear-all/`,
+    { method: "DELETE", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// DELETE /api/notifications/ â€” apagar todas as notificaÃ§Ãµes in-app do usuÃ¡rio.
+export const deleteAllNotifications = async (): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
+  const { response, data } = await fetchJson(`${API_BASE_URL}/notifications/`, {
+    method: "DELETE",
+    headers,
+  });
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
@@ -1834,6 +1917,57 @@ export const getRoleFromToken = (token: string): string => {
 export const getClinicIdFromToken = (token: string): string | null => {
   const payload = parseJwt(token);
   return payload?.clinic_id ?? null;
+};
+
+// ─── Tipos de arquivo aceitos ────────────────────────────────────────────────
+// Espelham apps/uploads.py no backend, que revalida extensão E conteúdo
+// (assinatura do arquivo). Usados para filtrar o seletor de arquivos, de modo
+// que o usuário não escolha algo que o servidor vai recusar depois.
+export const DOCUMENT_MIME_TYPES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+
+export const DOCUMENT_EXTENSIONS_LABEL = "PDF, PNG, JPG, DOC ou DOCX";
+
+// ─── Consulta com o dia ultrapassado ─────────────────────────────────────────
+// Estado DERIVADO (espelha Appointment.is_overdue do backend): consulta ainda
+// em aberto cujo DIA já passou. Regras:
+//   - comparação por DIA local, não por horário — não aparece antes do dia da
+//     consulta nem durante o dia dela, só a partir do dia seguinte;
+//   - só vale para consultas em aberto (agendada/remarcada); realizada,
+//     cancelada e não compareceu nunca ficam ultrapassadas;
+//   - nunca é gravado e não há ação de usuário que o force.
+// Calculado no cliente para o rótulo reagir na hora a mudanças locais de
+// status (ex.: concluir a consulta) sem precisar recarregar da API.
+export const OVERDUE_STATUS_LABEL = "Dia Ultrapassado";
+
+// Aceita tanto os status do backend quanto os rótulos normalizados em pt-br
+// usados nas telas do paciente.
+const OPEN_STATUSES = ["scheduled", "rescheduled", "agendada", "remarcada"];
+
+export const isAppointmentOverdue = (
+  status?: string,
+  scheduledAt?: string,
+): boolean => {
+  if (!status || !scheduledAt) return false;
+  if (!OPEN_STATUSES.includes(status.toLowerCase())) return false;
+
+  const scheduled = new Date(scheduledAt);
+  if (Number.isNaN(scheduled.getTime())) return false;
+
+  const day = new Date(
+    scheduled.getFullYear(),
+    scheduled.getMonth(),
+    scheduled.getDate(),
+  );
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  return day.getTime() < today.getTime();
 };
 
 export const getRouteForRole = (
