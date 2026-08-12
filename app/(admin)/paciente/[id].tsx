@@ -13,7 +13,17 @@ import {
   View,
 } from 'react-native';
 import { showAlert } from '../../../services/feedback';
-import { getPatientProfile, updatePatientProfile, updateUser, PatientProfileApiItem } from '../../../services/api';
+import {
+  getPatientProfile,
+  getPsychologists,
+  updatePatientAssignedProfessional,
+  updateUser,
+  PatientProfileApiItem,
+  ProfessionalApiItem,
+} from '../../../services/api';
+
+const psychologistName = (item?: ProfessionalApiItem | null) =>
+  item?.user?.full_name?.trim() || item?.full_name?.trim() || item?.name?.trim() || '';
 
 // ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
 const GREEN = '#2e8b6e';
@@ -75,6 +85,12 @@ export default function PatientDetailScreen() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
 
+  // Troca do psicólogo responsável — exclusiva do administrador.
+  const [psychologists, setPsychologists] = useState<ProfessionalApiItem[]>([]);
+  const [changingPsychologist, setChangingPsychologist] = useState(false);
+  const [selectedPsychologist, setSelectedPsychologist] = useState('');
+  const [savingPsychologist, setSavingPsychologist] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -108,6 +124,41 @@ export default function PatientDetailScreen() {
     };
     void load();
   }, [id]);
+
+  const handleStartChangingPsychologist = async () => {
+    setChangingPsychologist(true);
+    setSelectedPsychologist(patient?.assigned_professional ?? '');
+    if (psychologists.length === 0) {
+      const result = await getPsychologists();
+      setPsychologists(result.ok && Array.isArray(result.data) ? result.data : []);
+    }
+  };
+
+  const handleSavePsychologist = async () => {
+    if (!patient || !selectedPsychologist) return;
+
+    setSavingPsychologist(true);
+    try {
+      const result = await updatePatientAssignedProfessional(
+        patient.user.id,
+        selectedPsychologist,
+      );
+      if (!result.ok) {
+        showAlert('Erro', result.error ?? 'Não foi possível alterar o psicólogo.');
+        return;
+      }
+      // Relê o perfil para trazer assigned_professional_detail já atualizado,
+      // em vez de remontar o objeto aninhado na mão.
+      const atualizado = await getPatientProfile(patient.user.id);
+      if (atualizado.ok && atualizado.data) setPatient(atualizado.data);
+      setChangingPsychologist(false);
+      showAlert('Sucesso', 'Psicólogo responsável atualizado.');
+    } catch (err: any) {
+      showAlert('Erro', err?.message ?? 'Ocorreu um erro inesperado.');
+    } finally {
+      setSavingPsychologist(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!patient) return;
@@ -241,6 +292,106 @@ export default function PatientDetailScreen() {
               label="Cadastrado em"
               value={formatDate(patient.user.created_at)}
             />
+          </View>
+
+          {/* ── Psicólogo responsável ── */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Psicólogo responsável</Text>
+
+            <InfoRow
+              icon="person-outline"
+              label="Atendido por"
+              value={psychologistName(patient.assigned_professional_detail) || '—'}
+            />
+
+            {changingPsychologist ? (
+              <>
+                <View style={styles.divider} />
+                <Text style={styles.psychologistHint}>
+                  O paciente não escolhe com quem se consulta. Ao trocar, os próximos
+                  agendamentos passam a ser com o novo psicólogo; as consultas já marcadas
+                  não mudam.
+                </Text>
+
+                {psychologists.length === 0 ? (
+                  <ActivityIndicator color={GREEN} style={{ marginTop: 14 }} />
+                ) : (
+                  <View style={styles.psychologistList}>
+                    {psychologists.map((item) => {
+                      const selected = selectedPsychologist === String(item.id);
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[styles.psychologistOption, selected && styles.psychologistOptionSelected]}
+                          onPress={() => setSelectedPsychologist(String(item.id))}
+                          disabled={savingPsychologist}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name={selected ? 'radio-button-on' : 'radio-button-off'}
+                            size={20}
+                            color={selected ? GREEN : '#a8c4b8'}
+                          />
+                          <View style={styles.psychologistInfo}>
+                            <Text style={styles.psychologistName}>{psychologistName(item)}</Text>
+                            <Text style={styles.psychologistMeta}>
+                              {[item.specialty || 'Psicologia', item.crp ? `CRP ${item.crp}` : null]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                <View style={styles.editActionsRow}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setChangingPsychologist(false)}
+                    disabled={savingPsychologist}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton,
+                      (savingPsychologist ||
+                        !selectedPsychologist ||
+                        selectedPsychologist === patient.assigned_professional) &&
+                        styles.saveButtonDisabled,
+                    ]}
+                    onPress={handleSavePsychologist}
+                    disabled={
+                      savingPsychologist ||
+                      !selectedPsychologist ||
+                      selectedPsychologist === patient.assigned_professional
+                    }
+                    activeOpacity={0.85}
+                  >
+                    {savingPsychologist ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="save-outline" size={16} color="#fff" />
+                        <Text style={styles.saveButtonText}>Salvar</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.changePsychologistButton}
+                onPress={handleStartChangingPsychologist}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="swap-horizontal-outline" size={18} color={GREEN} />
+                <Text style={styles.changePsychologistText}>Alterar psicólogo</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* ── Edição rápida ── */}
@@ -478,6 +629,25 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   editButtonText: { fontSize: 15, fontWeight: '700', color: GREEN },
+
+  // Psicólogo responsável
+  psychologistHint: { fontSize: 12.5, color: TEXT_MUTED, lineHeight: 18, marginTop: 12 },
+  psychologistList: { marginTop: 14, gap: 8 },
+  psychologistOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: '#f6faf8', paddingHorizontal: 14, paddingVertical: 12,
+  },
+  psychologistOptionSelected: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
+  psychologistInfo: { flex: 1, minWidth: 0 },
+  psychologistName: { fontSize: 14, fontWeight: '700', color: TEXT_DARK },
+  psychologistMeta: { fontSize: 12, color: TEXT_MUTED, marginTop: 2 },
+  changePsychologistButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 14, paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: GREEN_LIGHT, backgroundColor: GREEN_LIGHT,
+  },
+  changePsychologistText: { fontSize: 14, fontWeight: '700', color: GREEN },
 
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   actionIconBox: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },

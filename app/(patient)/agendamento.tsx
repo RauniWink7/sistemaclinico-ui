@@ -1,11 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Image,
-  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,8 +17,8 @@ import {
   AppointmentAvailabilityApiItem,
   createAppointment,
   getCurrentPatientProfileId,
+  getMyAssignedProfessional,
   getPsychologistAvailability,
-  getPsychologists,
   ProfessionalApiItem,
 } from "../../services/api";
 import { showAlert } from "../../services/feedback";
@@ -126,31 +125,18 @@ const normalizeProfessional = (item: ProfessionalApiItem): Psychologist => {
   };
 };
 
-const parsePsychologistParam = (param: string | string[] | undefined) => {
-  if (!param) return null;
-  try {
-    const parsed =
-      typeof param === "string" ? JSON.parse(param) : JSON.parse(param[0]);
-    return normalizeProfessional(parsed);
-  } catch {
-    return null;
-  }
-};
-
 type AvailabilityItem = AppointmentAvailabilityApiItem;
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function ScheduleScreen() {
-  const { psychologist: psychologistParam } = useLocalSearchParams();
-  const initialPsychologist = parsePsychologistParam(psychologistParam);
-  const initialPsychologistId = initialPsychologist?.id;
   const { width: screenWidth } = useWindowDimensions();
   const cellSize = Math.min(46, Math.max(36, (screenWidth - 60) / 7));
 
   const today = new Date();
-  const [professionals, setProfessionals] = useState<Psychologist[]>([]);
+  // O paciente não escolhe o profissional: a consulta é sempre com o psicólogo
+  // vinculado ao seu perfil, definido pelo administrador no cadastro.
   const [activePsychologist, setActivePsychologist] =
-    useState<Psychologist | null>(initialPsychologist);
+    useState<Psychologist | null>(null);
   const [loadingPros, setLoadingPros] = useState(true);
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -161,9 +147,6 @@ export default function ScheduleScreen() {
   const [patientProfileId, setPatientProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(true);
-  const [infoPsychologist, setInfoPsychologist] = useState<Psychologist | null>(
-    null,
-  );
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -195,31 +178,17 @@ export default function ScheduleScreen() {
   }, []);
 
   React.useEffect(() => {
-    const loadProfessionals = async () => {
+    const loadAssignedProfessional = async () => {
       setLoadingPros(true);
-      const result = await getPsychologists();
-
-      const rawPros: ProfessionalApiItem[] =
-        result.ok && Array.isArray(result.data) ? result.data : [];
-
-      if (rawPros.length > 0) {
-        const mapped = rawPros.map(normalizeProfessional);
-        setProfessionals(mapped);
-
-        const match = initialPsychologistId
-          ? (mapped.find((p) => p.id === initialPsychologistId) ?? null)
-          : null;
-        setActivePsychologist(match ?? mapped[0] ?? null);
-      } else {
-        setProfessionals([]);
-        setActivePsychologist(null);
-      }
-
+      const result = await getMyAssignedProfessional();
+      setActivePsychologist(
+        result.ok && result.data ? normalizeProfessional(result.data) : null,
+      );
       setLoadingPros(false);
     };
 
-    void loadProfessionals();
-  }, [psychologistParam, initialPsychologistId]);
+    void loadAssignedProfessional();
+  }, []);
 
   React.useEffect(() => {
     const loadAvailability = async () => {
@@ -438,79 +407,11 @@ export default function ScheduleScreen() {
         <Animated.View
           style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
         >
-          {/* ── Professionals picker ── */}
-          <View style={styles.professionalsSection}>
-            <Text style={styles.sectionTitle}>Escolha um profissional</Text>
-            <View style={styles.professionalsList}>
-              {loadingPros ? (
-                <ActivityIndicator color={GREEN} />
-              ) : professionals.length === 0 ? (
-                <Text style={styles.noSlots}>
-                  Nenhum profissional encontrado.
-                </Text>
-              ) : (
-                professionals.map((item) => {
-                  const isActive = item.id === activePsychologist?.id;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[
-                        styles.professionalCard,
-                        isActive && styles.professionalCardSelected,
-                      ]}
-                      activeOpacity={0.85}
-                      onPress={() => setActivePsychologist(item)}
-                    >
-                      <View
-                        style={[
-                          styles.professionalAvatar,
-                          { backgroundColor: item.bg },
-                        ]}
-                      >
-                        {item.photo ? (
-                          <Image
-                            source={{ uri: item.photo }}
-                            style={styles.professionalAvatarImg}
-                          />
-                        ) : (
-                          <Text
-                            style={[
-                              styles.professionalAvatarText,
-                              { color: item.color },
-                            ]}
-                          >
-                            {item.initials}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.professionalInfo}>
-                        <Text style={styles.professionalNameSmall}>
-                          {item.name}
-                        </Text>
-                        <Text style={styles.professionalSpecialtySmall}>
-                          {item.specialty}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.infoBtn}
-                        onPress={() => setInfoPsychologist(item)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name="information-circle-outline"
-                          size={22}
-                          color={GREEN}
-                        />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
+          {loadingPros ? (
+            <View style={styles.card}>
+              <ActivityIndicator color={GREEN} />
             </View>
-          </View>
-
-          {activePsychologist ? (
+          ) : activePsychologist ? (
             <>
               {/* ── Psychologist card ── */}
               <View style={styles.psychCard}>
@@ -694,7 +595,8 @@ export default function ScheduleScreen() {
           ) : (
             <View style={styles.card}>
               <Text style={styles.noSlots}>
-                Selecione um profissional com horário disponível acima.
+                Você ainda não tem um psicólogo responsável definido. Entre em
+                contato com o administrador da clínica.
               </Text>
             </View>
           )}
@@ -811,102 +713,6 @@ export default function ScheduleScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* ── Modal: perfil completo do psicólogo ── */}
-      <Modal
-        visible={!!infoPsychologist}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setInfoPsychologist(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <TouchableOpacity
-              style={styles.modalClose}
-              onPress={() => setInfoPsychologist(null)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="close-outline" size={22} color="#4c7f6d" />
-            </TouchableOpacity>
-
-            {infoPsychologist && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.modalHeader}>
-                  <View
-                    style={[
-                      styles.modalAvatar,
-                      { backgroundColor: infoPsychologist.bg },
-                    ]}
-                  >
-                    {infoPsychologist.photo ? (
-                      <Image
-                        source={{ uri: infoPsychologist.photo }}
-                        style={styles.modalAvatarImg}
-                      />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.modalAvatarText,
-                          { color: infoPsychologist.color },
-                        ]}
-                      >
-                        {infoPsychologist.initials}
-                      </Text>
-                    )}
-                  </View>
-                  <Text style={styles.modalName}>{infoPsychologist.name}</Text>
-                  {infoPsychologist.crp ? (
-                    <Text style={styles.modalCrp}>{infoPsychologist.crp}</Text>
-                  ) : null}
-                  <View
-                    style={[
-                      styles.specialtyBadge,
-                      { backgroundColor: infoPsychologist.bg, marginTop: 8 },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.specialtyText,
-                        { color: infoPsychologist.color },
-                      ]}
-                    >
-                      {infoPsychologist.specialty}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.modalInfoRow}>
-                  <Ionicons name="time-outline" size={16} color={GREEN} />
-                  <Text style={styles.modalInfoText}>
-                    Duração da sessão: {infoPsychologist.sessionDuration} min
-                  </Text>
-                </View>
-
-                <View style={styles.modalDivider} />
-
-                <Text style={styles.modalSectionTitle}>Sobre</Text>
-                <Text style={styles.modalBio}>
-                  {infoPsychologist.bio ||
-                    "Este profissional ainda não adicionou uma descrição."}
-                </Text>
-
-                <TouchableOpacity
-                  style={styles.modalPrimaryBtn}
-                  onPress={() => {
-                    setActivePsychologist(infoPsychologist);
-                    setInfoPsychologist(null);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="calendar-outline" size={18} color="#fff" />
-                  <Text style={styles.modalPrimaryBtnText}>
-                    Agendar com {infoPsychologist.name.split(" ")[0]}
-                  </Text>
-                </TouchableOpacity>
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -953,69 +759,6 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  professionalsSection: {
-    width: "100%",
-  },
-  professionalsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 10,
-  },
-  professionalCard: {
-    minWidth: 140,
-    flex: 1,
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#e8f7f1",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  professionalCardSelected: {
-    borderColor: GREEN,
-    backgroundColor: "#e8f7f1",
-  },
-  professionalAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  professionalAvatarText: {
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  professionalAvatarImg: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 14,
-  },
-  infoBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#e8f7f1",
-  },
-  professionalInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  professionalNameSmall: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1a3d31",
-  },
-  professionalSpecialtySmall: {
-    fontSize: 11,
-    color: "#7aab96",
-    marginTop: 2,
-  },
 
   // Psychologist card
   psychCard: {
@@ -1112,11 +855,6 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#1a3d31",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
     color: "#1a3d31",
   },
 
@@ -1310,108 +1048,4 @@ const styles = StyleSheet.create({
   },
 
   // Modal — perfil do psicólogo
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(20,45,37,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 440,
-    maxHeight: "85%",
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 24,
-  },
-  modalClose: {
-    position: "absolute",
-    top: 14,
-    right: 14,
-    zIndex: 2,
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: "#f0f8f4",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalHeader: {
-    alignItems: "center",
-    paddingTop: 8,
-  },
-  modalAvatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    marginBottom: 12,
-  },
-  modalAvatarImg: {
-    width: "100%",
-    height: "100%",
-  },
-  modalAvatarText: {
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  modalName: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#1a3d31",
-    textAlign: "center",
-  },
-  modalCrp: {
-    fontSize: 13,
-    color: "#7aab96",
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  modalInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 18,
-  },
-  modalInfoText: {
-    fontSize: 14,
-    color: "#1a3d31",
-    fontWeight: "600",
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#eaf4ef",
-    marginVertical: 16,
-  },
-  modalSectionTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#4c7f6d",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  modalBio: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: "#3d5b50",
-  },
-  modalPrimaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: GREEN,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 24,
-  },
-  modalPrimaryBtnText: {
-    color: WHITE,
-    fontSize: 15,
-    fontWeight: "800",
-  },
 });

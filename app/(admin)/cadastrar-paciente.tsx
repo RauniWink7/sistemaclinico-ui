@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ScrollView,
   StatusBar,
@@ -13,7 +13,7 @@ import { showAlert } from '../../services/feedback';
 import { DateField } from '../../components/DateTimeField';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { createPatientAsAdmin } from '../../services/api';
+import { createPatientAsAdmin, getPsychologists, ProfessionalApiItem } from '../../services/api';
 
 // ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
 const GREEN = '#2e8b6e';
@@ -33,8 +33,13 @@ const CARD_SHADOW = {
   elevation: 2,
 } as const;
 
+const psychologistName = (item: ProfessionalApiItem) =>
+  item.user?.full_name?.trim() || item.full_name?.trim() || item.name?.trim() || 'Profissional';
+
 export default function CadastrarPacienteScreen() {
   const [loading, setLoading] = useState(false);
+  const [psychologists, setPsychologists] = useState<ProfessionalApiItem[]>([]);
+  const [loadingPsychologists, setLoadingPsychologists] = useState(true);
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -43,10 +48,23 @@ export default function CadastrarPacienteScreen() {
     cpf: '',
     emergencyName: '',
     emergencyPhone: '',
+    assignedProfessional: '',
   });
 
   const patch = (field: keyof typeof form) => (val: string) =>
     setForm((f) => ({ ...f, [field]: val }));
+
+  // O paciente é vinculado a um psicólogo já no cadastro e não escolhe com quem
+  // se consulta — a troca depois passa pelo administrador.
+  useEffect(() => {
+    const carregar = async () => {
+      setLoadingPsychologists(true);
+      const result = await getPsychologists();
+      setPsychologists(result.ok && Array.isArray(result.data) ? result.data : []);
+      setLoadingPsychologists(false);
+    };
+    void carregar();
+  }, []);
 
   // Data máxima do calendário: hoje (não faz sentido nascer no futuro).
   const todayStr = new Date().toLocaleDateString('en-CA');
@@ -54,6 +72,12 @@ export default function CadastrarPacienteScreen() {
   const handleSubmit = async () => {
     if (!form.fullName || !form.email)
       return showAlert('Campos obrigatórios', 'Preencha nome e e-mail.');
+
+    if (!form.assignedProfessional)
+      return showAlert(
+        'Psicólogo responsável',
+        'Selecione o psicólogo que vai atender este paciente.',
+      );
 
     setLoading(true);
     const result = await createPatientAsAdmin({
@@ -64,6 +88,7 @@ export default function CadastrarPacienteScreen() {
       cpf: form.cpf || undefined,
       emergency_contact_name: form.emergencyName || undefined,
       emergency_contact_phone: form.emergencyPhone || undefined,
+      assigned_professional: form.assignedProfessional,
       send_invite: true,
     });
     setLoading(false);
@@ -110,6 +135,57 @@ export default function CadastrarPacienteScreen() {
 
             <Text style={styles.fieldLabel}>Telefone</Text>
             <TextInput style={styles.input} placeholder="(00) 00000-0000" placeholderTextColor="#94b3a6" value={form.phone} onChangeText={patch('phone')} keyboardType="phone-pad" />
+          </View>
+
+          {/* Psicólogo responsável */}
+          <View style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardIcon}>
+                <Ionicons name="people-outline" size={16} color={GREEN} />
+              </View>
+              <Text style={styles.cardTitle}>Psicólogo responsável *</Text>
+            </View>
+
+            <Text style={styles.cardHint}>
+              O paciente será atendido por este psicólogo e não poderá escolher outro.
+              A troca é feita por aqui, pelo administrador.
+            </Text>
+
+            {loadingPsychologists ? (
+              <ActivityIndicator color={GREEN} style={{ marginTop: 16 }} />
+            ) : psychologists.length === 0 ? (
+              <Text style={styles.emptyText}>
+                Nenhum psicólogo cadastrado. Cadastre um psicólogo antes de cadastrar pacientes.
+              </Text>
+            ) : (
+              <View style={styles.psychologistList}>
+                {psychologists.map((item) => {
+                  const selected = form.assignedProfessional === String(item.id);
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.psychologistOption, selected && styles.psychologistOptionSelected]}
+                      onPress={() => patch('assignedProfessional')(String(item.id))}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={selected ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={selected ? GREEN : '#a8c4b8'}
+                      />
+                      <View style={styles.psychologistInfo}>
+                        <Text style={styles.psychologistName}>{psychologistName(item)}</Text>
+                        <Text style={styles.psychologistMeta}>
+                          {[item.specialty || 'Psicologia', item.crp ? `CRP ${item.crp}` : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* Dados clínicos */}
@@ -194,6 +270,18 @@ const styles = StyleSheet.create({
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: 'none',
   },
+  cardHint: { fontSize: 12.5, color: TEXT_MUTED, lineHeight: 18, marginTop: 10 },
+  emptyText: { fontSize: 13, color: TEXT_MUTED, marginTop: 14, lineHeight: 19 },
+  psychologistList: { marginTop: 14, gap: 8 },
+  psychologistOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: '#f6faf8', paddingHorizontal: 14, paddingVertical: 12,
+  },
+  psychologistOptionSelected: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
+  psychologistInfo: { flex: 1, minWidth: 0 },
+  psychologistName: { fontSize: 14, fontWeight: '700', color: TEXT_DARK },
+  psychologistMeta: { fontSize: 12, color: TEXT_MUTED, marginTop: 2 },
   submitButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: GREEN, borderRadius: 14, paddingVertical: 16, marginBottom: 8,

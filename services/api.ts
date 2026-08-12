@@ -250,6 +250,11 @@ export interface PatientProfileApiItem {
   anamnesis?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  // Psicólogo responsável pelo paciente. Definido pelo administrador no
+  // cadastro — o paciente não escolhe com quem se consulta, só agenda com
+  // quem está vinculado aqui. Para o paciente o campo é somente-leitura.
+  assigned_professional?: string | null; // UUID do ProfessionalProfile
+  assigned_professional_detail?: ProfessionalApiItem | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -688,6 +693,8 @@ export const createPatientAsAdmin = async (payload: {
   anamnesis?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  // Obrigatório: o backend recusa o cadastro sem o psicólogo responsável.
+  assigned_professional: string; // UUID do ProfessionalProfile
   send_invite?: boolean;
 }): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
@@ -807,6 +814,37 @@ export const updatePatientProfile = async (
   );
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
+};
+
+// PATCH /api/auth/patients/<userId>/profile/ — troca o psicólogo responsável.
+// Só o administrador consegue: para o paciente o campo é somente-leitura no
+// serializer, e um PATCH dele é ignorado silenciosamente pelo backend.
+export const updatePatientAssignedProfessional = async (
+  userId: string, // user.id do paciente (não o id do PatientProfile)
+  professionalId: string, // UUID do ProfessionalProfile
+): Promise<ApiResult> =>
+  updatePatientProfile(userId, { assigned_professional: professionalId });
+
+// Psicólogo vinculado ao paciente autenticado, já com nome, CRP, bio e foto.
+// Vem do próprio perfil (assigned_professional_detail), sem requisição extra —
+// usado na tela "Meu psicólogo" e para fixar o profissional no agendamento.
+export const getMyAssignedProfessional = async (): Promise<
+  ApiResult<ProfessionalApiItem | null>
+> => {
+  const me = await getMe();
+  if (!me.ok || !me.data?.id) {
+    return {
+      ok: false,
+      error: me.error || "Não foi possível identificar o paciente.",
+    };
+  }
+
+  const profile = await getPatientProfile(me.data.id);
+  if (!profile.ok) {
+    return { ok: false, error: profile.error || "Perfil não encontrado." };
+  }
+
+  return { ok: true, data: profile.data?.assigned_professional_detail ?? null };
 };
 
 // GET /api/auth/<clinicId>/patients/

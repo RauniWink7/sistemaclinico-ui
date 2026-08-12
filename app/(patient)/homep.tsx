@@ -59,6 +59,14 @@ const SHORTCUTS = [
     bg: "#f0ebff",
     route: "Chat",
   },
+  {
+    id: "6",
+    label: "Meu\nPsicólogo",
+    icon: "person-outline",
+    color: "#2e8b6e",
+    bg: "#e8f7f1",
+    route: "MyPsychologist",
+  },
   // {
   //   id: "4",
   //   label: "Documentos",
@@ -435,12 +443,14 @@ export default function HomeP() {
                     | "/(shared)/chat"
                     | "/documento"
                     | "/perfil"
+                    | "/escolha"
                   > = {
                     Schedule: "/agendamento",
                     MyAppointments: "/consultas",
                     Chat: "/(shared)/chat",
                     Documents: "/documento",
                     Profile: "/perfil",
+                    MyPsychologist: "/escolha",
                   };
 
                   const targetRoute = routes[item.route];

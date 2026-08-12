@@ -4,7 +4,6 @@ import React, { useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
-    TextInput as RNTextInput,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -13,24 +12,7 @@ import {
     View,
 } from "react-native";
 import { showAlert } from "../../services/feedback";
-import { getPsychologists, ProfessionalApiItem } from "../../services/api";
-
-// Alias para evitar conflitos
-const TextInput = RNTextInput;
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface Psychologist {
-  id: string;
-  name: string;
-  crp: string;
-  specialty: string;
-  bio: string;
-  initials: string;
-  color: string;
-  bg: string;
-  sessions: number;
-  available: boolean;
-}
+import { getMyAssignedProfessional, ProfessionalApiItem } from "../../services/api";
 
 // ─── Psychologist Card ────────────────────────────────────────────────────────
 const PsychologistCard = ({
@@ -147,40 +129,33 @@ const PsychologistCard = ({
 };
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
-export default function ChoosePsychologistScreen() {
-  const [psychologists, setPsychologists] = useState<ProfessionalApiItem[]>([]);
-  const [specialties, setSpecialties] = useState<string[]>(["Todos"]);
+export default function MyPsychologistScreen() {
+  // O paciente não escolhe com quem se consulta: esta tela mostra apenas o
+  // psicólogo responsável, definido pelo administrador no cadastro. A troca é
+  // solicitada à administração — daí não haver busca nem lista aqui.
+  const [psychologist, setPsychologist] = useState<ProfessionalApiItem | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState("Todos");
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   React.useEffect(() => {
-    const loadProfessionals = async () => {
+    const loadAssignedProfessional = async () => {
       setLoading(true);
-      const result = await getPsychologists();
-      if (result.ok && Array.isArray(result.data)) {
-        setPsychologists(result.data);
-
-        // ─── FEATURE 4: Derive specialties dynamically from API data
-        const specialtiesSet = new Set<string>(["Todos"]);
-        for (const prof of result.data) {
-          if (prof.specialty && prof.specialty.trim()) {
-            specialtiesSet.add(prof.specialty);
-          }
-        }
-        setSpecialties(Array.from(specialtiesSet));
+      const result = await getMyAssignedProfessional();
+      if (result.ok) {
+        setPsychologist(result.data ?? null);
       } else {
         showAlert(
           "Erro",
-          result.error || "Não foi possível carregar os psicólogos.",
+          result.error || "Não foi possível carregar o seu psicólogo.",
         );
       }
       setLoading(false);
     };
 
-    void loadProfessionals();
+    void loadAssignedProfessional();
 
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -196,19 +171,6 @@ export default function ChoosePsychologistScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const filtered = psychologists.filter((p) => {
-    const name =
-      p.user?.full_name || p.user?.first_name || p.full_name || p.name || "";
-    const specialty = p.specialty || "";
-    const matchSearch =
-      name.toLowerCase().includes(search.toLowerCase()) ||
-      specialty.toLowerCase().includes(search.toLowerCase());
-    const matchFilter =
-      activeFilter === "Todos" ||
-      specialty.toLowerCase().includes(activeFilter.toLowerCase());
-    return matchSearch && matchFilter;
-  });
-
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={GREEN} />
@@ -219,68 +181,15 @@ export default function ChoosePsychologistScreen() {
           <Ionicons name="arrow-back-outline" size={22} color="#fff" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>Nossos Psicólogos</Text>
+          <Text style={styles.headerTitle}>Meu Psicólogo</Text>
           <Text style={styles.headerSubtitle}>
-            {loading
-              ? "Carregando profissionais..."
-              : `${psychologists.length} profissionais disponíveis`}
+            {loading ? "Carregando..." : "Profissional responsável pelo seu acompanhamento"}
           </Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* ── Search ── */}
-      <Animated.View
-        style={[
-          styles.searchSection,
-          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color="#7aab96" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar por nome ou especialidade..."
-            placeholderTextColor="#9bbfb0"
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={18} color="#9bbfb0" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersRow}
-        >
-          {specialties.map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[
-                styles.filterChip,
-                activeFilter === s && styles.filterChipActive,
-              ]}
-              onPress={() => setActiveFilter(s)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  activeFilter === s && styles.filterChipTextActive,
-                ]}
-              >
-                {s}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Animated.View>
-
-      {/* ── List ── */}
+      {/* ── Conteúdo ── */}
       <ScrollView
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -289,26 +198,32 @@ export default function ChoosePsychologistScreen() {
           <View style={styles.emptyBox}>
             <ActivityIndicator size="large" color={GREEN} />
           </View>
-        ) : filtered.length === 0 ? (
+        ) : !psychologist ? (
           <View style={styles.emptyBox}>
-            <Ionicons name="search-outline" size={40} color="#b2dfcf" />
-            <Text style={styles.emptyText}>Nenhum psicólogo encontrado</Text>
+            <Ionicons name="person-outline" size={40} color="#b2dfcf" />
+            <Text style={styles.emptyText}>
+              Você ainda não tem um psicólogo responsável
+            </Text>
+            <Text style={styles.emptyHint}>
+              Entre em contato com o administrador da clínica para ser vinculado
+              a um profissional.
+            </Text>
           </View>
         ) : (
-          filtered.map((item, index) => (
+          <>
             <PsychologistCard
-              key={item.id}
-              item={item}
-              index={index}
+              item={psychologist}
+              index={0}
               fadeAnim={fadeAnim}
-              onSchedule={() =>
-                router.push({
-                  pathname: "/agendamento",
-                  params: { psychologist: JSON.stringify(item) },
-                })
-              }
+              onSchedule={() => router.push("/agendamento")}
             />
-          ))
+            <View style={styles.noticeBox}>
+              <Ionicons name="information-circle-outline" size={18} color={GREEN} />
+              <Text style={styles.noticeText}>
+                Para trocar de psicólogo, fale com o administrador da clínica.
+              </Text>
+            </View>
+          </>
         )}
       </ScrollView>
     </View>
@@ -355,61 +270,8 @@ const styles = StyleSheet.create({
   },
 
   // Search
-  searchSection: {
-    backgroundColor: WHITE,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 4,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f0faf5",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#d4ede3",
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: "#1a3d31",
-    fontWeight: "500",
-  },
 
   // Filter chips
-  filtersRow: {
-    gap: 8,
-    paddingBottom: 14,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#f0faf5",
-    borderWidth: 1,
-    borderColor: "#d4ede3",
-  },
-  filterChipActive: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
-  },
-  filterChipText: {
-    fontSize: 13,
-    color: "#4a7a66",
-    fontWeight: "600",
-  },
-  filterChipTextActive: {
-    color: WHITE,
-  },
 
   // List
   listContent: {
@@ -573,5 +435,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#7aab96",
     fontWeight: "500",
+  },
+  emptyHint: {
+    fontSize: 13,
+    color: "#9bbfb0",
+    textAlign: "center",
+    lineHeight: 19,
+    paddingHorizontal: 32,
+  },
+  noticeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#e8f7f1",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#3d5b50",
+    lineHeight: 19,
   },
 });
