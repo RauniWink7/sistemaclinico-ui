@@ -855,14 +855,26 @@ export const getClinicPatients = async (
 ): Promise<ApiResult<any[]>> => {
   const headers = await createAuthHeaders();
   if (!headers) return { ok: false, error: "UsuÃ¡rio nÃ£o autenticado." };
-  const { response, data } = await fetchJson(
-    `${API_BASE_URL}/auth/${encodeURIComponent(clinicId)}/patients/`,
-    { method: "GET", headers },
-  );
-  const results = extractList<any>(data);
-  if (!response.ok)
-    return { ok: false, error: normalizeError(data), data: results };
-  return { ok: true, data: results };
+  // A lista e paginada (DRF PageNumberPagination, PAGE_SIZE=20). Buscar apenas
+  // a primeira pagina escondia todo paciente a partir do 21o: ele sumia da lista
+  // do psicologo e dos seletores de paciente (agendar, documentos), sem nenhum
+  // aviso. Seguimos o campo `next` ate esgotar as paginas, como getNotifications.
+  const all: any[] = [];
+  let url: string | null =
+    `${API_BASE_URL}/auth/${encodeURIComponent(clinicId)}/patients/`;
+  let guard = 0;
+  while (url && guard < 50) {
+    guard += 1;
+    const { response, data } = await fetchJson(url, { method: "GET", headers });
+    if (!response.ok)
+      return { ok: false, error: normalizeError(data), data: all };
+    all.push(...extractList<any>(data));
+    url =
+      data && typeof data === "object" && typeof data.next === "string"
+        ? data.next
+        : null;
+  }
+  return { ok: true, data: all };
 };
 
 // Alias usado pelas telas de admin — aponta para getClinicPatients

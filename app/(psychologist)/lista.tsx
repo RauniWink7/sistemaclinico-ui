@@ -161,16 +161,18 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  // Com busca ativa procuramos em TODOS os pacientes carregados, e nao apenas
+  // na pagina exibida — senao um paciente da 21a posicao em diante so aparecia
+  // na busca depois de o usuario clicar em "carregar mais".
   const filteredPatients = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return patients.filter((patient) => {
-      if (!normalizedQuery) return true;
-      return (
+    if (!normalizedQuery) return patients;
+    return allPatients.filter(
+      (patient) =>
         patient._displayName.toLowerCase().includes(normalizedQuery) ||
-        patient._displayPhone?.toLowerCase().includes(normalizedQuery)
-      );
-    });
-  }, [query, patients]);
+        patient._displayPhone?.toLowerCase().includes(normalizedQuery),
+    );
+  }, [query, patients, allPatients]);
 
   // ─── FEATURE 5: Handle load more ──────────────────────────────────────────
   const handleLoadMore = async () => {
@@ -313,8 +315,9 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
               })}
             </View>
 
-            {/* ─── FEATURE 5: Load more button ────────────────────────────────── */}
-            {hasMore && (
+            {/* Durante a busca a lista ja cobre todos os pacientes carregados,
+                entao o botao de paginacao nao faz sentido. */}
+            {hasMore && !query.trim() && (
               <TouchableOpacity
                 style={styles.loadMoreBtn}
                 onPress={handleLoadMore}
