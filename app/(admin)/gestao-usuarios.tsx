@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 import { showAlert } from '../../services/feedback';
 import { DateField } from '../../components/DateTimeField';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,14 +29,10 @@ import {
 // Data máxima para nascimento: hoje (formato AAAA-MM-DD).
 const TODAY_STR = new Date().toLocaleDateString('en-CA');
 
-const GREEN = '#2e8b6e';
-const GREEN_DARK = '#1f684f';
-const GREEN_LIGHT = '#e8f7f1';
+// ─── Cores semânticas fixas (categorias/estado, não mudam com a paleta) ─────
 const BLUE_LIGHT = '#eaf1ff';
 const RED_LIGHT = '#fdeeee';
 const ORANGE_LIGHT = '#fef3e8';
-const BG = '#f0faf5';
-const WHITE = '#ffffff';
 
 type RoleFilter = 'todos' | 'admin' | 'professional' | 'patient';
 type StatusFilter = 'todos' | 'ativo' | 'inativo';
@@ -56,19 +54,29 @@ const ROLE_META: Record<string, { label: string; color: string; bg: string; icon
   patient: { label: 'Paciente', color: '#2d6cdf', bg: BLUE_LIGHT, icon: 'person-outline' },
 };
 
-const STATUS_META = {
-  ativo: { label: 'Ativo', color: GREEN, bg: GREEN_LIGHT, icon: 'checkmark-circle-outline' },
+// GREEN/GREEN_LIGHT (marca da clínica) entram como parâmetro porque mudam
+// conforme a paleta escolhida pelo admin — "inativo" é uma cor fixa.
+const buildStatusMeta = (colors: ThemeColors) => ({
+  ativo: { label: 'Ativo', color: colors.primary, bg: colors.primaryTint, icon: 'checkmark-circle-outline' },
   inativo: { label: 'Inativo', color: '#d95c5c', bg: RED_LIGHT, icon: 'pause-circle-outline' },
+});
+
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+    </>
+  );
 };
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
-
 export default function GestaoUsuariosScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const STATUS_META = useMemo(() => buildStatusMeta(colors), [colors]);
+
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -267,7 +275,7 @@ export default function GestaoUsuariosScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <DecorativeBackground />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -282,8 +290,8 @@ export default function GestaoUsuariosScreen() {
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-          <ActivityIndicator size="large" color={GREEN} />
-          <Text style={{ fontSize: 15, color: GREEN, fontWeight: '600' }}>Carregando usuarios...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ fontSize: 15, color: colors.primary, fontWeight: '600' }}>Carregando usuarios...</Text>
         </View>
       </View>
     );
@@ -291,7 +299,7 @@ export default function GestaoUsuariosScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <DecorativeBackground />
 
       {/* Header */}
@@ -343,7 +351,7 @@ export default function GestaoUsuariosScreen() {
             <Text style={styles.sectionTitle}>Busca e filtros</Text>
 
             <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={18} color="#6c8c80" />
+              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
                 value={query}
@@ -467,20 +475,20 @@ export default function GestaoUsuariosScreen() {
                         setEditForm({ full_name: user.full_name, phone: user.phone || '', email: user.email });
                       }}
                     >
-                      <Ionicons name="create-outline" size={15} color={GREEN} />
+                      <Ionicons name="create-outline" size={15} color={colors.primary} />
                       <Text style={styles.actionBtnText}>Editar</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: user.is_active ? RED_LIGHT : GREEN_LIGHT }]}
+                      style={[styles.actionBtn, { backgroundColor: user.is_active ? RED_LIGHT : colors.primaryTint }]}
                       onPress={() => handleToggleStatus(user)}
                     >
                       <Ionicons
                         name={user.is_active ? 'pause-circle-outline' : 'checkmark-circle-outline'}
                         size={15}
-                        color={user.is_active ? '#d95c5c' : GREEN}
+                        color={user.is_active ? '#d95c5c' : colors.primary}
                       />
-                      <Text style={[styles.actionBtnText, { color: user.is_active ? '#d95c5c' : GREEN }]}>
+                      <Text style={[styles.actionBtnText, { color: user.is_active ? '#d95c5c' : colors.primary }]}>
                         {user.is_active ? 'Desativar' : 'Ativar'}
                       </Text>
                     </TouchableOpacity>
@@ -528,7 +536,7 @@ export default function GestaoUsuariosScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Editar usuario</Text>
               <TouchableOpacity onPress={() => !saving && setEditUser(null)} disabled={saving}>
-                <Ionicons name="close-outline" size={24} color="#173d31" />
+                <Ionicons name="close-outline" size={24} color={colors.textDark} />
               </TouchableOpacity>
             </View>
 
@@ -596,7 +604,7 @@ export default function GestaoUsuariosScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Alterar papel</Text>
               <TouchableOpacity onPress={() => !changingRole && setRoleChangeUser(null)} disabled={changingRole}>
-                <Ionicons name="close-outline" size={24} color="#173d31" />
+                <Ionicons name="close-outline" size={24} color={colors.textDark} />
               </TouchableOpacity>
             </View>
 
@@ -664,7 +672,7 @@ export default function GestaoUsuariosScreen() {
                 Novo {createMode === 'professional' ? 'profissional' : 'paciente'}
               </Text>
               <TouchableOpacity onPress={() => !creating && setCreateMode(null)} disabled={creating}>
-                <Ionicons name="close-outline" size={24} color="#173d31" />
+                <Ionicons name="close-outline" size={24} color={colors.textDark} />
               </TouchableOpacity>
             </View>
 
@@ -674,7 +682,7 @@ export default function GestaoUsuariosScreen() {
                 <TextInput
                   style={styles.modalInput}
                   placeholder="Digite o nome completo"
-                  placeholderTextColor="#94b3a6"
+                  placeholderTextColor={colors.placeholder}
                   value={createForm.full_name}
                   onChangeText={(t) => setCreateForm({ ...createForm, full_name: t })}
                   editable={!creating}
@@ -684,7 +692,7 @@ export default function GestaoUsuariosScreen() {
                 <TextInput
                   style={styles.modalInput}
                   placeholder="Digite o e-mail"
-                  placeholderTextColor="#94b3a6"
+                  placeholderTextColor={colors.placeholder}
                   value={createForm.email}
                   onChangeText={(t) => setCreateForm({ ...createForm, email: t })}
                   keyboardType="email-address"
@@ -695,7 +703,7 @@ export default function GestaoUsuariosScreen() {
                 <TextInput
                   style={styles.modalInput}
                   placeholder="Digite o telefone"
-                  placeholderTextColor="#94b3a6"
+                  placeholderTextColor={colors.placeholder}
                   value={createForm.phone}
                   onChangeText={(t) => setCreateForm({ ...createForm, phone: t })}
                   keyboardType="phone-pad"
@@ -708,7 +716,7 @@ export default function GestaoUsuariosScreen() {
                     <TextInput
                       style={styles.modalInput}
                       placeholder="Ex: CRP 06/12345"
-                      placeholderTextColor="#94b3a6"
+                      placeholderTextColor={colors.placeholder}
                       value={createForm.crp}
                       onChangeText={(t) => setCreateForm({ ...createForm, crp: t })}
                       editable={!creating}
@@ -718,7 +726,7 @@ export default function GestaoUsuariosScreen() {
                     <TextInput
                       style={styles.modalInput}
                       placeholder="Ex: Ansiedade e Depressao"
-                      placeholderTextColor="#94b3a6"
+                      placeholderTextColor={colors.placeholder}
                       value={createForm.specialty}
                       onChangeText={(t) => setCreateForm({ ...createForm, specialty: t })}
                       editable={!creating}
@@ -740,7 +748,7 @@ export default function GestaoUsuariosScreen() {
                     <TextInput
                       style={styles.modalInput}
                       placeholder="000.000.000-00"
-                      placeholderTextColor="#94b3a6"
+                      placeholderTextColor={colors.placeholder}
                       value={createForm.cpf}
                       onChangeText={(t) => setCreateForm({ ...createForm, cpf: t })}
                       editable={!creating}
@@ -749,7 +757,7 @@ export default function GestaoUsuariosScreen() {
                 )}
 
                 <View style={styles.inviteNotice}>
-                  <Ionicons name="mail-outline" size={18} color={GREEN} />
+                  <Ionicons name="mail-outline" size={18} color={colors.primary} />
                   <Text style={styles.inviteNoticeText}>
                     Um convite sera enviado por e-mail para o usuario definir sua senha.
                   </Text>
@@ -787,19 +795,19 @@ export default function GestaoUsuariosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.authBg },
   circle1: {
     position: 'absolute', width: 280, height: 280, borderRadius: 140,
     backgroundColor: '#27795f', top: -110, right: -70, opacity: 0.45,
   },
   circle2: {
     position: 'absolute', width: 180, height: 180, borderRadius: 90,
-    backgroundColor: GREEN_DARK, top: -55, left: -70, opacity: 0.28,
+    backgroundColor: colors.primaryStrong, top: -55, left: -70, opacity: 0.28,
   },
   header: {
     paddingTop: 56, paddingBottom: 24, paddingHorizontal: 24,
-    backgroundColor: GREEN, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   backBtn: {
     width: 42, height: 42, borderRadius: 14,
@@ -811,24 +819,24 @@ const styles = StyleSheet.create({
   },
   headerTextBox: { flex: 1, marginHorizontal: 14 },
   headerEyebrow: { color: '#bce3d5', fontSize: 13, fontWeight: '600' },
-  headerTitle: { color: WHITE, fontSize: 24, fontWeight: '800', marginTop: 2, letterSpacing: -0.4 },
+  headerTitle: { color: colors.white, fontSize: 24, fontWeight: '800', marginTop: 2, letterSpacing: -0.4 },
   scroll: { flex: 1 },
   scrollContent: { padding: 22, paddingBottom: 100, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
 
   heroCard: {
-    backgroundColor: WHITE, borderRadius: 26, padding: 22, marginTop: -18, marginBottom: 22,
+    backgroundColor: colors.white, borderRadius: 26, padding: 22, marginTop: -18, marginBottom: 22,
     shadowColor: '#174c3e', shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 3,
   },
   heroEyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#6b8f82' },
   heroTitle: { marginTop: 8, fontSize: 22, fontWeight: '800', color: '#163c31', letterSpacing: -0.4 },
   heroSubtitle: { marginTop: 8, fontSize: 14, lineHeight: 21, color: '#5d7c71' },
   heroStatsRow: { flexDirection: 'row', marginTop: 18, gap: 8 },
-  heroStatCard: { flex: 1, borderRadius: 18, backgroundColor: GREEN_LIGHT, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 6 },
-  heroStatValue: { fontSize: 20, fontWeight: '800', color: GREEN },
+  heroStatCard: { flex: 1, borderRadius: 18, backgroundColor: colors.primaryTint, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 6 },
+  heroStatValue: { fontSize: 20, fontWeight: '800', color: colors.primary },
   heroStatLabel: { marginTop: 4, fontSize: 11, fontWeight: '700', color: '#5f7e73', textAlign: 'center' },
 
   filtersCard: {
-    backgroundColor: WHITE, borderRadius: 24, padding: 18, marginBottom: 18,
+    backgroundColor: colors.white, borderRadius: 24, padding: 18, marginBottom: 18,
     shadowColor: '#174c3e', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#163c31' },
@@ -840,15 +848,15 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: '#1f4036' },
   filterRow: { gap: 10, paddingRight: 6 },
   filterChip: { borderRadius: 999, backgroundColor: '#edf5f1', paddingVertical: 10, paddingHorizontal: 14 },
-  filterChipActive: { backgroundColor: GREEN },
+  filterChipActive: { backgroundColor: colors.primary },
   filterChipText: { fontSize: 13, fontWeight: '700', color: '#5f7e73' },
-  filterChipTextActive: { color: WHITE },
+  filterChipTextActive: { color: colors.white },
 
   listHeader: { marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   resultCount: { fontSize: 13, fontWeight: '700', color: '#6a887d' },
 
   userCard: {
-    backgroundColor: WHITE, borderRadius: 24, padding: 18, marginBottom: 16,
+    backgroundColor: colors.white, borderRadius: 24, padding: 18, marginBottom: 16,
     shadowColor: '#174c3e', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
   userTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
@@ -870,10 +878,10 @@ const styles = StyleSheet.create({
 
   actionsRow: { marginTop: 14, flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   actionBtn: {
-    flex: 1, minWidth: 90, borderRadius: 14, backgroundColor: GREEN_LIGHT,
+    flex: 1, minWidth: 90, borderRadius: 14, backgroundColor: colors.primaryTint,
     paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
   },
-  actionBtnText: { fontSize: 12, fontWeight: '700', color: GREEN },
+  actionBtnText: { fontSize: 12, fontWeight: '700', color: colors.primary },
 
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyStateText: { marginTop: 16, fontSize: 16, fontWeight: '600', color: '#a0b5aa' },
@@ -886,7 +894,7 @@ const styles = StyleSheet.create({
 
   // Modals
   modalContainer: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: WHITE, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%' },
+  modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '90%' },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingTop: 20, paddingHorizontal: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#edf4f0',
@@ -906,10 +914,10 @@ const styles = StyleSheet.create({
   modalButtonCancel: { flex: 1, borderRadius: 14, backgroundColor: '#edf5f1', paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   modalButtonCancelText: { fontSize: 14, fontWeight: '700', color: '#5f7e73' },
   modalButtonCreate: {
-    flex: 1, borderRadius: 14, backgroundColor: GREEN, paddingVertical: 14,
+    flex: 1, borderRadius: 14, backgroundColor: colors.primary, paddingVertical: 14,
     alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
-  modalButtonCreateText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  modalButtonCreateText: { fontSize: 14, fontWeight: '700', color: colors.white },
   buttonDisabled: { opacity: 0.6 },
 
   roleOption: {
@@ -920,7 +928,7 @@ const styles = StyleSheet.create({
 
   inviteNotice: {
     flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14,
-    borderRadius: 14, backgroundColor: GREEN_LIGHT, marginTop: 4,
+    borderRadius: 14, backgroundColor: colors.primaryTint, marginTop: 4,
   },
-  inviteNoticeText: { flex: 1, fontSize: 13, color: GREEN_DARK, fontWeight: '600', lineHeight: 19 },
+  inviteNoticeText: { flex: 1, fontSize: 13, color: colors.primaryStrong, fontWeight: '600', lineHeight: 19 },
 });

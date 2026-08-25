@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ScrollView,
   StatusBar,
@@ -9,20 +9,14 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 import { showAlert } from '../../services/feedback';
 import { DateField } from '../../components/DateTimeField';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { createPatientAsAdmin, getPsychologists, ProfessionalApiItem } from '../../services/api';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 const MAX_WIDTH = 1120;
 
 const CARD_SHADOW = {
@@ -37,6 +31,8 @@ const psychologistName = (item: ProfessionalApiItem) =>
   item.user?.full_name?.trim() || item.full_name?.trim() || item.name?.trim() || 'Profissional';
 
 export default function CadastrarPacienteScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(false);
   const [psychologists, setPsychologists] = useState<ProfessionalApiItem[]>([]);
   const [loadingPsychologists, setLoadingPsychologists] = useState(true);
@@ -99,7 +95,7 @@ export default function CadastrarPacienteScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
@@ -122,7 +118,7 @@ export default function CadastrarPacienteScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="person-outline" size={16} color={GREEN} />
+                <Ionicons name="person-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Dados de acesso</Text>
             </View>
@@ -141,7 +137,7 @@ export default function CadastrarPacienteScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="people-outline" size={16} color={GREEN} />
+                <Ionicons name="people-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Psicólogo responsável *</Text>
             </View>
@@ -152,7 +148,7 @@ export default function CadastrarPacienteScreen() {
             </Text>
 
             {loadingPsychologists ? (
-              <ActivityIndicator color={GREEN} style={{ marginTop: 16 }} />
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} />
             ) : psychologists.length === 0 ? (
               <Text style={styles.emptyText}>
                 Nenhum psicólogo cadastrado. Cadastre um psicólogo antes de cadastrar pacientes.
@@ -171,7 +167,7 @@ export default function CadastrarPacienteScreen() {
                       <Ionicons
                         name={selected ? 'radio-button-on' : 'radio-button-off'}
                         size={20}
-                        color={selected ? GREEN : '#a8c4b8'}
+                        color={selected ? colors.primary : '#a8c4b8'}
                       />
                       <View style={styles.psychologistInfo}>
                         <Text style={styles.psychologistName}>{psychologistName(item)}</Text>
@@ -192,7 +188,7 @@ export default function CadastrarPacienteScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="document-text-outline" size={16} color={GREEN} />
+                <Ionicons name="document-text-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Dados clínicos</Text>
             </View>
@@ -208,7 +204,7 @@ export default function CadastrarPacienteScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="call-outline" size={16} color={GREEN} />
+                <Ionicons name="call-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Contato de emergência</Text>
             </View>
@@ -240,54 +236,55 @@ export default function CadastrarPacienteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
-  headerInner: {
-    width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-  },
-  iconBtn: {
-    width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
-  container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
-  card: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
-    padding: 18, marginBottom: 16, ...CARD_SHADOW,
-  },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  cardIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: GREEN_LIGHT, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 15.5, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.2 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6a887d', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
-  input: {
-    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,
-    paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: '#1f4036',
-    // @ts-ignore — remove o contorno azul no web
-    outlineStyle: 'none',
-  },
-  cardHint: { fontSize: 12.5, color: TEXT_MUTED, lineHeight: 18, marginTop: 10 },
-  emptyText: { fontSize: 13, color: TEXT_MUTED, marginTop: 14, lineHeight: 19 },
-  psychologistList: { marginTop: 14, gap: 8 },
-  psychologistOption: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderRadius: 12, borderWidth: 1, borderColor: BORDER,
-    backgroundColor: '#f6faf8', paddingHorizontal: 14, paddingVertical: 12,
-  },
-  psychologistOptionSelected: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
-  psychologistInfo: { flex: 1, minWidth: 0 },
-  psychologistName: { fontSize: 14, fontWeight: '700', color: TEXT_DARK },
-  psychologistMeta: { fontSize: 12, color: TEXT_MUTED, marginTop: 2 },
-  submitButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: GREEN, borderRadius: 14, paddingVertical: 16, marginBottom: 8,
-  },
-  submitDisabled: { opacity: 0.6 },
-  submitText: { color: WHITE, fontSize: 16, fontWeight: '800' },
-  cancelButton: { alignItems: 'center', paddingVertical: 14 },
-  cancelText: { fontSize: 15, fontWeight: '600', color: TEXT_MUTED },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.pageBg },
+    header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
+    headerInner: {
+      width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    },
+    iconBtn: {
+      width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    headerTextBox: { flex: 1 },
+    headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
+    container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
+    card: {
+      backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+      padding: 18, marginBottom: 16, ...CARD_SHADOW,
+    },
+    cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+    cardIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+    cardTitle: { fontSize: 15.5, fontWeight: '800', color: colors.textDark, letterSpacing: -0.2 },
+    fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6a887d', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
+    input: {
+      borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border,
+      paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: '#1f4036',
+      // @ts-ignore — remove o contorno azul no web
+      outlineStyle: 'none',
+    },
+    cardHint: { fontSize: 12.5, color: colors.textMuted, lineHeight: 18, marginTop: 10 },
+    emptyText: { fontSize: 13, color: colors.textMuted, marginTop: 14, lineHeight: 19 },
+    psychologistList: { marginTop: 14, gap: 8 },
+    psychologistOption: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+      backgroundColor: '#f6faf8', paddingHorizontal: 14, paddingVertical: 12,
+    },
+    psychologistOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+    psychologistInfo: { flex: 1, minWidth: 0 },
+    psychologistName: { fontSize: 14, fontWeight: '700', color: colors.textDark },
+    psychologistMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+    submitButton: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+      backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 16, marginBottom: 8,
+    },
+    submitDisabled: { opacity: 0.6 },
+    submitText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+    cancelButton: { alignItems: 'center', paddingVertical: 14 },
+    cancelText: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
+  });

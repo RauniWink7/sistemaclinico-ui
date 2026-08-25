@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
@@ -19,6 +19,8 @@ import {
   getPsychologists,
   getUnreadNotifications,
 } from "../../services/api";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const { width } = Dimensions.get("window");
 
@@ -34,13 +36,15 @@ interface NextAppointment {
 }
 
 // ─── Shortcut Cards Data ──────────────────────────────────────────────────────
-const SHORTCUTS = [
+// color/bg do item "Agendar Consulta" e "Meu Psicólogo" seguem a cor da marca
+// (mudam conforme a paleta); as demais são categorias fixas, sem relação com a marca.
+const buildShortcuts = (green: string, greenLight: string) => [
   {
     id: "1",
     label: "Agendar\nConsulta",
     icon: "calendar-outline",
-    color: "#2e8b6e",
-    bg: "#e8f7f1",
+    color: green,
+    bg: greenLight,
     route: "Schedule",
   },
   {
@@ -63,8 +67,8 @@ const SHORTCUTS = [
     id: "6",
     label: "Meu\nPsicólogo",
     icon: "person-outline",
-    color: "#2e8b6e",
-    bg: "#e8f7f1",
+    color: green,
+    bg: greenLight,
     route: "MyPsychologist",
   },
   // {
@@ -83,15 +87,15 @@ const SHORTCUTS = [
     bg: "#fdeef2",
     route: "Profile",
   },
+  {
+    id: "7",
+    label: "Ajuda",
+    icon: "help-circle-outline",
+    color: "#0d9488",
+    bg: "#e3f4f1",
+    route: "Help",
+  },
 ];
-
-// ─── Decorative Background ───────────────────────────────────────────────────
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
 
 // ─── Shortcut Card ────────────────────────────────────────────────────────────
 interface ShortcutCardProps {
@@ -108,22 +112,44 @@ const ShortcutCard = ({
   color,
   bg,
   onPress,
-}: ShortcutCardProps) => (
-  <TouchableOpacity
-    style={styles.shortcutCard}
-    onPress={onPress}
-    activeOpacity={0.8}
-  >
-    <View style={[styles.shortcutIconBox, { backgroundColor: bg }]}>
-      <Ionicons name={icon as any} size={26} color={color} />
-    </View>
-    <Text style={styles.shortcutLabel}>{label}</Text>
-  </TouchableOpacity>
-);
+}: ShortcutCardProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <TouchableOpacity
+      style={styles.shortcutCard}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={[styles.shortcutIconBox, { backgroundColor: bg }]}>
+        <Ionicons name={icon as any} size={26} color={color} />
+      </View>
+      <Text style={styles.shortcutLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+// ─── Decorative Background ───────────────────────────────────────────────────
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+    </>
+  );
+};
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function HomeP() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const SHORTCUTS = useMemo(
+    () => buildShortcuts(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const [patientName, setPatientName] = useState(DEFAULT_PATIENT_NAME);
   const [nextAppointment, setNextAppointment] =
     useState<NextAppointment | null>(null);
@@ -297,7 +323,7 @@ export default function HomeP() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <DecorativeBackground />
 
       {/* ── Header ── */}
@@ -342,8 +368,8 @@ export default function HomeP() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#2e8b6e"]}
-            tintColor="#2e8b6e"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >
@@ -363,13 +389,13 @@ export default function HomeP() {
               <View style={styles.appointmentContent}>
                 {/* Data e hora */}
                 <View style={styles.appointmentDateRow}>
-                  <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                  <Ionicons name="calendar-outline" size={15} color={colors.primary} />
                   <Text style={styles.appointmentDate}>
                     {nextAppointment.date}
                   </Text>
                 </View>
                 <View style={styles.appointmentTimeRow}>
-                  <Ionicons name="time-outline" size={15} color={GREEN} />
+                  <Ionicons name="time-outline" size={15} color={colors.primary} />
                   <Text style={styles.appointmentTime}>
                     {nextAppointment.time}
                   </Text>
@@ -409,7 +435,7 @@ export default function HomeP() {
                   <Ionicons
                     name="arrow-forward-outline"
                     size={14}
-                    color={GREEN}
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
               </View>
@@ -444,6 +470,7 @@ export default function HomeP() {
                     | "/documento"
                     | "/perfil"
                     | "/escolha"
+                    | "/(shared)/ajuda"
                   > = {
                     Schedule: "/agendamento",
                     MyAppointments: "/consultas",
@@ -451,6 +478,7 @@ export default function HomeP() {
                     Documents: "/documento",
                     Profile: "/perfil",
                     MyPsychologist: "/escolha",
+                    Help: "/(shared)/ajuda",
                   };
 
                   const targetRoute = routes[item.route];
@@ -486,13 +514,10 @@ export default function HomeP() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const WHITE = "#ffffff";
-
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f0faf5",
+    backgroundColor: colors.authBg,
   },
 
   // Decorative
@@ -511,7 +536,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: "#1e6b54",
+    backgroundColor: colors.primaryStrong,
     top: -60,
     left: -60,
     opacity: 0.3,
@@ -519,7 +544,7 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 56,
     paddingBottom: 28,
     paddingHorizontal: 24,
@@ -535,7 +560,7 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 26,
     fontWeight: "800",
-    color: WHITE,
+    color: colors.white,
     letterSpacing: -0.5,
     marginTop: 2,
   },
@@ -563,7 +588,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     backgroundColor: "#f87171",
     borderWidth: 1.5,
-    borderColor: GREEN,
+    borderColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -585,18 +610,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1a3d31",
+    color: colors.textDark,
     marginBottom: 14,
     marginTop: 4,
   },
 
   // Appointment card
   appointmentCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 20,
     flexDirection: "row",
     marginBottom: 28,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
@@ -605,7 +630,7 @@ const styles = StyleSheet.create({
   },
   appointmentAccent: {
     width: 5,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderTopLeftRadius: 20,
     borderBottomLeftRadius: 20,
   },
@@ -632,7 +657,7 @@ const styles = StyleSheet.create({
   appointmentTime: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#1a3d31",
+    color: colors.textDark,
     letterSpacing: -0.5,
   },
   divider: {
@@ -650,19 +675,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#e8f7f1",
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontSize: 13,
     fontWeight: "800",
-    color: GREEN,
+    color: colors.primary,
   },
   professionalName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#1a3d31",
+    color: colors.textDark,
   },
   professionalSpecialty: {
     fontSize: 12,
@@ -674,14 +699,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     alignSelf: "flex-start",
-    backgroundColor: "#e8f7f1",
+    backgroundColor: colors.primaryTint,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   detailsBtnText: {
     fontSize: 12,
-    color: GREEN,
+    color: colors.primary,
     fontWeight: "700",
   },
 
@@ -694,12 +719,12 @@ const styles = StyleSheet.create({
   },
   shortcutCard: {
     width: (width - 40 - 12 * 2) / 3,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     paddingVertical: 16,
     paddingHorizontal: 10,
     alignItems: "center",
-    shadowColor: "#2e8b6e",
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
     shadowRadius: 10,
@@ -723,13 +748,13 @@ const styles = StyleSheet.create({
 
   // Banner
   bannerCard: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderRadius: 20,
     padding: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 14,
@@ -742,7 +767,7 @@ const styles = StyleSheet.create({
   bannerTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: WHITE,
+    color: colors.white,
     marginBottom: 4,
   },
   bannerSubtitle: {

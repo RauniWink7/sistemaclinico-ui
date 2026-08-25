@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Platform, StyleSheet, TextInput, TextStyle } from "react-native";
+import { ThemeColors } from "../constants/theme-palettes";
+import { useTheme } from "../contexts/ThemeContext";
 
 // ─── Campos de data e hora com o calendário/relógio CLÁSSICO ────────────────
 //
@@ -16,12 +18,6 @@ import { Platform, StyleSheet, TextInput, TextStyle } from "react-native";
 //   - "box" (padrão): campo com borda arredondada, para formulários.
 //   - "underline": só linha inferior, para as linhas de edição do perfil.
 
-const GREEN = "#2e8b6e";
-const BORDER = "#d7ebe2";
-const BG = "#fbfefd";
-const TEXT = "#173d31";
-const PLACEHOLDER = "#94b3a6";
-
 type Variant = "box" | "underline";
 
 interface FieldProps {
@@ -35,14 +31,14 @@ interface FieldProps {
 }
 
 // Estilo do <input> web conforme a variante, para casar com os campos do app.
-function webStyle(variant: Variant, disabled?: boolean): React.CSSProperties {
+function webStyle(variant: Variant, colors: ThemeColors, disabled?: boolean): React.CSSProperties {
   const base: React.CSSProperties =
     variant === "underline"
       ? {
           boxSizing: "border-box",
           width: "100%",
           border: "none",
-          borderBottom: `1.5px solid ${GREEN}`,
+          borderBottom: `1.5px solid ${colors.primary}`,
           backgroundColor: "transparent",
           padding: "2px 0 4px",
           fontSize: 15,
@@ -56,12 +52,12 @@ function webStyle(variant: Variant, disabled?: boolean): React.CSSProperties {
           width: "100%",
           minHeight: 52,
           borderRadius: 16,
-          border: `1.5px solid ${BORDER}`,
-          backgroundColor: BG,
+          border: `1.5px solid ${colors.border}`,
+          backgroundColor: colors.white,
           paddingLeft: 14,
           paddingRight: 12,
           fontSize: 15,
-          color: TEXT,
+          color: colors.textDark,
           fontWeight: 500,
           fontFamily: "inherit",
           outline: "none",
@@ -69,7 +65,10 @@ function webStyle(variant: Variant, disabled?: boolean): React.CSSProperties {
   return disabled ? { ...base, opacity: 0.6 } : base;
 }
 
-function nativeStyle(variant: Variant): TextStyle {
+function nativeStyle(
+  variant: Variant,
+  styles: ReturnType<typeof createStyles>,
+): TextStyle {
   return variant === "underline" ? styles.nativeUnderline : styles.nativeBox;
 }
 
@@ -81,6 +80,9 @@ export function DateField({
   disabled,
   variant = "box",
 }: FieldProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   if (Platform.OS === "web") {
     return (
       <input
@@ -90,18 +92,18 @@ export function DateField({
         max={max}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        style={webStyle(variant, disabled)}
+        style={webStyle(variant, colors, disabled)}
       />
     );
   }
   return (
     <TextInput
-      style={nativeStyle(variant)}
+      style={nativeStyle(variant, styles)}
       value={value}
       onChangeText={onChange}
       editable={!disabled}
       placeholder="AAAA-MM-DD"
-      placeholderTextColor={PLACEHOLDER}
+      placeholderTextColor={colors.placeholder}
     />
   );
 }
@@ -112,6 +114,9 @@ export function TimeField({
   disabled,
   variant = "box",
 }: FieldProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   // O backend às vezes envia "HH:MM:SS"; o <input type="time"> espera "HH:MM".
   const hhmm = value ? value.slice(0, 5) : value;
   if (Platform.OS === "web") {
@@ -121,41 +126,42 @@ export function TimeField({
         value={hhmm}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        style={webStyle(variant, disabled)}
+        style={webStyle(variant, colors, disabled)}
       />
     );
   }
   return (
     <TextInput
-      style={nativeStyle(variant)}
+      style={nativeStyle(variant, styles)}
       value={hhmm}
       onChangeText={onChange}
       editable={!disabled}
       placeholder="HH:MM"
-      placeholderTextColor={PLACEHOLDER}
+      placeholderTextColor={colors.placeholder}
     />
   );
 }
 
-const styles = StyleSheet.create({
-  nativeBox: {
-    minHeight: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: BORDER,
-    backgroundColor: BG,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: TEXT,
-    fontWeight: "500",
-  },
-  nativeUnderline: {
-    fontSize: 15,
-    color: "#1a3d31",
-    fontWeight: "500",
-    borderBottomWidth: 1.5,
-    borderBottomColor: GREEN,
-    paddingBottom: 4,
-    paddingTop: 2,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    nativeBox: {
+      minHeight: 52,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.white,
+      paddingHorizontal: 16,
+      fontSize: 15,
+      color: colors.textDark,
+      fontWeight: "500",
+    },
+    nativeUnderline: {
+      fontSize: 15,
+      color: "#1a3d31",
+      fontWeight: "500",
+      borderBottomWidth: 1.5,
+      borderBottomColor: colors.primary,
+      paddingBottom: 4,
+      paddingTop: 2,
+    },
+  });

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -11,6 +11,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import { getMyAssignedProfessional, ProfessionalApiItem } from "../../services/api";
 
@@ -26,6 +28,9 @@ const PsychologistCard = ({
   fadeAnim: Animated.Value;
   index: number;
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const name =
     item.user?.full_name ||
     item.user?.first_name ||
@@ -33,8 +38,8 @@ const PsychologistCard = ({
     item.name ||
     "Psicólogo";
   const specialty = item.specialty || "Psicologia";
-  const color = item.color || "#2e8b6e";
-  const bg = item.bg || "#e8f7f1";
+  const color = item.color || colors.primary;
+  const bg = item.bg || colors.primaryTint;
   const initials = name
     .split(" ")
     .filter((part) => part.length > 0)
@@ -49,19 +54,19 @@ const PsychologistCard = ({
       <View
         style={[
           styles.availBadge,
-          { backgroundColor: available ? "#e8f7f1" : "#fef3f3" },
+          { backgroundColor: available ? colors.primaryTint : "#fef3f3" },
         ]}
       >
         <View
           style={[
             styles.availDot,
-            { backgroundColor: available ? "#2e8b6e" : "#e05c5c" },
+            { backgroundColor: available ? colors.primary : "#e05c5c" },
           ]}
         />
         <Text
           style={[
             styles.availText,
-            { color: available ? "#2e8b6e" : "#e05c5c" },
+            { color: available ? colors.primary : "#e05c5c" },
           ]}
         >
           {available ? "Disponível" : "Indisponível"}
@@ -130,6 +135,9 @@ const PsychologistCard = ({
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function MyPsychologistScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   // O paciente não escolhe com quem se consulta: esta tela mostra apenas o
   // psicólogo responsável, definido pelo administrador no cadastro. A troca é
   // solicitada à administração — daí não haver busca nem lista aqui.
@@ -173,7 +181,7 @@ export default function MyPsychologistScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -196,7 +204,7 @@ export default function MyPsychologistScreen() {
       >
         {loading ? (
           <View style={styles.emptyBox}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : !psychologist ? (
           <View style={styles.emptyBox}>
@@ -218,7 +226,7 @@ export default function MyPsychologistScreen() {
               onSchedule={() => router.push("/agendamento")}
             />
             <View style={styles.noticeBox}>
-              <Ionicons name="information-circle-outline" size={18} color={GREEN} />
+              <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
               <Text style={styles.noticeText}>
                 Para trocar de psicólogo, fale com o administrador da clínica.
               </Text>
@@ -231,16 +239,13 @@ export default function MyPsychologistScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const WHITE = "#ffffff";
-const BG = "#f0faf5";
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.authBg },
 
   // Header
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 52,
     paddingBottom: 18,
     paddingHorizontal: 20,
@@ -259,7 +264,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: WHITE,
+    color: colors.white,
     textAlign: "center",
   },
   headerSubtitle: {
@@ -282,10 +287,10 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 20,
     padding: 18,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 14,
@@ -397,14 +402,14 @@ const styles = StyleSheet.create({
 
   // Schedule button
   scheduleBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     height: 46,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -416,7 +421,7 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   scheduleBtnText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -447,7 +452,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#e8f7f1",
+    backgroundColor: colors.primaryTint,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -459,4 +464,4 @@ const styles = StyleSheet.create({
     color: "#3d5b50",
     lineHeight: 19,
   },
-});
+  });

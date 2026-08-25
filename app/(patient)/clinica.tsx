@@ -8,7 +8,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -19,12 +19,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { getClinicData, getClinicId, getClinics } from "../../services/api";
 import { showToast } from "../../services/feedback";
-
-const GREEN = "#2e8b6e";
-const WHITE = "#ffffff";
-const BG = "#f0faf5";
 
 // "HH:MM:SS" → "HH:MM"
 const formatTime = (t?: string): string =>
@@ -41,6 +39,9 @@ interface ClinicInfo {
 }
 
 export default function ClinicInfoScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [loading, setLoading] = useState(true);
   const [clinic, setClinic] = useState<ClinicInfo | null>(null);
 
@@ -85,7 +86,7 @@ export default function ClinicInfoScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -98,7 +99,7 @@ export default function ClinicInfoScreen() {
 
       {loading ? (
         <View style={styles.loading}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : !clinic ? (
         <View style={styles.loading}>
@@ -114,7 +115,7 @@ export default function ClinicInfoScreen() {
           {/* Identidade */}
           <View style={styles.identityCard}>
             <View style={styles.identityIcon}>
-              <Ionicons name="business" size={26} color={GREEN} />
+              <Ionicons name="business" size={26} color={colors.primary} />
             </View>
             <Text style={styles.clinicName}>{clinic.name || "Clínica"}</Text>
             <View style={styles.readOnlyBadge}>
@@ -164,13 +165,16 @@ const Row = ({
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const content = (
     <View style={styles.rowInner}>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowValue}>{value}</Text>
       </View>
-      {icon && <Ionicons name={icon} size={18} color={GREEN} />}
+      {icon && <Ionicons name={icon} size={18} color={colors.primary} />}
     </View>
   );
   if (onPress) {
@@ -183,94 +187,95 @@ const Row = ({
   return content;
 };
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
-  header: {
-    backgroundColor: GREEN,
-    paddingTop: 52,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: WHITE, letterSpacing: 0.2 },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  emptyText: { fontSize: 15, color: "#7aab96", fontWeight: "600" },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 48 },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.authBg },
+    header: {
+      backgroundColor: colors.primary,
+      paddingTop: 52,
+      paddingBottom: 16,
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: { fontSize: 17, fontWeight: "700", color: colors.white, letterSpacing: 0.2 },
+    loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+    emptyText: { fontSize: 15, color: "#7aab96", fontWeight: "600" },
+    scroll: { flex: 1 },
+    scrollContent: { padding: 20, paddingBottom: 48 },
 
-  identityCard: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 22,
-    marginBottom: 16,
-    alignItems: "center",
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  identityIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "#e8f7f1",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  clinicName: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#1a3d31",
-    textAlign: "center",
-  },
-  readOnlyBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#f0faf5",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  readOnlyText: { fontSize: 11, color: "#7aab96", fontWeight: "600" },
+    identityCard: {
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 22,
+      marginBottom: 16,
+      alignItems: "center",
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+    identityIcon: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12,
+    },
+    clinicName: {
+      fontSize: 19,
+      fontWeight: "800",
+      color: "#1a3d31",
+      textAlign: "center",
+    },
+    readOnlyBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.authBg,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+      marginTop: 10,
+    },
+    readOnlyText: { fontSize: 11, color: "#7aab96", fontWeight: "600" },
 
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  rowInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-  },
-  rowLabel: {
-    fontSize: 11,
-    color: "#7aab96",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  rowValue: { fontSize: 15, color: "#1a3d31", fontWeight: "500" },
-  divider: { height: 1, backgroundColor: "#f0f8f4" },
-});
+    card: {
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 18,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+    rowInner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingVertical: 12,
+    },
+    rowLabel: {
+      fontSize: 11,
+      color: "#7aab96",
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 3,
+    },
+    rowValue: { fontSize: 15, color: "#1a3d31", fontWeight: "500" },
+    divider: { height: 1, backgroundColor: "#f0f8f4" },
+  });

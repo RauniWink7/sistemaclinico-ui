@@ -14,9 +14,9 @@ import {
     useWindowDimensions,
     View,
 } from "react-native";
+import { DateField, TimeField } from "../../components/DateTimeField";
 import { ThemeColors } from "../../constants/theme-palettes";
 import { useTheme } from "../../contexts/ThemeContext";
-import { showAlert } from "../../services/feedback";
 import {
     AppointmentApiItem,
     getAppointments,
@@ -28,7 +28,7 @@ import {
     updateSessionNote,
 } from "../../services/api";
 import { partsToISO, toInputParts, todayISODate } from "../../services/dateInput";
-import { DateField, TimeField } from "../../components/DateTimeField";
+import { showAlert } from "../../services/feedback";
 
 type AppointmentStatus =
   | "scheduled"
@@ -37,7 +37,7 @@ type AppointmentStatus =
   | "no_show"
   | "cancelled";
 
-interface WeeklyAppointment {
+interface CalendarAppointment {
   id: string;
   dayKey: string;
   weekday: string;
@@ -64,27 +64,30 @@ const CARD_SHADOW = {
   elevation: 2,
 } as const;
 
-const getCurrentWeekDays = (weekOffset: number = 0) => {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  monday.setDate(monday.getDate() + weekOffset * 7);
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTHS = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
 
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return {
-      key: d.toISOString().split("T")[0],
-      weekday: ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab"][i],
-      fullLabel: d.toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "short",
-      }),
-      date: d,
-    };
-  });
-};
+const getDaysInMonth = (year: number, month: number) =>
+  new Date(year, month + 1, 0).getDate();
+
+const getFirstDayOfMonth = (year: number, month: number) =>
+  new Date(year, month, 1).getDay();
+
+const toKey = (year: number, month: number, day: number) =>
+  `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
 const extractPatientName = (item: AppointmentApiItem): string => {
   if (item.patient_detail?.user?.full_name) {
@@ -96,21 +99,15 @@ const extractPatientName = (item: AppointmentApiItem): string => {
   return "Paciente";
 };
 
-const toWeeklyAppointment = (item: AppointmentApiItem): WeeklyAppointment => {
+const toCalendarAppointment = (item: AppointmentApiItem): CalendarAppointment => {
   const date = new Date(item.scheduled_at!);
   const dayKey = item.scheduled_at!.split("T")[0];
   return {
     id: item.id,
     dayKey,
     weekday: date.toLocaleDateString("pt-BR", { weekday: "short" }),
-    dateLabel: date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "short",
-    }),
-    time: date.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    dateLabel: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+    time: date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     patientName: extractPatientName(item),
     type: "Sessão individual",
     status: (item.status as AppointmentStatus) ?? "scheduled",
@@ -125,8 +122,6 @@ const getStatusMeta = (
   scheduledAt: string | undefined,
   colors: ThemeColors,
 ) => {
-  // Consulta em aberto cujo dia já passou: rótulo automático, sem ação do
-  // usuário. Não aparece antes nem durante o dia da consulta.
   if (isAppointmentOverdue(status, scheduledAt)) {
     return {
       label: OVERDUE_STATUS_LABEL,
@@ -138,66 +133,56 @@ const getStatusMeta = (
 
   switch (status) {
     case "completed":
-      return {
-        label: "Realizada",
-        icon: "checkmark-circle-outline",
-        color: "#2d6cdf",
-        bg: BLUE_LIGHT,
-      };
+      return { label: "Realizada", icon: "checkmark-circle-outline", color: "#2d6cdf", bg: BLUE_LIGHT };
     case "rescheduled":
-      return {
-        label: "Remarcada",
-        icon: "swap-horizontal-outline",
-        color: "#c46a1a",
-        bg: ORANGE_LIGHT,
-      };
+      return { label: "Remarcada", icon: "swap-horizontal-outline", color: "#c46a1a", bg: ORANGE_LIGHT };
     case "no_show":
-      return {
-        label: "Não compareceu",
-        icon: "close-circle-outline",
-        color: "#b03030",
-        bg: "#fdeaea",
-      };
+      return { label: "Não compareceu", icon: "close-circle-outline", color: "#b03030", bg: "#fdeaea" };
     case "cancelled":
-      return {
-        label: "Cancelada",
-        icon: "ban-outline",
-        color: "#888",
-        bg: "#f2f2f2",
-      };
+      return { label: "Cancelada", icon: "ban-outline", color: "#888", bg: "#f2f2f2" };
     default:
-      return {
-        label: "Agendada",
-        icon: "calendar-outline",
-        color: colors.primary,
-        bg: colors.primaryTint,
-      };
+      return { label: "Agendada", icon: "calendar-outline", color: colors.primary, bg: colors.primaryTint };
   }
 };
 
-export default function PsychologistAgendaScreen() {
+const formatDayLabel = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const weekday = date.toLocaleDateString("pt-BR", { weekday: "long" });
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${d} de ${MONTHS[m - 1]}`;
+};
+
+export default function PsychologistCalendarScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [appointments, setAppointments] = useState<WeeklyAppointment[]>([]);
+  const { width: screenWidth } = useWindowDimensions();
+  const cellSize = Math.min(46, Math.max(36, (screenWidth - 60) / 7));
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BREAKPOINT;
+
+  const today = new Date();
+  const todayKey = toKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const [appointments, setAppointments] = useState<CalendarAppointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDay, setSelectedDay] = useState("");
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey);
+
   const [selectedAppointment, setSelectedAppointment] =
-    useState<WeeklyAppointment | null>(null);
+    useState<CalendarAppointment | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [weekOffset, setWeekOffset] = useState(0);
 
   // Modal de conclusão (data realizada + nota do que aconteceu)
-  const [completing, setCompleting] = useState<WeeklyAppointment | null>(null);
+  const [completing, setCompleting] = useState<CalendarAppointment | null>(null);
   const [completeDate, setCompleteDate] = useState("");
   const [completeTime, setCompleteTime] = useState("");
   const [completeNote, setCompleteNote] = useState("");
   const [loadingCompleteNote, setLoadingCompleteNote] = useState(false);
 
   // Modal de remarcação (nova data)
-  const [rescheduling, setRescheduling] = useState<WeeklyAppointment | null>(
-    null,
-  );
+  const [rescheduling, setRescheduling] = useState<CalendarAppointment | null>(null);
   const [reDate, setReDate] = useState("");
   const [reTime, setReTime] = useState("");
 
@@ -205,93 +190,96 @@ export default function PsychologistAgendaScreen() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
-  const weekDays = useMemo(() => getCurrentWeekDays(weekOffset), [weekOffset]);
 
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= DESKTOP_BREAKPOINT;
+  const loadAppointments = async () => {
+    setLoading(true);
+    try {
+      const [meResult, appointmentsResult] = await Promise.all([getMe(), getAppointments()]);
+
+      if (!meResult.ok || !meResult.data) {
+        showAlert("Erro", meResult.error || "Erro ao carregar perfil.");
+        setLoading(false);
+        return;
+      }
+
+      if (appointmentsResult.ok && appointmentsResult.data) {
+        setAppointments(
+          appointmentsResult.data
+            .filter((item) => item.scheduled_at)
+            .map(toCalendarAppointment),
+        );
+      } else {
+        showAlert("Erro", appointmentsResult.error || "Erro ao carregar consultas.");
+      }
+    } catch {
+      showAlert("Erro", "Erro inesperado ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Compute the week days for the current offset inside the effect
-    // so we don't depend on the weekDays memo (which changes reference every render)
-    const currentWeekDays = getCurrentWeekDays(weekOffset);
-
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [meResult, appointmentsResult] = await Promise.all([
-          getMe(),
-          getAppointments(),
-        ]);
-
-        if (!meResult.ok || !meResult.data) {
-          showAlert("Erro", meResult.error || "Erro ao carregar perfil.");
-          setLoading(false);
-          return;
-        }
-
-        if (appointmentsResult.ok && appointmentsResult.data) {
-          const weeklyAppointments = appointmentsResult.data
-            .filter((item) => item.scheduled_at)
-            .map(toWeeklyAppointment)
-            .filter((item) =>
-              currentWeekDays.some((day) => day.key === item.dayKey),
-            );
-          setAppointments(weeklyAppointments);
-        } else {
-          showAlert(
-            "Erro",
-            appointmentsResult.error || "Erro ao carregar consultas.",
-          );
-        }
-
-        const todayKey = new Date().toISOString().split("T")[0];
-        if (currentWeekDays.some((day) => day.key === todayKey)) {
-          setSelectedDay(todayKey);
-        } else if (currentWeekDays.length > 0) {
-          setSelectedDay(currentWeekDays[0].key);
-        }
-      } catch {
-        showAlert("Erro", "Erro inesperado ao carregar dados.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [weekOffset]); // ✅ Only re-run when the week actually changes, not on every render
+    loadAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const summary = useMemo(() => {
-    const todayCount = appointments.filter(
-      (item) => item.dayKey === selectedDay,
+  // Contagem de consultas por dia, restrita ao mês exibido (para os pontinhos da grade).
+  const appointmentsCountByDay = useMemo(() => {
+    const map: Record<string, number> = {};
+    const monthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
+    for (const item of appointments) {
+      if (item.dayKey.startsWith(monthPrefix)) {
+        map[item.dayKey] = (map[item.dayKey] ?? 0) + 1;
+      }
+    }
+    return map;
+  }, [appointments, currentYear, currentMonth]);
+
+  const monthCompletedCount = useMemo(() => {
+    const monthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
+    return appointments.filter(
+      (item) => item.dayKey.startsWith(monthPrefix) && item.status === "completed",
     ).length;
-    const completedCount = appointments.filter(
-      (item) => item.status === "completed",
-    ).length;
-    return { todayCount, completedCount };
-  }, [appointments, selectedDay]);
+  }, [appointments, currentYear, currentMonth]);
 
   const selectedDayAppointments = useMemo(
     () =>
       appointments
-        .filter((item) => item.dayKey === selectedDay)
+        .filter((item) => item.dayKey === selectedDate)
         .sort((a, b) => a.time.localeCompare(b.time)),
-    [appointments, selectedDay],
+    [appointments, selectedDate],
   );
+
+  const prevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear((y) => y - 1);
+    } else {
+      setCurrentMonth((m) => m - 1);
+    }
+  };
+
+  const nextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear((y) => y + 1);
+    } else {
+      setCurrentMonth((m) => m + 1);
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentYear(today.getFullYear());
+    setCurrentMonth(today.getMonth());
+    setSelectedDate(todayKey);
+  };
 
   const handleStatusChange = async (
     newStatus: "completed" | "scheduled" | "rescheduled" | "no_show",
@@ -299,104 +287,28 @@ export default function PsychologistAgendaScreen() {
   ) => {
     if (!selectedAppointment) return;
     setUpdatingStatus(true);
-
-    // Captura o id ANTES de qualquer setState para evitar closure stale
     const updatedId = selectedAppointment.id;
-
-    if (__DEV__) {
-      console.log(
-        `🔄 Enviando atualização: appointmentId=${updatedId}, newStatus=${newStatus}`,
-      );
-    }
-
     const result = await updateAppointmentStatus(updatedId, newStatus);
-
-    if (__DEV__) {
-      console.log("📡 Resposta da API:", result);
-    }
-
     setUpdatingStatus(false);
 
     if (result.ok) {
-      if (__DEV__) {
-        console.log("✅ Atualização bem-sucedida no backend");
-      }
-
-      // Atualiza estado local imediatamente para feedback instantâneo
       setAppointments((current) =>
-        current.map((item) =>
-          item.id === updatedId ? { ...item, status: newStatus } : item,
-        ),
+        current.map((item) => (item.id === updatedId ? { ...item, status: newStatus } : item)),
       );
       setSelectedAppointment((current) =>
         current ? { ...current, status: newStatus } : current,
       );
-
       showAlert("Consulta atualizada", successMessage);
-
-      // Recarrega do backend após 1.5s e FAZ MERGE preservando o status confirmado
-      // Isso evita que uma resposta lenta do backend reverta o status local
-      setTimeout(() => {
-        const reloadData = async () => {
-          if (__DEV__) {
-            console.log("🔄 Recarregando consultas do backend...");
-          }
-          const appointmentsResult = await getAppointments();
-          if (__DEV__) {
-            console.log("📝 Consultas recarregadas:", appointmentsResult);
-          }
-
-          if (appointmentsResult.ok && appointmentsResult.data) {
-            const freshAppointments = appointmentsResult.data
-              .filter((item) => item.scheduled_at)
-              .map(toWeeklyAppointment);
-
-            // CORREÇÃO: merge que protege o item recém-atualizado
-            // Se o backend ainda retornar o status antigo (race condition),
-            // mantém o newStatus que confirmamos via 200 OK
-            setAppointments((current) => {
-              return freshAppointments.map((fetched) => {
-                if (fetched.id === updatedId) {
-                  const backendReflected = fetched.status === newStatus;
-                  if (!backendReflected) {
-                    if (__DEV__) {
-                      console.warn(
-                        `⚠️ Backend ainda retornou status antigo (${fetched.status}) para ${updatedId}. Mantendo ${newStatus}.`,
-                      );
-                    }
-                  }
-                  return backendReflected
-                    ? fetched
-                    : { ...fetched, status: newStatus as AppointmentStatus };
-                }
-                return fetched;
-              });
-            });
-
-            // Atualiza também o modal se ainda estiver aberto com o mesmo appointment
-            setSelectedAppointment((current) => {
-              if (!current || current.id !== updatedId) return current;
-              return { ...current, status: newStatus as AppointmentStatus };
-            });
-          }
-        };
-        reloadData();
-      }, 1500);
+      setTimeout(() => loadAppointments(), 1500);
     } else {
-      if (__DEV__) {
-        console.error("❌ Erro ao atualizar:", result.error);
-      }
       const detail = result.data ? JSON.stringify(result.data) : "";
       showAlert(
         "Erro ao atualizar",
-        result.error
-          ? `${result.error}${detail ? `\n\n${detail}` : ""}`
-          : "Não foi possível atualizar o status.",
+        result.error ? `${result.error}${detail ? `\n\n${detail}` : ""}` : "Não foi possível atualizar o status.",
       );
     }
   };
 
-  // Abre o modal de conclusão: prefill com "agora" e carrega a nota existente.
   const handleMarkCompleted = async () => {
     if (!selectedAppointment) return;
     const target = selectedAppointment;
@@ -421,31 +333,23 @@ export default function PsychologistAgendaScreen() {
       return;
     }
     if (new Date(iso).getTime() > Date.now()) {
-      showAlert(
-        "Data inválida",
-        "A data de realização não pode ser no futuro.",
-      );
+      showAlert("Data inválida", "A data de realização não pode ser no futuro.");
       return;
     }
     setSubmitting(true);
-    const result = await updateAppointmentStatus(completing.id, "completed", {
-      completed_at: iso,
-    });
+    const result = await updateAppointmentStatus(completing.id, "completed", { completed_at: iso });
     if (!result.ok) {
       setSubmitting(false);
       showAlert("Erro", result.error || "Não foi possível concluir a consulta.");
       return;
     }
-    // Salva a nota da sessão (o que aconteceu), se preenchida.
     if (completeNote.trim()) {
       await updateSessionNote(completing.id, completeNote);
     }
     setSubmitting(false);
     const doneId = completing.id;
     setAppointments((current) =>
-      current.map((item) =>
-        item.id === doneId ? { ...item, status: "completed" } : item,
-      ),
+      current.map((item) => (item.id === doneId ? { ...item, status: "completed" } : item)),
     );
     setCompleting(null);
     setSelectedAppointment(null);
@@ -455,7 +359,6 @@ export default function PsychologistAgendaScreen() {
   const handleUndoCompleted = () =>
     handleStatusChange("scheduled", "Consulta revertida para agendada.");
 
-  // Abre o modal de remarcação com sugestão de nova data (amanhã, mesmo horário).
   const handleMarkRescheduled = () => {
     if (!selectedAppointment) return;
     const suggestion = new Date();
@@ -478,9 +381,7 @@ export default function PsychologistAgendaScreen() {
       return;
     }
     setSubmitting(true);
-    const result = await updateAppointmentStatus(rescheduling.id, "rescheduled", {
-      scheduled_at: iso,
-    });
+    const result = await updateAppointmentStatus(rescheduling.id, "rescheduled", { scheduled_at: iso });
     setSubmitting(false);
     if (!result.ok) {
       showAlert("Erro", result.error || "Não foi possível remarcar a consulta.");
@@ -488,79 +389,17 @@ export default function PsychologistAgendaScreen() {
     }
     setRescheduling(null);
     setSelectedAppointment(null);
-    // Recarrega a semana atual para refletir a nova data.
-    const appointmentsResult = await getAppointments();
-    if (appointmentsResult.ok && appointmentsResult.data) {
-      const currentWeekDays = getCurrentWeekDays(weekOffset);
-      const weekly = appointmentsResult.data
-        .filter((item) => item.scheduled_at)
-        .map(toWeeklyAppointment)
-        .filter((item) =>
-          currentWeekDays.some((day) => day.key === item.dayKey),
-        );
-      setAppointments(weekly);
-    }
+    await loadAppointments();
     showAlert("Consulta remarcada", "A nova data foi salva.");
   };
 
-  const handlePreviousWeek = () => {
-    const newOffset = weekOffset - 1;
-    setWeekOffset(newOffset);
-    const newWeekDays = getCurrentWeekDays(newOffset);
-    setSelectedDay(newWeekDays[0].key);
-  };
-
-  const handleNextWeek = () => {
-    const newOffset = weekOffset + 1;
-    setWeekOffset(newOffset);
-    const newWeekDays = getCurrentWeekDays(newOffset);
-    setSelectedDay(newWeekDays[0].key);
-  };
-
-  const handleTodayWeek = () => {
-    setWeekOffset(0);
-    const todayKey = new Date().toISOString().split("T")[0];
-    const todayInWeek = getCurrentWeekDays(0).find(
-      (day) => day.key === todayKey,
-    );
-    if (todayInWeek) {
-      setSelectedDay(todayInWeek.key);
-    } else if (weekDays.length > 0) {
-      setSelectedDay(weekDays[0].key);
-    }
-  };
-
-  const renderDay = (day: ReturnType<typeof getCurrentWeekDays>[number]) => {
-    const isActive = day.key === selectedDay;
-    const appointmentsCount = appointments.filter(
-      (item) => item.dayKey === day.key,
-    ).length;
-
-    return (
-      <TouchableOpacity
-        key={day.key}
-        style={[
-          styles.dayCard,
-          isDesktop ? styles.dayCardDesktop : styles.dayCardMobile,
-          isActive && styles.dayCardActive,
-        ]}
-        onPress={() => setSelectedDay(day.key)}
-        activeOpacity={0.85}
-      >
-        <Text style={[styles.dayWeekLabel, isActive && styles.dayWeekLabelActive]}>
-          {day.weekday}
-        </Text>
-        <Text style={[styles.dayDateLabel, isActive && styles.dayDateLabelActive]}>
-          {day.fullLabel}
-        </Text>
-        <View style={[styles.dayBadge, isActive && styles.dayBadgeActive]}>
-          <Text style={[styles.dayBadgeText, isActive && styles.dayBadgeTextActive]}>
-            {appointmentsCount} consulta{appointmentsCount === 1 ? "" : "s"}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+  const calendarCells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
 
   return (
     <View style={styles.screen}>
@@ -573,14 +412,14 @@ export default function PsychologistAgendaScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerTextBox}>
-            <Text style={styles.headerTitle}>Agenda</Text>
+            <Text style={styles.headerTitle}>Calendário</Text>
           </View>
 
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={() => router.push("/(psychologist)/calendario" as any)}
+            onPress={() => router.push("/(psychologist)/agenda")}
           >
-            <Ionicons name="grid-outline" size={20} color="#fff" />
+            <Ionicons name="reorder-three-outline" size={22} color="#fff" />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -600,14 +439,11 @@ export default function PsychologistAgendaScreen() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Carregando agenda...</Text>
+            <Text style={styles.loadingText}>Carregando calendário...</Text>
           </View>
         ) : (
           <Animated.View
-            style={[
-              styles.container,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-            ]}
+            style={[styles.container, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
           >
             <View style={styles.summaryRow}>
               <View style={styles.summaryCard}>
@@ -615,7 +451,7 @@ export default function PsychologistAgendaScreen() {
                   <Ionicons name="calendar-outline" size={18} color={colors.primary} />
                 </View>
                 <View style={styles.summaryText}>
-                  <Text style={styles.summaryValue}>{summary.todayCount}</Text>
+                  <Text style={styles.summaryValue}>{selectedDayAppointments.length}</Text>
                   <Text style={styles.summaryLabel}>Consultas no dia</Text>
                 </View>
               </View>
@@ -624,147 +460,150 @@ export default function PsychologistAgendaScreen() {
                   <Ionicons name="checkmark-circle-outline" size={18} color="#2d6cdf" />
                 </View>
                 <View style={styles.summaryText}>
-                  <Text style={styles.summaryValue}>{summary.completedCount}</Text>
-                  <Text style={styles.summaryLabel}>Realizadas</Text>
+                  <Text style={styles.summaryValue}>{monthCompletedCount}</Text>
+                  <Text style={styles.summaryLabel}>Realizadas no mês</Text>
                 </View>
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Calendário semanal</Text>
-            <View style={styles.weekNavigationContainer}>
-              <TouchableOpacity
-                style={styles.weekNavButton}
-                onPress={handlePreviousWeek}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back-outline" size={20} color={colors.primary} />
+            {/* ── Calendário mensal ── */}
+            <View style={styles.calendarCard}>
+              <View style={styles.monthNav}>
+                <TouchableOpacity style={styles.navBtn} onPress={prevMonth} activeOpacity={0.7}>
+                  <Ionicons name="chevron-back-outline" size={18} color={colors.primary} />
+                </TouchableOpacity>
+                <Text style={styles.monthLabel}>
+                  {MONTHS[currentMonth]} {currentYear}
+                </Text>
+                <TouchableOpacity style={styles.navBtn} onPress={nextMonth} activeOpacity={0.7}>
+                  <Ionicons name="chevron-forward-outline" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.todayLink} onPress={goToToday} activeOpacity={0.7}>
+                <Text style={styles.todayLinkText}>Ir para hoje</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.todayButton}
-                onPress={handleTodayWeek}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.todayButtonText}>Hoje</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.weekNavButton}
-                onPress={handleNextWeek}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-forward-outline" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {weekDays.length > 0 && (
-              <View style={styles.weekLabelContainer}>
-                <View style={styles.weekLabelBadge}>
-                  <Text style={styles.weekLabelText}>
-                    {weekDays[0].fullLabel.split(" ")[0]}{" "}
-                    {weekDays[0].fullLabel.split(" ")[1]} –{" "}
-                    {weekDays[5].fullLabel.split(" ")[0]}{" "}
-                    {weekDays[5].fullLabel.split(" ")[1]}{" "}
-                    {new Date().getFullYear()}
+              <View style={[styles.weekdaysRow, { width: cellSize * 7 }]}>
+                {WEEKDAYS.map((w) => (
+                  <Text key={w} style={[styles.weekdayText, { width: cellSize }]}>
+                    {w}
                   </Text>
+                ))}
+              </View>
+
+              <View style={[styles.daysGrid, { width: cellSize * 7 }]}>
+                {calendarCells.map((day, idx) => {
+                  if (!day) {
+                    return (
+                      <View
+                        key={`empty-${idx}`}
+                        style={[styles.dayCell, { width: cellSize, height: cellSize }]}
+                      />
+                    );
+                  }
+
+                  const key = toKey(currentYear, currentMonth, day);
+                  const isToday = key === todayKey;
+                  const isSelected = key === selectedDate;
+                  const count = appointmentsCountByDay[key] ?? 0;
+                  const hasAppointments = count > 0;
+
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.dayCell,
+                        {
+                          width: cellSize,
+                          height: cellSize,
+                          borderRadius: cellSize / 2,
+                        },
+                        hasAppointments && styles.dayCellHasAppointments,
+                        isToday && !isSelected && styles.dayCellToday,
+                        isSelected && styles.dayCellSelected,
+                      ]}
+                      onPress={() => setSelectedDate(key)}
+                      activeOpacity={0.75}
+                    >
+                      <Text
+                        style={[
+                          styles.dayText,
+                          hasAppointments && styles.dayTextHasAppointments,
+                          isSelected && styles.dayTextSelected,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                      {hasAppointments && !isSelected && (
+                        <View style={styles.appointmentDot} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.legend}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.legendText}>Com consultas</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[
+                      styles.legendDot,
+                      { borderWidth: 1.5, borderColor: colors.primary, backgroundColor: "transparent" },
+                    ]}
+                  />
+                  <Text style={styles.legendText}>Hoje</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: colors.primaryTint }]} />
+                  <Text style={styles.legendText}>Selecionado</Text>
                 </View>
               </View>
-            )}
+            </View>
 
-            {isDesktop ? (
-              <View style={styles.weekRowDesktop}>{weekDays.map(renderDay)}</View>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.weekRow}
-              >
-                {weekDays.map(renderDay)}
-              </ScrollView>
-            )}
+            {/* ── Consultas do dia selecionado ── */}
+            <Text style={styles.sectionTitle}>
+              {selectedDate ? formatDayLabel(selectedDate) : "Consultas do dia"}
+            </Text>
 
-            <Text style={styles.sectionTitle}>Consultas agendadas</Text>
             {selectedDayAppointments.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="calendar-clear-outline" size={34} color="#9bbcaf" />
                 <Text style={styles.emptyTitle}>Sem consultas nesse dia</Text>
-                <Text style={styles.emptyText}>
-                  Nenhuma consulta agendada para este dia.
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => router.push("/(psychologist)/disponibilidade")}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="time-outline" size={15} color={colors.primary} />
-                  <Text style={styles.emptyBtnText}>Ver minha disponibilidade</Text>
-                </TouchableOpacity>
+                <Text style={styles.emptyText}>Nenhuma consulta agendada para este dia.</Text>
               </View>
             ) : (
               <View style={styles.appointmentsWrap}>
                 {selectedDayAppointments.map((appointment) => {
-                  const statusMeta = getStatusMeta(
-                    appointment.status,
-                    appointment.scheduledAt,
-                    colors,
-                  );
+                  const statusMeta = getStatusMeta(appointment.status, appointment.scheduledAt, colors);
 
                   return (
                     <TouchableOpacity
                       key={appointment.id}
-                      style={[
-                        styles.appointmentCard,
-                        { flexBasis: isDesktop ? 360 : "100%" },
-                      ]}
+                      style={[styles.appointmentCard, { flexBasis: isDesktop ? 360 : "100%" }]}
                       activeOpacity={0.85}
                       onPress={() => setSelectedAppointment(appointment)}
                     >
-                      <View
-                        style={[
-                          styles.statusStripe,
-                          { backgroundColor: statusMeta.color },
-                        ]}
-                      />
-
+                      <View style={[styles.statusStripe, { backgroundColor: statusMeta.color }]} />
                       <View style={styles.appointmentBody}>
                         <View style={styles.appointmentTopRow}>
                           <View style={styles.appointmentTimeBox}>
-                            <Text style={styles.appointmentTime}>
-                              {appointment.time}
-                            </Text>
-                            <Text style={styles.appointmentPatient}>
-                              {appointment.patientName}
-                            </Text>
+                            <Text style={styles.appointmentTime}>{appointment.time}</Text>
+                            <Text style={styles.appointmentPatient}>{appointment.patientName}</Text>
                           </View>
-
-                          <View
-                            style={[
-                              styles.statusBadge,
-                              { backgroundColor: statusMeta.bg },
-                            ]}
-                          >
-                            <Ionicons
-                              name={statusMeta.icon as any}
-                              size={14}
-                              color={statusMeta.color}
-                            />
-                            <Text
-                              style={[styles.statusText, { color: statusMeta.color }]}
-                            >
+                          <View style={[styles.statusBadge, { backgroundColor: statusMeta.bg }]}>
+                            <Ionicons name={statusMeta.icon as any} size={14} color={statusMeta.color} />
+                            <Text style={[styles.statusText, { color: statusMeta.color }]}>
                               {statusMeta.label}
                             </Text>
                           </View>
                         </View>
-
                         <View style={styles.appointmentFooter}>
-                          <Text style={styles.appointmentType}>
-                            {appointment.type}
-                          </Text>
-                          <Ionicons
-                            name="chevron-forward-outline"
-                            size={18}
-                            color="#9db6ab"
-                          />
+                          <Text style={styles.appointmentType}>{appointment.type}</Text>
+                          <Ionicons name="chevron-forward-outline" size={18} color="#9db6ab" />
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -776,65 +615,46 @@ export default function PsychologistAgendaScreen() {
         )}
       </ScrollView>
 
+      {/* Modal: detalhes da consulta */}
       <Modal
         visible={!!selectedAppointment}
         transparent
         animationType={isDesktop ? "fade" : "slide"}
         onRequestClose={() => setSelectedAppointment(null)}
       >
-        <View
-          style={[
-            styles.modalOverlay,
-            isDesktop && styles.modalOverlayDesktop,
-          ]}
-        >
-          <View
-            style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}
-          >
+        <View style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}>
+          <View style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}>
             {!isDesktop && <View style={styles.modalHandle} />}
 
             {selectedAppointment && (
               <>
                 <Text style={styles.modalTitle}>Detalhes da consulta</Text>
                 <Text style={styles.modalSubtitle}>
-                  {selectedAppointment.weekday}, {selectedAppointment.dateLabel}{" "}
-                  as {selectedAppointment.time}
+                  {selectedAppointment.weekday}, {selectedAppointment.dateLabel} as{" "}
+                  {selectedAppointment.time}
                 </Text>
 
                 <View style={styles.detailCard}>
                   <Text style={styles.detailLabel}>Paciente</Text>
-                  <Text style={styles.detailValue}>
-                    {selectedAppointment.patientName}
-                  </Text>
+                  <Text style={styles.detailValue}>{selectedAppointment.patientName}</Text>
                 </View>
 
                 <View style={styles.detailCard}>
                   <Text style={styles.detailLabel}>Tipo de atendimento</Text>
-                  <Text style={styles.detailValue}>
-                    {selectedAppointment.type}
-                  </Text>
+                  <Text style={styles.detailValue}>{selectedAppointment.type}</Text>
                 </View>
 
                 <View style={styles.detailCard}>
                   <Text style={styles.detailLabel}>Status atual</Text>
                   <Text style={styles.detailValue}>
-                    {
-                      getStatusMeta(
-                        selectedAppointment.status,
-                        selectedAppointment.scheduledAt,
-                        colors,
-                      ).label
-                    }
+                    {getStatusMeta(selectedAppointment.status, selectedAppointment.scheduledAt, colors).label}
                   </Text>
                 </View>
 
                 {selectedAppointment.status === "scheduled" && (
                   <>
                     <TouchableOpacity
-                      style={[
-                        styles.primaryAction,
-                        updatingStatus && styles.actionDisabled,
-                      ]}
+                      style={[styles.primaryAction, updatingStatus && styles.actionDisabled]}
                       onPress={handleMarkCompleted}
                       disabled={updatingStatus}
                       activeOpacity={0.85}
@@ -842,44 +662,26 @@ export default function PsychologistAgendaScreen() {
                       {updatingStatus ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Ionicons
-                          name="checkmark-circle-outline"
-                          size={18}
-                          color="#fff"
-                        />
+                        <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
                       )}
-                      <Text style={styles.primaryActionText}>
-                        Marcar como realizada
-                      </Text>
+                      <Text style={styles.primaryActionText}>Marcar como realizada</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[
-                        styles.secondaryAction,
-                        updatingStatus && styles.actionDisabled,
-                      ]}
+                      style={[styles.secondaryAction, updatingStatus && styles.actionDisabled]}
                       onPress={handleMarkRescheduled}
                       disabled={updatingStatus}
                       activeOpacity={0.85}
                     >
-                      <Ionicons
-                        name="swap-horizontal-outline"
-                        size={18}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.secondaryActionText}>
-                        Marcar como remarcada
-                      </Text>
+                      <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
+                      <Text style={styles.secondaryActionText}>Marcar como remarcada</Text>
                     </TouchableOpacity>
                   </>
                 )}
 
                 {selectedAppointment.status === "completed" && (
                   <TouchableOpacity
-                    style={[
-                      styles.undoAction,
-                      updatingStatus && styles.actionDisabled,
-                    ]}
+                    style={[styles.undoAction, updatingStatus && styles.actionDisabled]}
                     onPress={handleUndoCompleted}
                     disabled={updatingStatus}
                     activeOpacity={0.85}
@@ -887,11 +689,7 @@ export default function PsychologistAgendaScreen() {
                     {updatingStatus ? (
                       <ActivityIndicator size="small" color="#c46a1a" />
                     ) : (
-                      <Ionicons
-                        name="arrow-undo-outline"
-                        size={18}
-                        color="#c46a1a"
-                      />
+                      <Ionicons name="arrow-undo-outline" size={18} color="#c46a1a" />
                     )}
                     <Text style={styles.undoActionText}>Desfazer realizada</Text>
                   </TouchableOpacity>
@@ -899,16 +697,8 @@ export default function PsychologistAgendaScreen() {
 
                 {selectedAppointment.status === "rescheduled" && (
                   <TouchableOpacity
-                    style={[
-                      styles.secondaryAction,
-                      updatingStatus && styles.actionDisabled,
-                    ]}
-                    onPress={() =>
-                      handleStatusChange(
-                        "scheduled",
-                        "Consulta reativada como agendada.",
-                      )
-                    }
+                    style={[styles.secondaryAction, updatingStatus && styles.actionDisabled]}
+                    onPress={() => handleStatusChange("scheduled", "Consulta reativada como agendada.")}
                     disabled={updatingStatus}
                     activeOpacity={0.85}
                   >
@@ -917,9 +707,7 @@ export default function PsychologistAgendaScreen() {
                     ) : (
                       <Ionicons name="refresh-outline" size={18} color={colors.primary} />
                     )}
-                    <Text style={styles.secondaryActionText}>
-                      Reverter para agendada
-                    </Text>
+                    <Text style={styles.secondaryActionText}>Reverter para agendada</Text>
                   </TouchableOpacity>
                 )}
 
@@ -952,9 +740,7 @@ export default function PsychologistAgendaScreen() {
         animationType={isDesktop ? "fade" : "slide"}
         onRequestClose={() => !submitting && setCompleting(null)}
       >
-        <View
-          style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}
-        >
+        <View style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}>
           <View style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}>
             {!isDesktop && <View style={styles.modalHandle} />}
             <Text style={styles.modalTitle}>Concluir consulta</Text>
@@ -965,11 +751,7 @@ export default function PsychologistAgendaScreen() {
             <Text style={styles.fieldLabel}>Data realizada</Text>
             <View style={styles.dateRow}>
               <View style={styles.dateCol}>
-                <DateField
-                  value={completeDate}
-                  onChange={setCompleteDate}
-                  max={todayISODate()}
-                />
+                <DateField value={completeDate} onChange={setCompleteDate} max={todayISODate()} />
               </View>
               <View style={styles.timeCol}>
                 <TimeField value={completeTime} onChange={setCompleteTime} />
@@ -978,11 +760,7 @@ export default function PsychologistAgendaScreen() {
 
             <Text style={styles.fieldLabel}>O que aconteceu (opcional)</Text>
             {loadingCompleteNote ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.primary}
-                style={{ marginVertical: 20 }}
-              />
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
             ) : (
               <TextInput
                 style={styles.noteInput}
@@ -1027,24 +805,16 @@ export default function PsychologistAgendaScreen() {
         animationType={isDesktop ? "fade" : "slide"}
         onRequestClose={() => !submitting && setRescheduling(null)}
       >
-        <View
-          style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}
-        >
+        <View style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}>
           <View style={[styles.modalSheet, isDesktop && styles.modalSheetDesktop]}>
             {!isDesktop && <View style={styles.modalHandle} />}
             <Text style={styles.modalTitle}>Remarcar consulta</Text>
-            <Text style={styles.modalSubtitle}>
-              Escolha a nova data e horário. Deve ser no futuro.
-            </Text>
+            <Text style={styles.modalSubtitle}>Escolha a nova data e horário. Deve ser no futuro.</Text>
 
             <Text style={styles.fieldLabel}>Nova data</Text>
             <View style={styles.dateRow}>
               <View style={styles.dateCol}>
-                <DateField
-                  value={reDate}
-                  onChange={setReDate}
-                  min={todayISODate()}
-                />
+                <DateField value={reDate} onChange={setReDate} min={todayISODate()} />
               </View>
               <View style={styles.timeCol}>
                 <TimeField value={reTime} onChange={setReTime} />
@@ -1134,7 +904,7 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 12,
-      marginBottom: 26,
+      marginBottom: 22,
     },
     summaryCard: {
       flexGrow: 1,
@@ -1172,125 +942,128 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textMuted,
       fontWeight: "600",
     },
+    calendarCard: {
+      alignSelf: "center",
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 18,
+      marginBottom: 24,
+      ...CARD_SHADOW,
+    },
+    monthNav: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    navBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 11,
+      backgroundColor: colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    monthLabel: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.textDark,
+      letterSpacing: -0.3,
+    },
+    todayLink: {
+      alignSelf: "center",
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    todayLinkText: {
+      fontSize: 12.5,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+    weekdaysRow: {
+      flexDirection: "row",
+      marginTop: 14,
+      marginBottom: 6,
+    },
+    weekdayText: {
+      textAlign: "center",
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textMuted,
+      textTransform: "uppercase",
+    },
+    daysGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "flex-start",
+    },
+    dayCell: {
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+      position: "relative",
+    },
+    dayCellHasAppointments: {
+      backgroundColor: colors.primaryTint,
+    },
+    dayCellToday: {
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+    },
+    dayCellSelected: {
+      backgroundColor: colors.primary,
+    },
+    dayText: {
+      fontSize: 13,
+      color: colors.textDark,
+      fontWeight: "600",
+    },
+    dayTextHasAppointments: {
+      color: colors.primary,
+      fontWeight: "800",
+    },
+    dayTextSelected: {
+      color: colors.white,
+      fontWeight: "800",
+    },
+    appointmentDot: {
+      position: "absolute",
+      bottom: 4,
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.primary,
+    },
+    legend: {
+      flexDirection: "row",
+      justifyContent: "center",
+      flexWrap: "wrap",
+      gap: 16,
+      marginTop: 14,
+    },
+    legendItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    legendDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+    },
+    legendText: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontWeight: "600",
+    },
     sectionTitle: {
       fontSize: 16,
       fontWeight: "800",
       color: colors.textDark,
       letterSpacing: -0.2,
       marginBottom: 12,
-    },
-    weekNavigationContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 12,
-      marginBottom: 16,
-    },
-    weekNavButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: colors.white,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    todayButton: {
-      paddingVertical: 11,
-      paddingHorizontal: 20,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    todayButtonText: {
-      color: colors.white,
-      fontSize: 14,
-      fontWeight: "700",
-    },
-    weekLabelContainer: {
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    weekLabelBadge: {
-      backgroundColor: colors.primaryTint,
-      borderRadius: 999,
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-    },
-    weekLabelText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.primary,
-      textAlign: "center",
-    },
-    weekRow: {
-      gap: 12,
-      paddingBottom: 8,
-      marginBottom: 20,
-    },
-    weekRowDesktop: {
-      flexDirection: "row",
-      gap: 10,
-      marginBottom: 24,
-    },
-    dayCard: {
-      backgroundColor: colors.white,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 14,
-      ...CARD_SHADOW,
-    },
-    dayCardMobile: {
-      width: 118,
-    },
-    dayCardDesktop: {
-      flexGrow: 1,
-      flexBasis: 0,
-      minWidth: 90,
-    },
-    dayCardActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    dayWeekLabel: {
-      fontSize: 12.5,
-      color: colors.textMuted,
-      fontWeight: "700",
-      textTransform: "uppercase",
-    },
-    dayWeekLabelActive: {
-      color: "#d9efe5",
-    },
-    dayDateLabel: {
-      marginTop: 6,
-      fontSize: 17,
-      color: colors.textDark,
-      fontWeight: "800",
-    },
-    dayDateLabelActive: {
-      color: colors.white,
-    },
-    dayBadge: {
-      marginTop: 12,
-      alignSelf: "flex-start",
-      backgroundColor: "#f2f9f5",
-      borderRadius: 999,
-      paddingVertical: 5,
-      paddingHorizontal: 10,
-    },
-    dayBadgeActive: {
-      backgroundColor: "rgba(255,255,255,0.18)",
-    },
-    dayBadgeText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: colors.primary,
-    },
-    dayBadgeTextActive: {
-      color: colors.white,
+      textTransform: "capitalize",
     },
     emptyCard: {
       backgroundColor: colors.white,
@@ -1314,22 +1087,6 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: 20,
       color: colors.textMuted,
       textAlign: "center",
-    },
-    emptyBtn: {
-      marginTop: 16,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      borderWidth: 1.5,
-      borderColor: colors.primary,
-      borderRadius: 12,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-    },
-    emptyBtnText: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: colors.primary,
     },
     appointmentsWrap: {
       flexDirection: "row",
@@ -1473,7 +1230,6 @@ const createStyles = (colors: ThemeColors) =>
       gap: 10,
       marginBottom: 6,
     },
-    // flex + minWidth:0 permite que o campo de hora encolha e não estoure a telinha.
     dateCol: { flex: 1.4, minWidth: 0 },
     timeCol: { flex: 1, minWidth: 0 },
     noteInput: {

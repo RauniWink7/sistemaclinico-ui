@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -12,6 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ThemeColors } from '../../../constants/theme-palettes';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { showAlert } from '../../../services/feedback';
 import {
   getPatientProfile,
@@ -25,19 +27,11 @@ import {
 const psychologistName = (item?: ProfessionalApiItem | null) =>
   item?.user?.full_name?.trim() || item?.full_name?.trim() || item?.name?.trim() || '';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
+// ─── Cores semânticas fixas (não mudam com a paleta) ──────────────────────────
 const BLUE = '#2d6cdf';
 const BLUE_LIGHT = '#eaf1ff';
 const RED = '#d95c5c';
 const RED_LIGHT = '#fdeeee';
-
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 
 const MAX_WIDTH = 1120;
 
@@ -57,14 +51,18 @@ const InfoRow = ({
   icon,
   label,
   value,
+  styles,
+  colors,
 }: {
   icon: string;
   label: string;
   value: string;
+  styles: ReturnType<typeof createStyles>;
+  colors: ThemeColors;
 }) => (
   <View style={styles.infoRow}>
     <View style={styles.infoIconBox}>
-      <Ionicons name={icon as any} size={16} color={GREEN} />
+      <Ionicons name={icon as any} size={16} color={colors.primary} />
     </View>
     <View style={styles.infoTextBox}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -74,6 +72,9 @@ const InfoRow = ({
 );
 
 export default function PatientDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [patient, setPatient] = useState<PatientDetail | null>(null);
@@ -221,10 +222,10 @@ export default function PatientDetailScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <Header title="Paciente" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Buscando dados do paciente...</Text>
         </View>
       </View>
@@ -235,7 +236,7 @@ export default function PatientDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <Header title="Paciente" />
 
       <ScrollView
@@ -255,16 +256,16 @@ export default function PatientDetailScreen() {
 
             <View style={[
               styles.statusBadge,
-              { backgroundColor: patient.user.is_active ? GREEN_LIGHT : RED_LIGHT }
+              { backgroundColor: patient.user.is_active ? colors.primaryTint : RED_LIGHT }
             ]}>
               <Ionicons
                 name={patient.user.is_active ? 'checkmark-circle-outline' : 'pause-circle-outline'}
                 size={14}
-                color={patient.user.is_active ? GREEN : RED}
+                color={patient.user.is_active ? colors.primary : RED}
               />
               <Text style={[
                 styles.statusText,
-                { color: patient.user.is_active ? GREEN : RED }
+                { color: patient.user.is_active ? colors.primary : RED }
               ]}>
                 {patient.user.is_active ? 'Ativo' : 'Inativo'}
               </Text>
@@ -275,22 +276,26 @@ export default function PatientDetailScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Dados cadastrais</Text>
 
-            <InfoRow icon="mail-outline" label="E-mail" value={patient.user.email} />
+            <InfoRow icon="mail-outline" label="E-mail" value={patient.user.email} styles={styles} colors={colors} />
             <View style={styles.divider} />
-            <InfoRow icon="call-outline" label="Telefone" value={patient.user.phone ?? '—'} />
+            <InfoRow icon="call-outline" label="Telefone" value={patient.user.phone ?? '—'} styles={styles} colors={colors} />
             <View style={styles.divider} />
-            <InfoRow icon="card-outline" label="CPF" value={patient.cpf ?? '—'} />
+            <InfoRow icon="card-outline" label="CPF" value={patient.cpf ?? '—'} styles={styles} colors={colors} />
             <View style={styles.divider} />
             <InfoRow
               icon="calendar-outline"
               label="Data de nascimento"
               value={formatDate(patient.birth_date ?? undefined)}
+              styles={styles}
+              colors={colors}
             />
             <View style={styles.divider} />
             <InfoRow
               icon="time-outline"
               label="Cadastrado em"
               value={formatDate(patient.user.created_at)}
+              styles={styles}
+              colors={colors}
             />
           </View>
 
@@ -302,6 +307,8 @@ export default function PatientDetailScreen() {
               icon="person-outline"
               label="Atendido por"
               value={psychologistName(patient.assigned_professional_detail) || '—'}
+              styles={styles}
+              colors={colors}
             />
 
             {changingPsychologist ? (
@@ -314,7 +321,7 @@ export default function PatientDetailScreen() {
                 </Text>
 
                 {psychologists.length === 0 ? (
-                  <ActivityIndicator color={GREEN} style={{ marginTop: 14 }} />
+                  <ActivityIndicator color={colors.primary} style={{ marginTop: 14 }} />
                 ) : (
                   <View style={styles.psychologistList}>
                     {psychologists.map((item) => {
@@ -330,7 +337,7 @@ export default function PatientDetailScreen() {
                           <Ionicons
                             name={selected ? 'radio-button-on' : 'radio-button-off'}
                             size={20}
-                            color={selected ? GREEN : '#a8c4b8'}
+                            color={selected ? colors.primary : '#a8c4b8'}
                           />
                           <View style={styles.psychologistInfo}>
                             <Text style={styles.psychologistName}>{psychologistName(item)}</Text>
@@ -388,7 +395,7 @@ export default function PatientDetailScreen() {
                 onPress={handleStartChangingPsychologist}
                 activeOpacity={0.85}
               >
-                <Ionicons name="swap-horizontal-outline" size={18} color={GREEN} />
+                <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
                 <Text style={styles.changePsychologistText}>Alterar psicólogo</Text>
               </TouchableOpacity>
             )}
@@ -404,7 +411,7 @@ export default function PatientDetailScreen() {
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Nome completo"
-                placeholderTextColor="#94b3a6"
+                placeholderTextColor={colors.placeholder}
                 editable={!saving}
               />
               <Text style={styles.fieldLabel}>Telefone</Text>
@@ -413,7 +420,7 @@ export default function PatientDetailScreen() {
                 value={editPhone}
                 onChangeText={setEditPhone}
                 placeholder="Telefone"
-                placeholderTextColor="#94b3a6"
+                placeholderTextColor={colors.placeholder}
                 keyboardType="phone-pad"
                 editable={!saving}
               />
@@ -453,7 +460,7 @@ export default function PatientDetailScreen() {
               onPress={() => setEditing(true)}
               activeOpacity={0.85}
             >
-              <Ionicons name="create-outline" size={18} color={GREEN} />
+              <Ionicons name="create-outline" size={18} color={colors.primary} />
               <Text style={styles.editButtonText}>Editar dados básicos</Text>
             </TouchableOpacity>
           )}
@@ -466,8 +473,8 @@ export default function PatientDetailScreen() {
               onPress={() => router.push({ pathname: '/(admin)/agendar', params: { patientId: patient.id } })}
               activeOpacity={0.85}
             >
-              <View style={[styles.actionIconBox, { backgroundColor: GREEN_LIGHT }]}>
-                <Ionicons name="calendar-outline" size={20} color={GREEN} />
+              <View style={[styles.actionIconBox, { backgroundColor: colors.primaryTint }]}>
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.actionTextBox}>
                 <Text style={styles.actionTitle}>Agendar consulta</Text>
@@ -500,9 +507,9 @@ export default function PatientDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -512,18 +519,18 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
   container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
 
   profileCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 26,
     marginBottom: 16,
     alignItems: 'center',
@@ -539,8 +546,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   avatarText: { fontSize: 28, fontWeight: '800', color: BLUE },
-  profileName: { fontSize: 21, fontWeight: '800', color: TEXT_DARK, textAlign: 'center', letterSpacing: -0.4 },
-  profileEmail: { marginTop: 6, fontSize: 14, color: TEXT_MUTED, textAlign: 'center' },
+  profileName: { fontSize: 21, fontWeight: '800', color: colors.textDark, textAlign: 'center', letterSpacing: -0.4 },
+  profileEmail: { marginTop: 6, fontSize: 14, color: colors.textMuted, textAlign: 'center' },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -553,22 +560,22 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 13, fontWeight: '700' },
 
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 18,
     marginBottom: 14,
     ...CARD_SHADOW,
   },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: TEXT_DARK, marginBottom: 14, letterSpacing: -0.2 },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.textDark, marginBottom: 14, letterSpacing: -0.2 },
 
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   infoIconBox: {
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
@@ -587,7 +594,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f6faf8',
     paddingHorizontal: 16,
     fontSize: 15,
-    color: TEXT_DARK,
+    color: colors.textDark,
     fontWeight: '500',
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: 'none',
@@ -602,19 +609,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButtonText: { fontSize: 14, fontWeight: '700', color: GREEN },
+  cancelButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
   saveButton: {
     flex: 1,
     height: 48,
     borderRadius: 12,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   saveButtonDisabled: { opacity: 0.75 },
-  saveButtonText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  saveButtonText: { fontSize: 14, fontWeight: '700', color: colors.white },
 
   editButton: {
     flexDirection: 'row',
@@ -628,30 +635,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fdfb',
     marginBottom: 14,
   },
-  editButtonText: { fontSize: 15, fontWeight: '700', color: GREEN },
+  editButtonText: { fontSize: 15, fontWeight: '700', color: colors.primary },
 
   // Psicólogo responsável
-  psychologistHint: { fontSize: 12.5, color: TEXT_MUTED, lineHeight: 18, marginTop: 12 },
+  psychologistHint: { fontSize: 12.5, color: colors.textMuted, lineHeight: 18, marginTop: 12 },
   psychologistList: { marginTop: 14, gap: 8 },
   psychologistOption: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.border,
     backgroundColor: '#f6faf8', paddingHorizontal: 14, paddingVertical: 12,
   },
-  psychologistOptionSelected: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
+  psychologistOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   psychologistInfo: { flex: 1, minWidth: 0 },
-  psychologistName: { fontSize: 14, fontWeight: '700', color: TEXT_DARK },
-  psychologistMeta: { fontSize: 12, color: TEXT_MUTED, marginTop: 2 },
+  psychologistName: { fontSize: 14, fontWeight: '700', color: colors.textDark },
+  psychologistMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   changePsychologistButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginTop: 14, paddingVertical: 12, borderRadius: 12,
-    borderWidth: 1, borderColor: GREEN_LIGHT, backgroundColor: GREEN_LIGHT,
+    borderWidth: 1, borderColor: colors.primaryTint, backgroundColor: colors.primaryTint,
   },
-  changePsychologistText: { fontSize: 14, fontWeight: '700', color: GREEN },
+  changePsychologistText: { fontSize: 14, fontWeight: '700', color: colors.primary },
 
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   actionIconBox: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   actionTextBox: { flex: 1, marginRight: 8 },
-  actionTitle: { fontSize: 15, fontWeight: '700', color: TEXT_DARK },
-  actionSubtitle: { marginTop: 3, fontSize: 12, color: TEXT_MUTED },
+  actionTitle: { fontSize: 15, fontWeight: '700', color: colors.textDark },
+  actionSubtitle: { marginTop: 3, fontSize: 12, color: colors.textMuted },
 });

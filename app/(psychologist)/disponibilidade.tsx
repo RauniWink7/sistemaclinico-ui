@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -12,6 +12,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
     createAvailabilityBlock,
@@ -68,17 +70,13 @@ const TIME_OPTIONS = Array.from({ length: 28 }, (_, i) => {
   return `${String(hour).padStart(2, "0")}:${min}`;
 });
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
-const GREEN_LIGHT = "#e8f7f1";
-const BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
 const MAX_WIDTH = 1120;
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AvailabilityScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [professionalId, setProfessionalId] = useState("");
@@ -278,7 +276,7 @@ export default function AvailabilityScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -326,7 +324,7 @@ export default function AvailabilityScreen() {
       {/* ── Content ── */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={GREEN} size="large" />
+          <ActivityIndicator color={colors.primary} size="large" />
           <Text style={styles.loadingText}>Carregando horários...</Text>
         </View>
       ) : (
@@ -352,7 +350,7 @@ export default function AvailabilityScreen() {
                   que eles possam agendar consultas.
                 </Text>
                 <TouchableOpacity style={styles.emptyAddBtn} onPress={openAdd}>
-                  <Ionicons name="add-outline" size={18} color={WHITE} />
+                  <Ionicons name="add-outline" size={18} color={colors.white} />
                   <Text style={styles.emptyAddBtnText}>
                     Adicionar primeiro horário
                   </Text>
@@ -520,7 +518,7 @@ export default function AvailabilityScreen() {
                     <Text
                       style={[
                         styles.weekdayChipText,
-                        isActive && { color: WHITE },
+                        isActive && { color: colors.white },
                       ]}
                     >
                       {WEEKDAY_SHORT[day.value]}
@@ -541,14 +539,14 @@ export default function AvailabilityScreen() {
                     setShowEndPicker(false);
                   }}
                 >
-                  <Ionicons name="time-outline" size={16} color={GREEN} />
+                  <Ionicons name="time-outline" size={16} color={colors.primary} />
                   <Text style={styles.timePickerBtnText}>
                     {newSlot.start_time}
                   </Text>
                   <Ionicons
                     name="chevron-down-outline"
                     size={14}
-                    color={GREEN}
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
                 {showStartPicker && (
@@ -596,14 +594,14 @@ export default function AvailabilityScreen() {
                     setShowStartPicker(false);
                   }}
                 >
-                  <Ionicons name="time-outline" size={16} color={GREEN} />
+                  <Ionicons name="time-outline" size={16} color={colors.primary} />
                   <Text style={styles.timePickerBtnText}>
                     {newSlot.end_time}
                   </Text>
                   <Ionicons
                     name="chevron-down-outline"
                     size={14}
-                    color={GREEN}
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
                 {showEndPicker && (
@@ -652,7 +650,7 @@ export default function AvailabilityScreen() {
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color={WHITE} size="small" />
+                  <ActivityIndicator color={colors.white} size="small" />
                 ) : (
                   <Text style={styles.modalConfirmBtnText}>Confirmar</Text>
                 )}
@@ -707,7 +705,7 @@ export default function AvailabilityScreen() {
                 disabled={isDeleting}
               >
                 {isDeleting ? (
-                  <ActivityIndicator color={WHITE} size="small" />
+                  <ActivityIndicator color={colors.white} size="small" />
                 ) : (
                   <Text style={styles.deleteModalConfirmBtnText}>Remover</Text>
                 )}
@@ -721,11 +719,11 @@ export default function AvailabilityScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
 
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 52,
     paddingBottom: 16,
   },
@@ -749,7 +747,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: WHITE,
+    color: colors.white,
     letterSpacing: 0.2,
   },
   addBtn: {
@@ -761,10 +759,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
   },
-  addBtnText: { color: WHITE, fontSize: 13, fontWeight: "700" },
+  addBtnText: { color: colors.white, fontSize: 13, fontWeight: "700" },
 
   summaryBar: {
-    backgroundColor: GREEN_DARK,
+    backgroundColor: colors.primaryStrong,
     paddingVertical: 14,
   },
   summaryInner: {
@@ -775,7 +773,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   summaryItem: { flex: 1, alignItems: "center" },
-  summaryNumber: { fontSize: 22, fontWeight: "800", color: WHITE },
+  summaryNumber: { fontSize: 22, fontWeight: "800", color: colors.white },
   summaryLabel: { fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 2 },
   summaryDivider: {
     width: 1,
@@ -819,10 +817,10 @@ const styles = StyleSheet.create({
   overviewDot: { width: 5, height: 5, borderRadius: 999 },
 
   dayCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 18,
     marginBottom: 12,
     shadowColor: "#1f5442",
@@ -868,7 +866,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
@@ -887,20 +885,20 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   emptyAddBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 16,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  emptyAddBtnText: { color: WHITE, fontSize: 15, fontWeight: "700" },
+  emptyAddBtnText: { color: colors.white, fontSize: 15, fontWeight: "700" },
 
   // Modal
   modalOverlay: {
@@ -909,7 +907,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalSheet: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
@@ -947,7 +945,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1.5,
     borderColor: "#d4e8de",
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
   },
   weekdayChipText: { fontSize: 13, fontWeight: "700", color: "#5a756a" },
 
@@ -968,21 +966,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
   },
-  timePickerBtnText: { flex: 1, fontSize: 15, fontWeight: "700", color: GREEN },
+  timePickerBtnText: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.primary },
   timeDropdown: {
     maxHeight: 160,
     borderWidth: 1,
     borderColor: "#d4e8de",
     borderRadius: 12,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     marginTop: 4,
   },
   timeOption: { paddingHorizontal: 14, paddingVertical: 10 },
-  timeOptionActive: { backgroundColor: GREEN_LIGHT },
+  timeOptionActive: { backgroundColor: colors.primaryTint },
   timeOptionText: { fontSize: 14, color: "#3a6054", fontWeight: "500" },
-  timeOptionTextActive: { color: GREEN, fontWeight: "700" },
+  timeOptionTextActive: { color: colors.primary, fontWeight: "700" },
 
   modalButtons: { flexDirection: "row", gap: 10 },
   modalCancelBtn: {
@@ -995,12 +993,12 @@ const styles = StyleSheet.create({
   modalCancelBtnText: { color: "#666", fontSize: 15, fontWeight: "600" },
   modalConfirmBtn: {
     flex: 1,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
   },
-  modalConfirmBtnText: { color: WHITE, fontSize: 15, fontWeight: "700" },
+  modalConfirmBtnText: { color: colors.white, fontSize: 15, fontWeight: "700" },
 
   // Delete Modal
   deleteModalOverlay: {
@@ -1011,7 +1009,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   deleteModalContent: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 24,
     padding: 28,
     alignItems: "center",
@@ -1073,7 +1071,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   deleteModalConfirmBtnText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 15,
     fontWeight: "700",
   },

@@ -12,6 +12,8 @@ import {
   View,
 } from "react-native";
 import { DateField } from "../../components/DateTimeField";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
   downloadReportFile,
@@ -23,24 +25,19 @@ import {
   ReportSummary,
 } from "../../services/api";
 
-const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1f684f";
-const GREEN_LIGHT = "#e8f7f1";
 const BLUE_LIGHT = "#eaf1ff";
 const ORANGE_LIGHT = "#fef3e8";
-const BG = "#f0faf5";
-const WHITE = "#ffffff";
 
 const formatNumber = (value?: number) => String(value ?? 0);
 const formatPercent = (value?: number) => `${value ?? 0}%`;
 
-const summaryCards = (summary?: ReportSummary) => [
+const buildSummaryCards = (colors: ThemeColors, summary?: ReportSummary) => [
   {
     label: "Consultas",
     value: formatNumber(summary?.total_appointments),
     icon: "calendar-outline",
-    color: GREEN,
-    bg: GREEN_LIGHT,
+    color: colors.primary,
+    bg: colors.primaryTint,
   },
   {
     label: "Realizadas",
@@ -58,12 +55,19 @@ const summaryCards = (summary?: ReportSummary) => [
   },
 ];
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+// Componentes no escopo do módulo (não dentro do componente principal) para
+// não perder identidade/estado dos campos de data a cada re-render do pai —
+// cada um lê a paleta da clínica direto via useTheme().
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+    </>
+  );
+};
 
 const PeriodPicker = ({
   startDate,
@@ -77,27 +81,34 @@ const PeriodPicker = ({
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
   onApply: () => void;
-}) => (
-  <View style={styles.filterCard}>
-    <Text style={styles.sectionTitle}>Período</Text>
-    <View style={styles.inputRow}>
-      <View style={styles.inputBox}>
-        <Text style={styles.inputLabel}>Início</Text>
-        <DateField value={startDate} onChange={onStartChange} max={endDate || undefined} />
+}) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.filterCard}>
+      <Text style={styles.sectionTitle}>Período</Text>
+      <View style={styles.inputRow}>
+        <View style={styles.inputBox}>
+          <Text style={styles.inputLabel}>Início</Text>
+          <DateField value={startDate} onChange={onStartChange} max={endDate || undefined} />
+        </View>
+        <View style={styles.inputBox}>
+          <Text style={styles.inputLabel}>Fim</Text>
+          <DateField value={endDate} onChange={onEndChange} min={startDate || undefined} />
+        </View>
       </View>
-      <View style={styles.inputBox}>
-        <Text style={styles.inputLabel}>Fim</Text>
-        <DateField value={endDate} onChange={onEndChange} min={startDate || undefined} />
-      </View>
+      <TouchableOpacity style={styles.applyBtn} onPress={onApply} activeOpacity={0.85}>
+        <Ionicons name="filter-outline" size={17} color={colors.white} />
+        <Text style={styles.applyBtnText}>Aplicar filtros</Text>
+      </TouchableOpacity>
     </View>
-    <TouchableOpacity style={styles.applyBtn} onPress={onApply} activeOpacity={0.85}>
-      <Ionicons name="filter-outline" size={17} color={WHITE} />
-      <Text style={styles.applyBtnText}>Aplicar filtros</Text>
-    </TouchableOpacity>
-  </View>
-);
+  );
+};
 
 export default function PatientReportsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [report, setReport] = useState<PatientReportApi | null>(null);
   const [patientProfileId, setPatientProfileId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -179,12 +190,12 @@ export default function PatientReportsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <DecorativeBackground />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
+          <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
         </TouchableOpacity>
         <View style={styles.headerTextBox}>
           <Text style={styles.headerEyebrow}>Area do paciente</Text>
@@ -196,9 +207,9 @@ export default function PatientReportsScreen() {
           disabled={exporting || !report}
         >
           {exporting ? (
-            <ActivityIndicator color={WHITE} />
+            <ActivityIndicator color={colors.white} />
           ) : (
-            <Ionicons name="download-outline" size={22} color={WHITE} />
+            <Ionicons name="download-outline" size={22} color={colors.white} />
           )}
         </TouchableOpacity>
       </View>
@@ -206,7 +217,7 @@ export default function PatientReportsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando relatorio...</Text>
           </View>
         ) : (
@@ -229,7 +240,7 @@ export default function PatientReportsScreen() {
             />
 
             <View style={styles.metricsGrid}>
-              {summaryCards(report?.summary).map((item) => (
+              {buildSummaryCards(colors, report?.summary).map((item) => (
                 <View key={item.label} style={styles.metricCard}>
                   <View style={[styles.metricIcon, { backgroundColor: item.bg }]}>
                     <Ionicons name={item.icon as any} size={20} color={item.color} />
@@ -269,8 +280,8 @@ export default function PatientReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.authBg },
   circle1: {
     position: "absolute",
     width: 280,
@@ -286,7 +297,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: GREEN_DARK,
+    backgroundColor: colors.primaryStrong,
     top: -55,
     left: -70,
     opacity: 0.28,
@@ -295,7 +306,7 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 24,
     paddingHorizontal: 24,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
@@ -311,17 +322,17 @@ const styles = StyleSheet.create({
   iconBtnDisabled: { opacity: 0.6 },
   headerTextBox: { flex: 1 },
   headerEyebrow: { color: "#bce3d5", fontSize: 13, fontWeight: "700" },
-  headerTitle: { color: WHITE, fontSize: 24, fontWeight: "800", marginTop: 2 },
+  headerTitle: { color: colors.white, fontSize: 24, fontWeight: "800", marginTop: 2 },
   scroll: { flex: 1 },
   scrollContent: { padding: 22, paddingBottom: 40, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
   loadingContainer: { minHeight: 360, alignItems: "center", justifyContent: "center", gap: 12 },
-  loadingText: { color: GREEN, fontWeight: "700" },
+  loadingText: { color: colors.primary, fontWeight: "700" },
   heroCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 22,
     padding: 22,
     marginBottom: 16,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 18,
@@ -330,7 +341,7 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 22, fontWeight: "800", color: "#173d31" },
   heroSubtitle: { marginTop: 8, fontSize: 14, lineHeight: 21, color: "#5d7a6e" },
   filterCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     padding: 16,
     marginBottom: 16,
@@ -345,21 +356,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
     height: 46,
     borderRadius: 12,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
-  applyBtnText: { color: WHITE, fontWeight: "800" },
+  applyBtnText: { color: colors.white, fontWeight: "800" },
   metricsGrid: { flexDirection: "row", gap: 10, marginBottom: 22 },
   metricCard: {
     flex: 1,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     padding: 14,
     minHeight: 126,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.07,
     shadowRadius: 14,
@@ -376,7 +387,7 @@ const styles = StyleSheet.create({
   metricValue: { fontSize: 22, fontWeight: "800", color: "#173d31" },
   metricLabel: { fontSize: 12, color: "#6c8c80", fontWeight: "700", marginTop: 2 },
   tableCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     padding: 16,
     marginBottom: 22,
@@ -392,7 +403,7 @@ const styles = StyleSheet.create({
   rowLabel: { color: "#557366", fontWeight: "700" },
   rowValue: { color: "#173d31", fontWeight: "800" },
   appointmentCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
@@ -404,8 +415,8 @@ const styles = StyleSheet.create({
   appointmentTitle: { fontSize: 14, color: "#173d31", fontWeight: "800" },
   appointmentMeta: { marginTop: 3, fontSize: 12, color: "#7a9d8f", fontWeight: "600" },
   statusPill: {
-    color: GREEN,
-    backgroundColor: GREEN_LIGHT,
+    color: colors.primary,
+    backgroundColor: colors.primaryTint,
     overflow: "hidden",
     borderRadius: 8,
     paddingHorizontal: 9,

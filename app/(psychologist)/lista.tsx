@@ -13,6 +13,8 @@ import {
     useWindowDimensions,
     View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
     getAppointments,
@@ -21,15 +23,8 @@ import {
 
 } from "../../services/api";
 
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
+// Cor semântica fixa (não muda com a paleta da clínica).
 const BLUE_LIGHT = "#eaf1ff";
-
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#17352b";
-const TEXT_MUTED = "#5f7a6f";
 
 const MAX_WIDTH = 1120;
 const DESKTOP_BREAKPOINT = 900;
@@ -43,6 +38,9 @@ const CARD_SHADOW = {
 } as const;
 
 export default function PsychologistPatientListScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [query, setQuery] = useState("");
   const [allPatients, setAllPatients] = useState<any[]>([]); // All loaded patients
   const [patients, setPatients] = useState<any[]>([]); // Paginated display
@@ -194,7 +192,7 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
@@ -222,7 +220,7 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando pacientes...</Text>
           </View>
         ) : (
@@ -234,7 +232,7 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
           >
             <View style={styles.searchCard}>
               <View style={styles.searchBox}>
-                <Ionicons name="search-outline" size={18} color={TEXT_MUTED} />
+                <Ionicons name="search-outline" size={18} color={colors.textMuted} />
                 <TextInput
                   style={styles.searchInput}
                   value={query}
@@ -305,7 +303,7 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
                     </View>
 
                     <View style={styles.lastAppointmentBox}>
-                      <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                      <Ionicons name="calendar-outline" size={15} color={colors.primary} />
                       <Text style={styles.lastAppointmentText}>
                         Última consulta: {patient.lastAppointment}
                       </Text>
@@ -325,13 +323,13 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
                 activeOpacity={0.85}
               >
                 {loadingMore ? (
-                  <ActivityIndicator size="small" color={GREEN} />
+                  <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
                   <>
                     <Ionicons
                       name="cloud-download-outline"
                       size={18}
-                      color={GREEN}
+                      color={colors.primary}
                     />
                     <Text style={styles.loadMoreText}>
                       Carregar mais pacientes
@@ -347,13 +345,14 @@ _displayPhone: patient.user?.phone ?? patient.phone ?? "Telefone não informado"
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: PAGE_BG,
+    backgroundColor: colors.pageBg,
   },
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 52,
     paddingBottom: 20,
   },
@@ -379,7 +378,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 21,
     fontWeight: "800",
     letterSpacing: -0.3,
@@ -398,10 +397,10 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   searchCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 12,
     marginBottom: 22,
     ...CARD_SHADOW,
@@ -410,7 +409,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#f6faf8",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: "row",
@@ -420,7 +419,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
-    color: TEXT_DARK,
+    color: colors.textDark,
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: "none",
   },
@@ -433,7 +432,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT_DARK,
+    color: colors.textDark,
     letterSpacing: -0.2,
   },
   countBadge: {
@@ -441,14 +440,14 @@ const styles = StyleSheet.create({
     height: 26,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
   resultCount: {
     fontSize: 14,
     fontWeight: "800",
-    color: GREEN,
+    color: colors.primary,
   },
   patientsWrap: {
     flexDirection: "row",
@@ -457,10 +456,10 @@ const styles = StyleSheet.create({
   },
   patientCard: {
     flexGrow: 1,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 16,
     ...CARD_SHADOW,
   },
@@ -488,19 +487,19 @@ const styles = StyleSheet.create({
   patientName: {
     fontSize: 15.5,
     fontWeight: "800",
-    color: TEXT_DARK,
+    color: colors.textDark,
   },
   patientMeta: {
     marginTop: 3,
     fontSize: 13,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
   },
   lastAppointmentBox: {
     marginTop: 14,
     borderRadius: 12,
     backgroundColor: "#f6faf8",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -520,11 +519,11 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 15,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontWeight: "600",
   },
   loadMoreBtn: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 14,
     padding: 16,
     marginTop: 16,
@@ -533,12 +532,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: GREEN,
+    borderColor: colors.primary,
   },
   loadMoreText: {
     marginLeft: 10,
     fontSize: 15,
     fontWeight: "800",
-    color: GREEN,
+    color: colors.primary,
   },
 });

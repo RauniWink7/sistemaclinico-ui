@@ -21,14 +21,9 @@ import {
   getProfessionalsByClinic,
   ReportPeriodQuery,
 } from "../../services/api";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#173d31";
 const MAX_WIDTH = 1120;
 
 const CARD_SHADOW = {
@@ -40,6 +35,9 @@ const CARD_SHADOW = {
 } as const;
 
 export default function AdminReportsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [report, setReport] = useState<AdminAppointmentsReportApi | null>(null);
   const [professionals, setProfessionals] = useState<any[]>([]);
   const [professionalId, setProfessionalId] = useState("");
@@ -112,18 +110,18 @@ export default function AdminReportsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
+            <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
           </TouchableOpacity>
           <View style={styles.headerTextBox}>
             <Text style={styles.headerTitle}>Relatórios</Text>
           </View>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.replace("/(admin)")}>
-            <Ionicons name="home-outline" size={20} color={WHITE} />
+            <Ionicons name="home-outline" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -131,7 +129,7 @@ export default function AdminReportsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando relatório...</Text>
           </View>
         ) : (
@@ -190,7 +188,7 @@ export default function AdminReportsScreen() {
                 ))}
               </ScrollView>
               <TouchableOpacity style={styles.applyBtn} onPress={() => void loadReport()}>
-                <Ionicons name="filter-outline" size={17} color={WHITE} />
+                <Ionicons name="filter-outline" size={17} color={colors.white} />
                 <Text style={styles.applyBtnText}>Aplicar filtros</Text>
               </TouchableOpacity>
             </View>
@@ -198,17 +196,17 @@ export default function AdminReportsScreen() {
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.exportBtn} onPress={() => void exportReport("pdf")}>
                 {exporting === "pdf" ? (
-                  <ActivityIndicator color={GREEN} />
+                  <ActivityIndicator color={colors.primary} />
                 ) : (
-                  <Ionicons name="document-text-outline" size={18} color={GREEN} />
+                  <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                 )}
                 <Text style={styles.exportBtnText}>PDF</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.exportBtn} onPress={() => void exportReport("excel")}>
                 {exporting === "excel" ? (
-                  <ActivityIndicator color={GREEN} />
+                  <ActivityIndicator color={colors.primary} />
                 ) : (
-                  <Ionicons name="grid-outline" size={18} color={GREEN} />
+                  <Ionicons name="grid-outline" size={18} color={colors.primary} />
                 )}
                 <Text style={styles.exportBtnText}>Excel</Text>
               </TouchableOpacity>
@@ -252,57 +250,61 @@ export default function AdminReportsScreen() {
   );
 }
 
-const Metric = ({ label, value }: { label: string; value: number | string }) => (
-  <View style={styles.metricCard}>
-    <View style={styles.metricIcon}>
-      <Ionicons name="stats-chart-outline" size={19} color={GREEN} />
+const Metric = ({ label, value }: { label: string; value: number | string }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.metricCard}>
+      <View style={styles.metricIcon}>
+        <Ionicons name="stats-chart-outline" size={19} color={colors.primary} />
+      </View>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
     </View>
-    <Text style={styles.metricValue}>{value}</Text>
-    <Text style={styles.metricLabel}>{label}</Text>
-  </View>
-);
+  );
+};
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
   },
   iconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44, maxWidth: MAX_WIDTH, alignSelf: "center" as const, width: "100%" as const },
   loadingContainer: { minHeight: 360, alignItems: "center", justifyContent: "center", gap: 12 },
-  loadingText: { color: GREEN, fontWeight: "700" },
-  heroCard: { backgroundColor: WHITE, borderRadius: 18, borderWidth: 1, borderColor: BORDER, padding: 20, marginBottom: 16, ...CARD_SHADOW },
-  heroTitle: { fontSize: 22, fontWeight: "800", color: TEXT_DARK },
+  loadingText: { color: colors.primary, fontWeight: "700" },
+  heroCard: { backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 20, marginBottom: 16, ...CARD_SHADOW },
+  heroTitle: { fontSize: 22, fontWeight: "800", color: colors.textDark },
   heroSubtitle: { marginTop: 8, fontSize: 14, lineHeight: 21, color: "#5d7a6e" },
-  filterCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER, ...CARD_SHADOW },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: TEXT_DARK, marginBottom: 12, marginTop: 4, letterSpacing: -0.2 },
+  filterCard: { backgroundColor: colors.white, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border, ...CARD_SHADOW },
+  sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.textDark, marginBottom: 12, marginTop: 4, letterSpacing: -0.2 },
   inputRow: { flexDirection: "row", gap: 10 },
   dateField: { flex: 1, gap: 6 },
   inputLabel: { fontSize: 12, fontWeight: "700", color: "#6c8c80", marginLeft: 2 },
   profScroll: { marginTop: 12 },
-  profChip: { height: 36, borderRadius: 10, backgroundColor: GREEN_LIGHT, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", marginRight: 8 },
-  profChipActive: { backgroundColor: GREEN },
-  profChipText: { color: GREEN, fontWeight: "800", fontSize: 12 },
-  profChipTextActive: { color: WHITE },
-  applyBtn: { marginTop: 12, height: 46, borderRadius: 12, backgroundColor: GREEN, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  applyBtnText: { color: WHITE, fontWeight: "800" },
+  profChip: { height: 36, borderRadius: 10, backgroundColor: colors.primaryTint, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", marginRight: 8 },
+  profChipActive: { backgroundColor: colors.primary },
+  profChipText: { color: colors.primary, fontWeight: "800", fontSize: 12 },
+  profChipTextActive: { color: colors.white },
+  applyBtn: { marginTop: 12, height: 46, borderRadius: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  applyBtnText: { color: colors.white, fontWeight: "800" },
   actionRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  exportBtn: { flex: 1, height: 46, borderRadius: 12, backgroundColor: GREEN_LIGHT, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  exportBtnText: { color: GREEN, fontWeight: "800" },
+  exportBtn: { flex: 1, height: 46, borderRadius: 12, backgroundColor: colors.primaryTint, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  exportBtnText: { color: colors.primary, fontWeight: "800" },
   metricsGrid: { flexDirection: "row", gap: 10, marginBottom: 22 },
-  metricCard: { flex: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 14, minHeight: 122, ...CARD_SHADOW },
-  metricIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: GREEN_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 10 },
-  metricValue: { fontSize: 22, fontWeight: "800", color: TEXT_DARK },
+  metricCard: { flex: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, minHeight: 122, ...CARD_SHADOW },
+  metricIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  metricValue: { fontSize: 22, fontWeight: "800", color: colors.textDark },
   metricLabel: { fontSize: 12, color: "#6c8c80", fontWeight: "700", marginTop: 2 },
-  professionalCard: { backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...CARD_SHADOW },
-  appointmentCard: { backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, ...CARD_SHADOW },
-  cardTitle: { fontSize: 14, color: TEXT_DARK, fontWeight: "800" },
+  professionalCard: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...CARD_SHADOW },
+  appointmentCard: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, ...CARD_SHADOW },
+  cardTitle: { fontSize: 14, color: colors.textDark, fontWeight: "800" },
   cardMeta: { marginTop: 3, fontSize: 12, color: "#7a9d8f", fontWeight: "600" },
-  valuePill: { minWidth: 34, textAlign: "center", color: GREEN, backgroundColor: GREEN_LIGHT, overflow: "hidden", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, fontSize: 12, fontWeight: "800" },
-  statusPill: { color: GREEN, backgroundColor: GREEN_LIGHT, overflow: "hidden", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, fontSize: 11, fontWeight: "800" },
+  valuePill: { minWidth: 34, textAlign: "center", color: colors.primary, backgroundColor: colors.primaryTint, overflow: "hidden", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, fontSize: 12, fontWeight: "800" },
+  statusPill: { color: colors.primary, backgroundColor: colors.primaryTint, overflow: "hidden", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, fontSize: 11, fontWeight: "800" },
 });

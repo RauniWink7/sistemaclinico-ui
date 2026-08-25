@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ScrollView,
   StatusBar,
@@ -14,17 +14,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 import { createProfessionalAsAdmin } from '../../services/api';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
+// ─── Cores semânticas fixas (não mudam com a paleta) ──────────────────────────
 const BLUE_LIGHT = '#eaf1ff';
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 const MAX_WIDTH = 1120;
 
 const CARD_SHADOW = {
@@ -38,6 +33,9 @@ const CARD_SHADOW = {
 const DURATIONS = ['30', '45', '50', '60', '90'];
 
 export default function CadastrarPsicologoScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [loading, setLoading] = useState(false);
   const [sessionDuration, setSessionDuration] = useState('50');
   const [photo, setPhoto] = useState<{ uri: string; name: string; type: string } | null>(null);
@@ -96,7 +94,7 @@ export default function CadastrarPsicologoScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
@@ -119,7 +117,7 @@ export default function CadastrarPsicologoScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="camera-outline" size={16} color={GREEN} />
+                <Ionicons name="camera-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Foto (opcional)</Text>
             </View>
@@ -134,7 +132,7 @@ export default function CadastrarPsicologoScreen() {
               </View>
               <View style={styles.photoActions}>
                 <TouchableOpacity style={styles.photoBtn} onPress={handlePickPhoto} activeOpacity={0.85}>
-                  <Ionicons name="image-outline" size={16} color={GREEN} />
+                  <Ionicons name="image-outline" size={16} color={colors.primary} />
                   <Text style={styles.photoBtnText}>{photo ? 'Trocar foto' : 'Selecionar foto'}</Text>
                 </TouchableOpacity>
                 {photo && (
@@ -151,7 +149,7 @@ export default function CadastrarPsicologoScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="person-outline" size={16} color={GREEN} />
+                <Ionicons name="person-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Dados de acesso</Text>
             </View>
@@ -170,7 +168,7 @@ export default function CadastrarPsicologoScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="medkit-outline" size={16} color={GREEN} />
+                <Ionicons name="medkit-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Dados profissionais</Text>
             </View>
@@ -198,7 +196,7 @@ export default function CadastrarPsicologoScreen() {
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardIcon}>
-                <Ionicons name="time-outline" size={16} color={GREEN} />
+                <Ionicons name="time-outline" size={16} color={colors.primary} />
               </View>
               <Text style={styles.cardTitle}>Duração da sessão</Text>
             </View>
@@ -240,9 +238,9 @@ export default function CadastrarPsicologoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -252,32 +250,32 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
   container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   card: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     padding: 18, marginBottom: 16, ...CARD_SHADOW,
   },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  cardIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: GREEN_LIGHT, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 15.5, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.2 },
-  cardSubtitle: { marginTop: 6, fontSize: 13, color: TEXT_MUTED, lineHeight: 20 },
+  cardIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 15.5, fontWeight: '800', color: colors.textDark, letterSpacing: -0.2 },
+  cardSubtitle: { marginTop: 6, fontSize: 13, color: colors.textMuted, lineHeight: 20 },
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 14 },
   photoPreview: {
     width: 76, height: 76, borderRadius: 38, backgroundColor: '#f6faf8',
-    borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden',
   },
   photoImg: { width: '100%', height: '100%' },
   photoActions: { flex: 1, gap: 8 },
   photoBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderRadius: 12, borderWidth: 1.5, borderColor: GREEN, backgroundColor: GREEN_LIGHT,
+    borderRadius: 12, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.primaryTint,
     paddingVertical: 11, paddingHorizontal: 14, alignSelf: 'flex-start',
   },
-  photoBtnText: { fontSize: 14, fontWeight: '700', color: GREEN },
+  photoBtnText: { fontSize: 14, fontWeight: '700', color: colors.primary },
   photoRemove: {
     flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
     paddingVertical: 4, paddingHorizontal: 4,
@@ -285,23 +283,23 @@ const styles = StyleSheet.create({
   photoRemoveText: { fontSize: 13, fontWeight: '600', color: '#d95c5c' },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6a887d', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
   input: {
-    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,
+    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border,
     paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: '#1f4036',
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: 'none',
   },
   inputMultiline: { minHeight: 100, paddingTop: 13 },
   durationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
-  durationChip: { borderRadius: 12, borderWidth: 1.5, borderColor: BORDER, backgroundColor: BLUE_LIGHT, paddingVertical: 11, paddingHorizontal: 18 },
-  durationChipActive: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
+  durationChip: { borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, backgroundColor: BLUE_LIGHT, paddingVertical: 11, paddingHorizontal: 18 },
+  durationChipActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   durationText: { fontSize: 14, fontWeight: '700', color: '#5f7e73' },
-  durationTextActive: { color: GREEN },
+  durationTextActive: { color: colors.primary },
   submitButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: GREEN, borderRadius: 14, paddingVertical: 16, marginBottom: 8,
+    backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 16, marginBottom: 8,
   },
   submitDisabled: { opacity: 0.6 },
-  submitText: { color: WHITE, fontSize: 16, fontWeight: '800' },
+  submitText: { color: colors.white, fontSize: 16, fontWeight: '800' },
   cancelButton: { alignItems: 'center', paddingVertical: 14 },
-  cancelText: { fontSize: 15, fontWeight: '600', color: TEXT_MUTED },
+  cancelText: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
 });

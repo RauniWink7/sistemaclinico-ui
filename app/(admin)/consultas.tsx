@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
@@ -27,19 +27,14 @@ import {
 } from "../../services/api";
 import { partsToISO, toInputParts, todayISODate } from "../../services/dateInput";
 import { DateField, TimeField } from "../../components/DateTimeField";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
+// ─── Cores semânticas fixas (categorias de status, não mudam com a paleta) ───
 
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
 const BLUE = "#2d6cdf";
 const ORANGE = "#c46a1a";
 const RED = "#d95c5c";
-
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#173d31";
 
 const MAX_WIDTH = 1120;
 const DESKTOP_BREAKPOINT = 900;
@@ -75,7 +70,10 @@ interface StatusConfig {
   icon: string;
 }
 
-const STATUS_MAP: Record<string, StatusConfig> = {
+const buildStatusMap = (
+  green: string,
+  greenLight: string,
+): Record<string, StatusConfig> => ({
   scheduled: {
     label: "Agendada",
     color: BLUE,
@@ -84,8 +82,8 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   completed: {
     label: "Concluída",
-    color: GREEN,
-    bg: "#e8f7f1",
+    color: green,
+    bg: greenLight,
     icon: "checkmark-circle-outline",
   },
   cancelled: {
@@ -106,7 +104,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     bg: "#f3ecff",
     icon: "refresh-circle-outline",
   },
-};
+});
 
 // Exibição da consulta em aberto cujo dia já passou (estado derivado —
 // o status gravado continua "scheduled"/"rescheduled").
@@ -195,10 +193,12 @@ const StatusBadge = ({
   status: string;
   scheduledAt?: string;
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const overdue = isAppointmentOverdue(status, scheduledAt);
   const cfg = overdue
     ? OVERDUE_CONFIG
-    : (STATUS_MAP[status] ?? {
+    : (buildStatusMap(colors.primary, colors.primaryTint)[status] ?? {
         label: status,
         color: "#6c8c80",
         bg: "#edf4f0",
@@ -223,6 +223,8 @@ const AppointmentCard = ({
   onChangeStatus: (item: NormalizedAppointment) => void;
   onCancel: (item: NormalizedAppointment) => void;
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const canModify = item.status === "scheduled";
 
   return (
@@ -268,7 +270,7 @@ const AppointmentCard = ({
             onPress={() => onChangeStatus(item)}
             activeOpacity={0.8}
           >
-            <Ionicons name="create-outline" size={14} color={GREEN} />
+            <Ionicons name="create-outline" size={14} color={colors.primary} />
             <Text style={styles.actionBtnText}>Alterar status</Text>
           </TouchableOpacity>
 
@@ -291,6 +293,9 @@ const AppointmentCard = ({
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
 export default function AdminAppointmentsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [appointments, setAppointments] = useState<NormalizedAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -557,10 +562,10 @@ export default function AdminAppointmentsScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <Header />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Carregando consultas...</Text>
         </View>
       </View>
@@ -570,7 +575,7 @@ export default function AdminAppointmentsScreen() {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <Header />
 
       <ScrollView
@@ -581,8 +586,8 @@ export default function AdminAppointmentsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[GREEN]}
-            tintColor={GREEN}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >
@@ -684,7 +689,7 @@ export default function AdminAppointmentsScreen() {
           {filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="calendar-outline" size={32} color={GREEN} />
+                <Ionicons name="calendar-outline" size={32} color={colors.primary} />
               </View>
               <Text style={styles.emptyTitle}>Nenhuma consulta encontrada</Text>
               <Text style={styles.emptySubtitle}>
@@ -735,7 +740,7 @@ export default function AdminAppointmentsScreen() {
 
             <View style={styles.modalOptions}>
               {STATUS_OPTIONS.map((opt) => {
-                const cfg = STATUS_MAP[opt.value];
+                const cfg = buildStatusMap(colors.primary, colors.primaryTint)[opt.value];
                 return (
                   <TouchableOpacity
                     key={opt.value}
@@ -918,9 +923,9 @@ export default function AdminAppointmentsScreen() {
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
@@ -930,60 +935,60 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
+  loadingText: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
   container: { width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center" },
   heroCard: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     padding: 18, marginBottom: 16, ...CARD_SHADOW,
   },
   countersRow: { flexDirection: "row", alignItems: "center" },
   counter: { flex: 1, alignItems: "center" },
-  counterValue: { fontSize: 22, fontWeight: "800", color: GREEN },
+  counterValue: { fontSize: 22, fontWeight: "800", color: colors.primary },
   counterLabel: { fontSize: 11, color: "#7a9e90", fontWeight: "600", marginTop: 2 },
   counterDivider: { width: 1, height: 32, backgroundColor: "#e0ede7" },
   searchBox: {
-    flexDirection: "row", alignItems: "center", backgroundColor: WHITE, borderRadius: 12,
-    borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, height: 50, marginBottom: 14, gap: 8,
+    flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderRadius: 12,
+    borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 50, marginBottom: 14, gap: 8,
     ...CARD_SHADOW,
   },
   searchInput: {
-    flex: 1, fontSize: 14, color: TEXT_DARK, fontWeight: "500",
+    flex: 1, fontSize: 14, color: colors.textDark, fontWeight: "500",
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: "none",
   },
   filtersRow: { gap: 8, paddingBottom: 16 },
   filterChip: {
     flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 999, backgroundColor: WHITE, borderWidth: 1, borderColor: BORDER,
+    borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
   },
-  filterChipActive: { backgroundColor: GREEN, borderColor: GREEN },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterChipText: { fontSize: 13, fontWeight: "700", color: "#5e7b70" },
-  filterChipTextActive: { color: WHITE },
+  filterChipTextActive: { color: colors.white },
   filterCount: {
     minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#edf4f0",
     alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
   },
   filterCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
   filterCountText: { fontSize: 11, fontWeight: "700", color: "#5e7b70" },
-  filterCountTextActive: { color: WHITE },
+  filterCountTextActive: { color: colors.white },
   resultCount: { fontSize: 13, fontWeight: "700", color: "#7a9e90", marginBottom: 12 },
   cardsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   card: {
-    flexGrow: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    flexGrow: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     padding: 16, ...CARD_SHADOW,
   },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   avatar: {
-    width: 46, height: 46, borderRadius: 15, backgroundColor: GREEN_LIGHT,
+    width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primaryTint,
     alignItems: "center", justifyContent: "center",
   },
-  avatarText: { fontSize: 15, fontWeight: "800", color: GREEN },
+  avatarText: { fontSize: 15, fontWeight: "800", color: colors.primary },
   cardInfo: { flex: 1 },
-  patientName: { fontSize: 15, fontWeight: "800", color: TEXT_DARK },
+  patientName: { fontSize: 15, fontWeight: "800", color: colors.textDark },
   professionalName: { fontSize: 12, color: "#7a9e90", fontWeight: "600", marginTop: 2 },
   badge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10 },
   badgeText: { fontSize: 11, fontWeight: "700" },
@@ -999,21 +1004,21 @@ const styles = StyleSheet.create({
     height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: "#cfe7dc", backgroundColor: "#f9fdfb",
   },
   actionBtnRed: { borderColor: "#f5d0d0", backgroundColor: "#fff8f8" },
-  actionBtnText: { fontSize: 12, fontWeight: "700", color: GREEN },
+  actionBtnText: { fontSize: 12, fontWeight: "700", color: colors.primary },
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyIcon: {
-    width: 72, height: 72, borderRadius: 24, backgroundColor: GREEN_LIGHT,
+    width: 72, height: 72, borderRadius: 24, backgroundColor: colors.primaryTint,
     alignItems: "center", justifyContent: "center",
   },
-  emptyTitle: { fontSize: 17, fontWeight: "800", color: TEXT_DARK },
+  emptyTitle: { fontSize: 17, fontWeight: "800", color: colors.textDark },
   emptySubtitle: { fontSize: 13, color: "#7a9e90", textAlign: "center", lineHeight: 19 },
 
   // Modais
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24,
   },
-  modalBox: { backgroundColor: WHITE, borderRadius: 20, padding: 24, width: "100%", maxWidth: 400 },
-  modalTitle: { fontSize: 19, fontWeight: "800", color: TEXT_DARK, textAlign: "center" },
+  modalBox: { backgroundColor: colors.white, borderRadius: 20, padding: 24, width: "100%", maxWidth: 400 },
+  modalTitle: { fontSize: 19, fontWeight: "800", color: colors.textDark, textAlign: "center" },
   modalSubtitle: { fontSize: 13, color: "#6c8c80", textAlign: "center", marginTop: 6, marginBottom: 20, lineHeight: 19 },
   modalLabel: {
     fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8,
@@ -1022,7 +1027,7 @@ const styles = StyleSheet.create({
   modalInput: {
     minHeight: 80, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
     backgroundColor: "#f6faf8", paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 14, color: TEXT_DARK, marginBottom: 20,
+    fontSize: 14, color: colors.textDark, marginBottom: 20,
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: "none",
   },
@@ -1033,7 +1038,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 12,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1047,7 +1052,7 @@ const styles = StyleSheet.create({
     flex: 1, height: 46, borderRadius: 12, backgroundColor: RED,
     alignItems: "center", justifyContent: "center",
   },
-  modalDangerText: { fontSize: 14, fontWeight: "700", color: WHITE },
+  modalDangerText: { fontSize: 14, fontWeight: "700", color: colors.white },
   disabledBtn: { opacity: 0.6 },
   modalOptions: { gap: 10, marginBottom: 16 },
   statusOption: {

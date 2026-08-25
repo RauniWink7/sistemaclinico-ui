@@ -12,6 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
   getNotifications,
@@ -21,22 +23,17 @@ import {
 
 type NotificationFilter = "all" | "unread" | "read";
 
-const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1e6b54";
-const GREEN_LIGHT = "#e8f7f1";
-const BG = "#f0faf5";
-const WHITE = "#ffffff";
-
 const FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: "all", label: "Todas" },
   { key: "unread", label: "Nao lidas" },
   { key: "read", label: "Historico" },
 ];
 
-const TYPE_META: Record<
-  string,
-  { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }
-> = {
+type TypeMeta = { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; bg: string };
+
+// "appointment_confirmed" acompanha a marca da clínica; os demais tipos são
+// cores semânticas fixas (lembrete, cancelamento, remarcação, mensagem, aviso).
+const buildTypeMeta = (colors: ThemeColors): Record<string, TypeMeta> => ({
   appointment_reminder: {
     label: "Lembrete",
     icon: "alarm-outline",
@@ -46,8 +43,8 @@ const TYPE_META: Record<
   appointment_confirmed: {
     label: "Consulta confirmada",
     icon: "checkmark-circle-outline",
-    color: GREEN,
-    bg: GREEN_LIGHT,
+    color: colors.primary,
+    bg: colors.primaryTint,
   },
   appointment_cancelled: {
     label: "Consulta cancelada",
@@ -73,14 +70,18 @@ const TYPE_META: Record<
     color: "#64748b",
     bg: "#eef2f7",
   },
-};
+});
 
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+    </>
+  );
+};
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "";
@@ -94,7 +95,10 @@ const formatDateTime = (value?: string | null) => {
   }).format(date);
 };
 
-const getNotificationMeta = (type: string) => TYPE_META[type] ?? TYPE_META.general;
+const getNotificationMeta = (type: string, colors: ThemeColors) => {
+  const meta = buildTypeMeta(colors);
+  return meta[type] ?? meta.general;
+};
 
 const getMetadataLabel = (metadata?: Record<string, any>) => {
   if (!metadata) return "";
@@ -124,7 +128,9 @@ const NotificationCard = ({
   onMarkRead: (id: string) => void;
   marking: boolean;
 }) => {
-  const meta = getNotificationMeta(item.type);
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const meta = getNotificationMeta(item.type, colors);
   const metadataLabel = getMetadataLabel(item.metadata);
 
   return (
@@ -170,10 +176,10 @@ const NotificationCard = ({
           activeOpacity={0.85}
         >
           {marking ? (
-            <ActivityIndicator size="small" color={GREEN} />
+            <ActivityIndicator size="small" color={colors.primary} />
           ) : (
             <>
-              <Ionicons name="checkmark-outline" size={15} color={GREEN} />
+              <Ionicons name="checkmark-outline" size={15} color={colors.primary} />
               <Text style={styles.markReadText}>Marcar como lida</Text>
             </>
           )}
@@ -184,6 +190,9 @@ const NotificationCard = ({
 };
 
 export default function NotificationsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [notifications, setNotifications] = useState<NotificationApiItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<NotificationFilter>("all");
   const [loading, setLoading] = useState(true);
@@ -296,7 +305,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <DecorativeBackground />
 
       <View style={styles.header}>
@@ -305,7 +314,7 @@ export default function NotificationsScreen() {
           onPress={() => router.back()}
           activeOpacity={0.85}
         >
-          <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
+          <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
         </TouchableOpacity>
 
         <View style={styles.headerTextBox}>
@@ -325,7 +334,7 @@ export default function NotificationsScreen() {
           disabled={unreadCount === 0}
           activeOpacity={0.85}
         >
-          <Ionicons name="checkmark-done-outline" size={22} color={WHITE} />
+          <Ionicons name="checkmark-done-outline" size={22} color={colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -360,7 +369,7 @@ export default function NotificationsScreen() {
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator color={GREEN} />
+            <ActivityIndicator color={colors.primary} />
             <Text style={styles.loadingText}>Carregando avisos...</Text>
           </View>
         ) : (
@@ -372,8 +381,8 @@ export default function NotificationsScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                colors={[GREEN]}
-                tintColor={GREEN}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
               />
             }
           >
@@ -383,7 +392,7 @@ export default function NotificationsScreen() {
                   <Ionicons
                     name="notifications-off-outline"
                     size={30}
-                    color={GREEN}
+                    color={colors.primary}
                   />
                 </View>
                 <Text style={styles.emptyTitle}>Nenhum aviso encontrado</Text>
@@ -408,10 +417,10 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.authBg,
   },
   circle1: {
     position: "absolute",
@@ -428,13 +437,13 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: GREEN_DARK,
+    backgroundColor: colors.primaryStrong,
     top: -60,
     left: -60,
     opacity: 0.3,
   },
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 54,
     paddingBottom: 24,
     paddingHorizontal: 20,
@@ -459,7 +468,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: WHITE,
+    color: colors.white,
     letterSpacing: -0.4,
   },
   headerSubtitle: {
@@ -482,15 +491,15 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     borderRadius: 10,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#d9eee5",
   },
   filterBtnActive: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterText: {
     fontSize: 13,
@@ -498,7 +507,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   filterTextActive: {
-    color: WHITE,
+    color: colors.white,
   },
   loadingBox: {
     flex: 1,
@@ -508,7 +517,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: GREEN,
+    color: colors.primary,
     fontWeight: "600",
   },
   list: {
@@ -523,12 +532,12 @@ const styles = StyleSheet.create({
     width: '100%' as const,
   },
   notificationCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
     borderColor: "#e3f1eb",
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.08,
     shadowRadius: 14,
@@ -608,7 +617,7 @@ const styles = StyleSheet.create({
     height: 36,
     marginTop: 14,
     borderRadius: 10,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -616,7 +625,7 @@ const styles = StyleSheet.create({
   },
   markReadText: {
     fontSize: 13,
-    color: GREEN,
+    color: colors.primary,
     fontWeight: "800",
   },
   emptyBox: {
@@ -629,7 +638,7 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 18,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,

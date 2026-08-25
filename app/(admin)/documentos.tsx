@@ -16,6 +16,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
   deleteDocument,
@@ -26,16 +28,9 @@ import {
   uploadDocument,
 } from "../../services/api";
 
-// ─── Tema ──────────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
+// ─── Cores semânticas fixas (não mudam com a paleta) ──────────────────────────
 const BLUE = "#2d6cdf";
 const RED = "#d95c5c";
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#17352b";
-const TEXT_MUTED = "#5f7a6f";
 const MAX_WIDTH = 1120;
 const DESKTOP_BREAKPOINT = 900;
 
@@ -81,13 +76,17 @@ const UPLOAD_TYPES: { label: string; value: string }[] = [
   { label: "Outro", value: "other" },
 ];
 
-const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
+const buildTypeConfig = (
+  primary: string,
+  primaryTint: string,
+): Record<string, { icon: string; color: string; bg: string }> => ({
   pdf: { icon: "document-text-outline", color: "#e05c5c", bg: "#fdeaea" },
   image: { icon: "image-outline", color: BLUE, bg: "#e8f0fc" },
-  other: { icon: "folder-outline", color: GREEN, bg: GREEN_LIGHT },
-};
+  other: { icon: "folder-outline", color: primary, bg: primaryTint },
+});
 
-const typeCfg = (t: string) => TYPE_CONFIG[t] ?? TYPE_CONFIG.other;
+const typeCfg = (t: string, cfg: Record<string, { icon: string; color: string; bg: string }>) =>
+  cfg[t] ?? cfg.other;
 
 const formatDate = (iso: string): string => {
   if (!iso) return "—";
@@ -97,7 +96,11 @@ const formatDate = (iso: string): string => {
 };
 
 // Rótulo do vínculo do documento.
-const patientLabel = (doc: DocItem): { text: string; color: string; bg: string } => {
+const patientLabel = (
+  doc: DocItem,
+  primary: string,
+  primaryTint: string,
+): { text: string; color: string; bg: string } => {
   if (doc.is_avulso || !doc.patient) {
     return { text: "Avulso", color: "#8a55d9", bg: "#f3ecff" };
   }
@@ -108,11 +111,18 @@ const patientLabel = (doc: DocItem): { text: string; color: string; bg: string }
       bg: "#fef3e8",
     };
   }
-  return { text: doc.patient_name || "Paciente", color: GREEN, bg: GREEN_LIGHT };
+  return { text: doc.patient_name || "Paciente", color: primary, bg: primaryTint };
 };
 
 // ─── Tela ──────────────────────────────────────────────────────────────────────
 export default function AdminDocumentsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typeConfig = useMemo(
+    () => buildTypeConfig(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const [docs, setDocs] = useState<DocItem[]>([]);
   const [patients, setPatients] = useState<SimplePatient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -221,7 +231,7 @@ export default function AdminDocumentsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
@@ -244,7 +254,7 @@ export default function AdminDocumentsScreen() {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando documentos...</Text>
           </View>
         ) : (
@@ -262,17 +272,17 @@ export default function AdminDocumentsScreen() {
 
             {/* Busca */}
             <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={16} color="#94b3a6" />
+              <Ionicons name="search-outline" size={16} color={colors.placeholder} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Buscar por título ou paciente..."
-                placeholderTextColor="#94b3a6"
+                placeholderTextColor={colors.placeholder}
                 value={search}
                 onChangeText={setSearch}
               />
               {search.length > 0 && (
                 <TouchableOpacity onPress={() => setSearch("")}>
-                  <Ionicons name="close-circle" size={16} color="#94b3a6" />
+                  <Ionicons name="close-circle" size={16} color={colors.placeholder} />
                 </TouchableOpacity>
               )}
             </View>
@@ -318,8 +328,8 @@ export default function AdminDocumentsScreen() {
             ) : (
               <View style={styles.cardsWrap}>
                 {filtered.map((doc) => {
-                  const cfg = typeCfg(doc.file_type);
-                  const pl = patientLabel(doc);
+                  const cfg = typeCfg(doc.file_type, typeConfig);
+                  const pl = patientLabel(doc, colors.primary, colors.primaryTint);
                   return (
                     <View
                       key={doc.id}
@@ -346,7 +356,7 @@ export default function AdminDocumentsScreen() {
                             onPress={() => handleDownload(doc)}
                             activeOpacity={0.8}
                           >
-                            <Ionicons name="download-outline" size={13} color={GREEN} />
+                            <Ionicons name="download-outline" size={13} color={colors.primary} />
                             <Text style={styles.downloadBtnText}>Baixar</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -393,7 +403,7 @@ export default function AdminDocumentsScreen() {
             <Text style={styles.confirmTitle}>Excluir documento</Text>
             <Text style={styles.confirmMsg}>
               Excluir {"\n"}
-              <Text style={{ fontWeight: "700", color: TEXT_DARK }}>{deleteTarget?.title}</Text>?
+              <Text style={{ fontWeight: "700", color: colors.textDark }}>{deleteTarget?.title}</Text>?
               {"\n"}Esta ação não pode ser desfeita.
             </Text>
             <View style={styles.confirmButtons}>
@@ -436,18 +446,33 @@ function UploadModal({
   onClose: () => void;
   onUploaded: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const typeConfig = useMemo(
+    () => buildTypeConfig(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const [avulso, setAvulso] = useState(true);
   const [patientId, setPatientId] = useState<string | null>(null);
   const [patientOpen, setPatientOpen] = useState(false);
+  const [patientSearch, setPatientSearch] = useState("");
   const [title, setTitle] = useState("");
   const [fileType, setFileType] = useState("pdf");
   const [file, setFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  const filteredPatients = useMemo(() => {
+    const q = patientSearch.trim().toLowerCase();
+    if (!q) return patients;
+    return patients.filter((p) => p.label.toLowerCase().includes(q));
+  }, [patients, patientSearch]);
+
   const reset = () => {
     setAvulso(true);
     setPatientId(null);
     setPatientOpen(false);
+    setPatientSearch("");
     setTitle("");
     setFileType("pdf");
     setFile(null);
@@ -549,7 +574,7 @@ function UploadModal({
                   activeOpacity={0.85}
                 >
                   <Text
-                    style={[styles.selectorBtnText, !patientId && { color: "#94b3a6" }]}
+                    style={[styles.selectorBtnText, !patientId && { color: colors.placeholder }]}
                     numberOfLines={1}
                   >
                     {selectedPatientLabel}
@@ -562,25 +587,50 @@ function UploadModal({
                 </TouchableOpacity>
                 {patientOpen && (
                   <View style={styles.dropdown}>
-                    {patients.length === 0 ? (
-                      <Text style={styles.dropdownEmpty}>Nenhum paciente disponível</Text>
-                    ) : (
-                      patients.map((p) => (
-                        <TouchableOpacity
-                          key={p.id}
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setPatientId(p.id);
-                            setPatientOpen(false);
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>{p.label}</Text>
-                          {patientId === p.id && (
-                            <Ionicons name="checkmark-outline" size={16} color={GREEN} />
-                          )}
-                        </TouchableOpacity>
-                      ))
+                    {patients.length > 0 && (
+                      <View style={styles.dropdownSearchBox}>
+                        <Ionicons name="search-outline" size={15} color={colors.placeholder} />
+                        <TextInput
+                          style={styles.dropdownSearchInput}
+                          placeholder="Buscar paciente por nome..."
+                          placeholderTextColor={colors.placeholder}
+                          value={patientSearch}
+                          onChangeText={setPatientSearch}
+                          autoFocus
+                        />
+                        {patientSearch.length > 0 && (
+                          <TouchableOpacity onPress={() => setPatientSearch("")}>
+                            <Ionicons name="close-circle" size={15} color={colors.placeholder} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
+                    <ScrollView keyboardShouldPersistTaps="handled" style={styles.dropdownList}>
+                      {patients.length === 0 ? (
+                        <Text style={styles.dropdownEmpty}>Nenhum paciente disponível</Text>
+                      ) : filteredPatients.length === 0 ? (
+                        <Text style={styles.dropdownEmpty}>
+                          Nenhum paciente encontrado para "{patientSearch}"
+                        </Text>
+                      ) : (
+                        filteredPatients.map((p) => (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={styles.dropdownItem}
+                            onPress={() => {
+                              setPatientId(p.id);
+                              setPatientOpen(false);
+                              setPatientSearch("");
+                            }}
+                          >
+                            <Text style={styles.dropdownItemText}>{p.label}</Text>
+                            {patientId === p.id && (
+                              <Ionicons name="checkmark-outline" size={16} color={colors.primary} />
+                            )}
+                          </TouchableOpacity>
+                        ))
+                      )}
+                    </ScrollView>
                   </View>
                 )}
               </>
@@ -593,7 +643,7 @@ function UploadModal({
               value={title}
               onChangeText={setTitle}
               placeholder="Ex: Termo de consentimento"
-              placeholderTextColor="#94b3a6"
+              placeholderTextColor={colors.placeholder}
             />
 
             {/* Tipo */}
@@ -601,7 +651,7 @@ function UploadModal({
             <View style={styles.typeRow}>
               {UPLOAD_TYPES.map((t) => {
                 const active = fileType === t.value;
-                const cfg = typeCfg(t.value);
+                const cfg = typeCfg(t.value, typeConfig);
                 return (
                   <TouchableOpacity
                     key={t.value}
@@ -615,7 +665,7 @@ function UploadModal({
                     <Ionicons
                       name={cfg.icon as any}
                       size={16}
-                      color={active ? cfg.color : "#94b3a6"}
+                      color={active ? cfg.color : colors.placeholder}
                     />
                     <Text style={[styles.typeOptionText, active && { color: cfg.color }]}>
                       {t.label}
@@ -627,7 +677,7 @@ function UploadModal({
 
             {/* Arquivo */}
             <TouchableOpacity style={styles.filePicker} onPress={handlePick} activeOpacity={0.8}>
-              <Ionicons name="cloud-upload-outline" size={26} color="#94b3a6" />
+              <Ionicons name="cloud-upload-outline" size={26} color={colors.placeholder} />
               <Text style={styles.filePickerText}>
                 {file ? file.name : "Toque para selecionar o arquivo"}
               </Text>
@@ -667,9 +717,9 @@ function UploadModal({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
@@ -679,62 +729,62 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
   container: { width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center" },
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
+  loadingText: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   addBtn: {
-    height: 50, borderRadius: 14, backgroundColor: GREEN, flexDirection: "row",
+    height: 50, borderRadius: 14, backgroundColor: colors.primary, flexDirection: "row",
     alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16,
   },
-  addBtnText: { color: WHITE, fontSize: 15, fontWeight: "800" },
+  addBtnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
   searchBox: {
-    flexDirection: "row", alignItems: "center", backgroundColor: WHITE, borderRadius: 12,
-    borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, height: 50, marginBottom: 14, gap: 8,
+    flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderRadius: 12,
+    borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, height: 50, marginBottom: 14, gap: 8,
     ...CARD_SHADOW,
   },
   searchInput: {
-    flex: 1, fontSize: 14, color: TEXT_DARK, fontWeight: "500",
+    flex: 1, fontSize: 14, color: colors.textDark, fontWeight: "500",
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: "none",
   },
   filtersRow: { gap: 8, paddingBottom: 16 },
   filterChip: {
     flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 999, backgroundColor: WHITE, borderWidth: 1, borderColor: BORDER,
+    borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
   },
-  filterChipActive: { backgroundColor: GREEN, borderColor: GREEN },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterChipText: { fontSize: 13, fontWeight: "700", color: "#5e7b70" },
-  filterChipTextActive: { color: WHITE },
+  filterChipTextActive: { color: colors.white },
   filterCount: {
     minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#edf4f0",
     alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
   },
   filterCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
   filterCountText: { fontSize: 11, fontWeight: "700", color: "#5e7b70" },
-  filterCountTextActive: { color: WHITE },
+  filterCountTextActive: { color: colors.white },
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: "800", color: TEXT_DARK },
+  emptyTitle: { fontSize: 16, fontWeight: "800", color: colors.textDark },
   cardsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   docCard: {
-    flexGrow: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    flexGrow: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     padding: 14, flexDirection: "row", gap: 12, ...CARD_SHADOW,
   },
   fileIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   docInfo: { flex: 1 },
-  docTitle: { fontSize: 14, fontWeight: "800", color: TEXT_DARK, marginBottom: 6 },
+  docTitle: { fontSize: 14, fontWeight: "800", color: colors.textDark, marginBottom: 6 },
   docMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 },
   linkBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   linkBadgeText: { fontSize: 11, fontWeight: "700" },
-  docDate: { fontSize: 11.5, color: TEXT_MUTED, fontWeight: "500" },
+  docDate: { fontSize: 11.5, color: colors.textMuted, fontWeight: "500" },
   docActions: { flexDirection: "row", gap: 8 },
   downloadBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: GREEN_LIGHT,
+    flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.primaryTint,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
   },
-  downloadBtnText: { fontSize: 11.5, fontWeight: "700", color: GREEN },
+  downloadBtnText: { fontSize: 11.5, fontWeight: "700", color: colors.primary },
   deleteBtn: {
     flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#fdeaea",
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
@@ -743,45 +793,55 @@ const styles = StyleSheet.create({
   // Modal upload
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   modalSheet: {
-    backgroundColor: WHITE, borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    backgroundColor: colors.white, borderTopLeftRadius: 26, borderTopRightRadius: 26,
     padding: 24, paddingBottom: 34, maxHeight: "90%",
   },
   modalHandle: {
     width: 40, height: 4, borderRadius: 2, backgroundColor: "#d4ede3",
     alignSelf: "center", marginBottom: 18,
   },
-  modalTitle: { fontSize: 19, fontWeight: "800", color: TEXT_DARK, marginBottom: 16 },
+  modalTitle: { fontSize: 19, fontWeight: "800", color: colors.textDark, marginBottom: 16 },
   modalLabel: {
     fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8, marginTop: 6,
     textTransform: "uppercase", letterSpacing: 0.5,
   },
   segment: {
-    flexDirection: "row", backgroundColor: "#f0faf5", borderRadius: 12, padding: 4, gap: 4,
+    flexDirection: "row", backgroundColor: colors.authBg, borderRadius: 12, padding: 4, gap: 4,
     borderWidth: 1, borderColor: "#d4ede3",
   },
   segmentBtn: { flex: 1, height: 40, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  segmentBtnActive: { backgroundColor: GREEN },
+  segmentBtnActive: { backgroundColor: colors.primary },
   segmentText: { fontSize: 13.5, fontWeight: "700", color: "#5e7b70" },
-  segmentTextActive: { color: WHITE },
+  segmentTextActive: { color: colors.white },
   selectorBtn: {
     minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
     backgroundColor: "#f6faf8", paddingHorizontal: 16,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
-  selectorBtnText: { fontSize: 15, color: TEXT_DARK, fontWeight: "500", flex: 1 },
+  selectorBtnText: { fontSize: 15, color: colors.textDark, fontWeight: "500", flex: 1 },
   dropdown: {
     marginTop: 6, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
-    backgroundColor: WHITE, overflow: "hidden", maxHeight: 220,
+    backgroundColor: colors.white, overflow: "hidden",
   },
-  dropdownEmpty: { padding: 16, fontSize: 14, color: "#94b3a6", textAlign: "center" },
+  dropdownSearchBox: {
+    flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14,
+    height: 44, borderBottomWidth: 1, borderBottomColor: "#e3efe8",
+  },
+  dropdownSearchInput: {
+    flex: 1, fontSize: 14, color: colors.textDark, fontWeight: "500",
+    // @ts-ignore — remove o contorno azul no web
+    outlineStyle: "none",
+  },
+  dropdownList: { maxHeight: 220 },
+  dropdownEmpty: { padding: 16, fontSize: 14, color: colors.placeholder, textAlign: "center" },
   dropdownItem: {
     paddingVertical: 13, paddingHorizontal: 16,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
-  dropdownItemText: { fontSize: 15, color: TEXT_DARK, fontWeight: "500", flex: 1 },
+  dropdownItemText: { fontSize: 15, color: colors.textDark, fontWeight: "500", flex: 1 },
   modalInput: {
     minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
-    backgroundColor: "#f6faf8", paddingHorizontal: 14, fontSize: 15, color: TEXT_DARK,
+    backgroundColor: "#f6faf8", paddingHorizontal: 14, fontSize: 15, color: colors.textDark,
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: "none",
   },
@@ -790,7 +850,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 10, borderWidth: 1.5, borderColor: "#d4ede3", backgroundColor: "#fafffe",
   },
-  typeOptionText: { fontSize: 13, fontWeight: "700", color: "#94b3a6" },
+  typeOptionText: { fontSize: 13, fontWeight: "700", color: colors.placeholder },
   filePicker: {
     marginTop: 16, borderWidth: 1.5, borderColor: "#d4ede3", borderStyle: "dashed",
     borderRadius: 14, padding: 22, alignItems: "center", gap: 6, backgroundColor: "#fafffe",
@@ -803,22 +863,22 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: { fontSize: 15, fontWeight: "700", color: "#7aab96" },
   confirmBtn: {
-    flex: 2, height: 50, borderRadius: 14, backgroundColor: GREEN, flexDirection: "row",
+    flex: 2, height: 50, borderRadius: 14, backgroundColor: colors.primary, flexDirection: "row",
     alignItems: "center", justifyContent: "center", gap: 8,
   },
-  confirmBtnText: { fontSize: 15, fontWeight: "700", color: WHITE },
+  confirmBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
   // Confirmação exclusão
   confirmOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", padding: 30,
   },
   confirmSheet: {
-    backgroundColor: WHITE, borderRadius: 22, padding: 26, width: "100%", maxWidth: 360, alignItems: "center",
+    backgroundColor: colors.white, borderRadius: 22, padding: 26, width: "100%", maxWidth: 360, alignItems: "center",
   },
   confirmIconBox: {
     width: 54, height: 54, borderRadius: 17, backgroundColor: "#fdeaea",
     alignItems: "center", justifyContent: "center", marginBottom: 14,
   },
-  confirmTitle: { fontSize: 18, fontWeight: "800", color: TEXT_DARK, marginBottom: 8 },
+  confirmTitle: { fontSize: 18, fontWeight: "800", color: colors.textDark, marginBottom: 8 },
   confirmMsg: { fontSize: 14, color: "#4a7a66", textAlign: "center", lineHeight: 21, marginBottom: 22 },
   confirmButtons: { flexDirection: "row", gap: 12, width: "100%" },
   confirmCancelBtn: {
@@ -829,5 +889,5 @@ const styles = StyleSheet.create({
   confirmDeleteBtn: {
     flex: 1, height: 46, borderRadius: 12, backgroundColor: RED, alignItems: "center", justifyContent: "center",
   },
-  confirmDeleteText: { fontSize: 14, fontWeight: "700", color: WHITE },
+  confirmDeleteText: { fontSize: 14, fontWeight: "700", color: colors.white },
 });

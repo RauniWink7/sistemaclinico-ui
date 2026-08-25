@@ -16,20 +16,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { getMe, getPatientsByClinic } from '../../services/api';
 import type { PatientProfileApiItem } from '../../services/api';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
+// ─── Cores semânticas fixas (categorias de status, não mudam com a paleta) ───
 const BLUE = '#2d6cdf';
 const BLUE_LIGHT = '#eaf1ff';
 const RED = '#d95c5c';
 const RED_LIGHT = '#fdeeee';
-
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 
 const MAX_WIDTH = 1120;
 const DESKTOP_BREAKPOINT = 900;
@@ -42,12 +36,15 @@ const CARD_SHADOW = {
   elevation: 2,
 } as const;
 
-const getStatusMeta = (isActive: boolean) =>
+const getStatusMeta = (isActive: boolean, green: string, greenLight: string) =>
   isActive
-    ? { label: 'Ativo', color: GREEN, bg: GREEN_LIGHT, icon: 'checkmark-circle-outline' }
+    ? { label: 'Ativo', color: green, bg: greenLight, icon: 'checkmark-circle-outline' }
     : { label: 'Inativo', color: RED, bg: RED_LIGHT, icon: 'pause-circle-outline' };
 
 export default function AdminPacientesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'ativo' | 'inativo'>('todos');
   const [patients, setPatients] = useState<PatientProfileApiItem[]>([]);
@@ -124,10 +121,10 @@ export default function AdminPacientesScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <Header />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Carregando pacientes...</Text>
         </View>
       </View>
@@ -136,7 +133,7 @@ export default function AdminPacientesScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <Header />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -167,7 +164,7 @@ export default function AdminPacientesScreen() {
           {/* ── Busca e filtros ── */}
           <View style={styles.searchCard}>
             <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={18} color={TEXT_MUTED} />
+              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
                 value={query}
@@ -212,7 +209,7 @@ export default function AdminPacientesScreen() {
           ) : (
             <View style={styles.cardsWrap}>
               {filtered.map((p) => {
-                const status = getStatusMeta(p.user.is_active ?? true);
+                const status = getStatusMeta(p.user.is_active ?? true, colors.primary, colors.primaryTint);
                 const initials = p.user.full_name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
                 return (
                   <View key={p.id} style={[styles.userCard, { flexBasis: isDesktop ? 420 : '100%' }]}>
@@ -261,7 +258,7 @@ export default function AdminPacientesScreen() {
                         activeOpacity={0.85}
                         onPress={() => router.push({ pathname: '/(admin)/paciente/[id]', params: { id: p.user.id } })}
                       >
-                        <Ionicons name="document-text-outline" size={16} color={GREEN} />
+                        <Ionicons name="document-text-outline" size={16} color={colors.primary} />
                         <Text style={styles.secondaryButtonText}>Ver perfil</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -284,9 +281,9 @@ export default function AdminPacientesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -296,57 +293,57 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
   container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
 
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   summaryCard: {
-    flex: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    flex: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     alignItems: 'center', paddingVertical: 16, ...CARD_SHADOW,
   },
-  summaryValue: { fontSize: 24, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.5 },
-  summaryLabel: { marginTop: 4, fontSize: 12.5, fontWeight: '700', color: TEXT_MUTED },
+  summaryValue: { fontSize: 24, fontWeight: '800', color: colors.textDark, letterSpacing: -0.5 },
+  summaryLabel: { marginTop: 4, fontSize: 12.5, fontWeight: '700', color: colors.textMuted },
 
   newButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: GREEN, borderRadius: 14, paddingVertical: 15, marginBottom: 16,
+    backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 15, marginBottom: 16,
   },
-  newButtonText: { color: WHITE, fontSize: 15, fontWeight: '800' },
+  newButtonText: { color: colors.white, fontSize: 15, fontWeight: '800' },
 
   searchCard: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     padding: 14, marginBottom: 22, ...CARD_SHADOW,
   },
   searchBox: {
-    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,
+    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border,
     paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center',
   },
   searchInput: {
-    flex: 1, marginLeft: 10, fontSize: 14, color: TEXT_DARK,
+    flex: 1, marginLeft: 10, fontSize: 14, color: colors.textDark,
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: 'none',
   },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 10 },
   filterChip: { borderRadius: 999, backgroundColor: '#edf5f1', paddingVertical: 9, paddingHorizontal: 14 },
-  filterChipActive: { backgroundColor: GREEN },
+  filterChipActive: { backgroundColor: colors.primary },
   filterChipText: { fontSize: 13, fontWeight: '700', color: '#5f7e73' },
-  filterChipTextActive: { color: WHITE },
+  filterChipTextActive: { color: colors.white },
 
   listHeader: { marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.2 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.textDark, letterSpacing: -0.2 },
   countBadge: {
     minWidth: 30, height: 26, paddingHorizontal: 10, borderRadius: 999,
-    backgroundColor: GREEN_LIGHT, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center',
   },
-  resultCount: { fontSize: 14, fontWeight: '800', color: GREEN },
+  resultCount: { fontSize: 14, fontWeight: '800', color: colors.primary },
 
   cardsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   userCard: {
-    flexGrow: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
+    flexGrow: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
     padding: 16, ...CARD_SHADOW,
   },
   userTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
@@ -357,25 +354,25 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 16, fontWeight: '800', color: BLUE },
   nameBox: { flex: 1 },
-  userName: { fontSize: 15.5, fontWeight: '800', color: TEXT_DARK },
-  userMeta: { marginTop: 3, fontSize: 13, color: TEXT_MUTED },
+  userName: { fontSize: 15.5, fontWeight: '800', color: colors.textDark },
+  userMeta: { marginTop: 3, fontSize: 13, color: colors.textMuted },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 11 },
   statusText: { fontSize: 12.5, fontWeight: '700' },
   infoGrid: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#edf4f0', gap: 10 },
-  infoItem: { borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER, padding: 12 },
+  infoItem: { borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border, padding: 12 },
   infoLabel: { fontSize: 11, fontWeight: '700', color: '#789286', textTransform: 'uppercase', letterSpacing: 0.6 },
   infoValue: { marginTop: 4, fontSize: 14, color: '#1f4036', fontWeight: '600' },
   actionsRow: { marginTop: 14, flexDirection: 'row', gap: 10 },
   secondaryButton: {
-    flex: 1, borderRadius: 12, backgroundColor: GREEN_LIGHT, paddingVertical: 12,
+    flex: 1, borderRadius: 12, backgroundColor: colors.primaryTint, paddingVertical: 12,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  secondaryButtonText: { fontSize: 13, fontWeight: '700', color: GREEN },
+  secondaryButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   primaryButton: {
-    flex: 1, borderRadius: 12, backgroundColor: GREEN, paddingVertical: 12,
+    flex: 1, borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 12,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  primaryButtonText: { fontSize: 13, fontWeight: '700', color: WHITE },
+  primaryButtonText: { fontSize: 13, fontWeight: '700', color: colors.white },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50, gap: 14 },
-  emptyStateText: { fontSize: 15, fontWeight: '600', color: TEXT_MUTED },
+  emptyStateText: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
 });

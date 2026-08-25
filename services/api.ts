@@ -244,6 +244,7 @@ export interface PatientProfileApiItem {
     is_active?: boolean;
     created_at?: string;
   };
+  photo?: string | null;
   birth_date?: string | null;
   cpf?: string | null;
   medical_history?: string;
@@ -816,6 +817,20 @@ export const updatePatientProfile = async (
   return { ok: true, data };
 };
 
+// PATCH /api/auth/patients/<userId>/profile/ (multipart) — envia ou remove a
+// foto de perfil do paciente. Passe `photo` para enviar uma nova foto, ou
+// `null` para remover a atual.
+export const updatePatientProfilePhoto = (
+  userId: string,
+  photo: { uri: string; name: string; type: string } | null,
+): Promise<ApiResult> =>
+  patchFileField(
+    `${API_BASE_URL}/auth/patients/${encodeURIComponent(userId)}/profile/`,
+    "photo",
+    "remove_photo",
+    photo,
+  );
+
 // PATCH /api/auth/patients/<userId>/profile/ — troca o psicólogo responsável.
 // Só o administrador consegue: para o paciente o campo é somente-leitura no
 // serializer, e um PATCH dele é ignorado silenciosamente pelo backend.
@@ -935,6 +950,20 @@ export const updateProfessionalProfile = async (
   return { ok: true, data };
 };
 
+// PATCH /api/auth/professionals/<id>/ (multipart) — envia ou remove a foto de
+// perfil do profissional. Passe `photo` para enviar uma nova foto, ou `null`
+// para remover a atual.
+export const updateProfessionalProfilePhoto = (
+  professionalId: string,
+  photo: { uri: string; name: string; type: string } | null,
+): Promise<ApiResult> =>
+  patchFileField(
+    `${API_BASE_URL}/auth/professionals/${encodeURIComponent(professionalId)}/`,
+    "photo",
+    "remove_photo",
+    photo,
+  );
+
 // DELETE /api/appointments/availability/<id>/
 export const deleteAvailability = async (
   availabilityId: string,
@@ -1011,7 +1040,8 @@ export const getClinicData = async (clinicId: string): Promise<ApiResult> => {
 };
 
 // PATCH /api/clinics/{clinic_id}/
-// Atualiza dados da clÃ­nica: name, address, phone, email, open_from, open_until
+// Atualiza dados da clÃ­nica: name, address, phone, email, open_from, open_until,
+// theme_preset ('default'|'blue'|'purple'|'custom'), theme_primary_color (#RRGGBB, só para 'custom')
 export const updateClinic = async (
   clinicId: string,
   payload: {
@@ -1021,6 +1051,8 @@ export const updateClinic = async (
     email?: string;
     open_from?: string;
     open_until?: string;
+    theme_preset?: "default" | "blue" | "purple" | "custom";
+    theme_primary_color?: string;
   },
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
@@ -1032,6 +1064,59 @@ export const updateClinic = async (
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
 };
+
+// Helper compartilhado: PATCH multipart pra trocar/remover um campo de
+// arquivo (logo da clínica, foto de perfil). `fieldName` é o campo de
+// arquivo no backend (ex: "logo", "photo"); `removeFieldName` é a flag
+// write-only que o serializer usa pra limpar (ex: "remove_logo",
+// "remove_photo") — um campo de arquivo vazio não é interpretado como
+// "remover" pelo DRF. Passe `photo: null` para remover o arquivo atual.
+const patchFileField = async (
+  url: string,
+  fieldName: string,
+  removeFieldName: string,
+  photo: { uri: string; name: string; type: string } | null,
+): Promise<ApiResult> => {
+  const token = await getAccessToken();
+  if (!token) return { ok: false, error: "Usuário não autenticado." };
+
+  const formData = new FormData();
+
+  if (!photo) {
+    formData.append(removeFieldName, "true");
+  } else if (Platform.OS === "web") {
+    const blobRes = await fetch(photo.uri);
+    const blob = await blobRes.blob();
+    const fileObj = new File([blob], photo.name, {
+      type: blob.type || photo.type || "image/jpeg",
+    });
+    formData.append(fieldName, fileObj);
+  } else {
+    formData.append(fieldName, photo as any);
+  }
+
+  const res = await fetchWithRefresh(url, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/clinics/{clinic_id}/ (multipart) — envia ou remove a logo da clínica.
+// Passe `photo` para enviar uma nova logo, ou `null` para remover a atual.
+export const updateClinicLogo = (
+  clinicId: string,
+  photo: { uri: string; name: string; type: string } | null,
+): Promise<ApiResult> =>
+  patchFileField(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/`,
+    "logo",
+    "remove_logo",
+    photo,
+  );
 
 // GET /api/auth/professionals/?clinic_id={clinic_id}
 // Retorna lista de profissionais de uma clÃ­nica especÃ­fica

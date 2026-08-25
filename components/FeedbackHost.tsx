@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ThemeColors } from "../constants/theme-palettes";
+import { useTheme } from "../contexts/ThemeContext";
 import {
   ButtonStyle,
   DialogItem,
@@ -19,14 +21,15 @@ import {
 } from "../services/feedback";
 
 // ─── Aparência por tipo de toast ────────────────────────────────────────────
-const TOAST_STYLE: Record<
-  ToastType,
-  { bg: string; icon: keyof typeof Ionicons.glyphMap }
-> = {
-  success: { bg: "#2e8b6e", icon: "checkmark-circle" },
+// "success" acompanha a cor da marca da clínica; error/info são semânticas
+// (fixas) — não fazem sentido mudando de cor conforme a paleta escolhida.
+const getToastStyle = (
+  colors: ThemeColors,
+): Record<ToastType, { bg: string; icon: keyof typeof Ionicons.glyphMap }> => ({
+  success: { bg: colors.primary, icon: "checkmark-circle" },
   error: { bg: "#d9534f", icon: "close-circle" },
   info: { bg: "#3f6f8f", icon: "information-circle" },
-};
+});
 
 const TOAST_DURATION = 3800; // ms até sumir sozinho
 
@@ -38,8 +41,11 @@ function Toast({
   item: ToastItem;
   onDone: (id: number) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const cfg = useMemo(() => getToastStyle(colors)[item.type], [colors, item.type]);
+
   const anim = useRef(new Animated.Value(0)).current;
-  const cfg = TOAST_STYLE[item.type];
 
   const dismiss = useCallback(() => {
     Animated.timing(anim, {
@@ -90,14 +96,18 @@ function Toast({
 }
 
 // ─── Estilo visual de cada botão do diálogo ─────────────────────────────────
-function buttonColors(style: ButtonStyle): { bg: string; text: string } {
+// O botão "default" acompanha a marca da clínica; cancel/destructive são fixos.
+function buttonColors(style: ButtonStyle, colors: ThemeColors): { bg: string; text: string } {
   if (style === "cancel") return { bg: "#eef2f0", text: "#4c7f6d" };
   if (style === "destructive") return { bg: "#d9534f", text: "#fff" };
-  return { bg: "#2e8b6e", text: "#fff" };
+  return { bg: colors.primary, text: "#fff" };
 }
 
 // ─── Host global: escuta o módulo de feedback e renderiza tudo ──────────────
 export default function FeedbackHost() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [dialog, setDialog] = useState<DialogItem | null>(null);
 
@@ -155,19 +165,19 @@ export default function FeedbackHost() {
               ]}
             >
               {dialog?.buttons.map((btn, idx) => {
-                const colors = buttonColors(btn.style);
+                const btnColors = buttonColors(btn.style, colors);
                 return (
                   <TouchableOpacity
                     key={`${btn.text}-${idx}`}
                     style={[
                       styles.dialogBtn,
                       stacked && styles.dialogBtnStacked,
-                      { backgroundColor: colors.bg },
+                      { backgroundColor: btnColors.bg },
                     ]}
                     onPress={() => closeDialog(btn.onPress)}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.dialogBtnText, { color: colors.text }]}>
+                    <Text style={[styles.dialogBtnText, { color: btnColors.text }]}>
                       {btn.text}
                     </Text>
                   </TouchableOpacity>
@@ -181,97 +191,98 @@ export default function FeedbackHost() {
   );
 }
 
-const styles = StyleSheet.create({
-  // Toasts
-  toastContainer: {
-    position: "absolute",
-    top: Platform.OS === "web" ? 20 : 52,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 9999,
-    gap: 8,
-  },
-  toast: {
-    maxWidth: 440,
-    width: "90%",
-    borderRadius: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  toastInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-  },
-  toastText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
-    lineHeight: 19,
-  },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    // Toasts
+    toastContainer: {
+      position: "absolute",
+      top: Platform.OS === "web" ? 20 : 52,
+      left: 0,
+      right: 0,
+      alignItems: "center",
+      zIndex: 9999,
+      gap: 8,
+    },
+    toast: {
+      maxWidth: 440,
+      width: "90%",
+      borderRadius: 14,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    toastInner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 13,
+      paddingHorizontal: 16,
+    },
+    toastText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "600",
+      flex: 1,
+      lineHeight: 19,
+    },
 
-  // Diálogo
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  dialogCard: {
-    width: "100%",
-    maxWidth: 400,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 22,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 12,
-  },
-  dialogTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#1a3d31",
-  },
-  dialogMessage: {
-    fontSize: 14,
-    color: "#4c7f6d",
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  dialogActions: {
-    marginTop: 22,
-    gap: 10,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  actionsStacked: {
-    flexDirection: "column",
-  },
-  dialogBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    minWidth: 100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dialogBtnStacked: {
-    width: "100%",
-  },
-  dialogBtnText: {
-    fontWeight: "700",
-    fontSize: 14,
-  },
-});
+    // Diálogo
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+    },
+    dialogCard: {
+      width: "100%",
+      maxWidth: 400,
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 22,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 20,
+      elevation: 12,
+    },
+    dialogTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.textDark,
+    },
+    dialogMessage: {
+      fontSize: 14,
+      color: colors.textMuted,
+      marginTop: 8,
+      lineHeight: 20,
+    },
+    dialogActions: {
+      marginTop: 22,
+      gap: 10,
+    },
+    actionsRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+    },
+    actionsStacked: {
+      flexDirection: "column",
+    },
+    dialogBtn: {
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 12,
+      minWidth: 100,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    dialogBtnStacked: {
+      width: "100%",
+    },
+    dialogBtnText: {
+      fontWeight: "700",
+      fontSize: 14,
+    },
+  });

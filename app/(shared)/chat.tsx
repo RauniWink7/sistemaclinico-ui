@@ -60,16 +60,10 @@ import {
     sendChatAttachment,
     sendChatMessage,
 } from "../../services/api";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 
-// ─── Paleta ───────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1e6b54";
-const GREEN_LIGHT = "#e8f7f1";
-const BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-
-// ── Estilo WhatsApp ──
+// ── Estilo WhatsApp — fixo, não muda com a paleta da clínica ──
 const WA_BG = "#ece5dd"; // fundo bege do thread
 const WA_OUT = "#d9fdd3"; // bolha enviada (verde claro)
 const WA_IN = "#ffffff"; // bolha recebida (branca)
@@ -254,15 +248,24 @@ interface Contact {
 }
 
 // ─── Componente de fundo decorativo ──────────────────────────────────────────
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+// Componente-irmão no escopo do módulo: monta seu próprio tema/estilos
+// memoizados (mesmo padrão de app/(auth)/login.tsx).
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+    </>
+  );
+};
 
 // ─── Tela principal ───────────────────────────────────────────────────────────
 export default function ChatScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   // Auth
   const [myUserId, setMyUserId] = useState<string>("");
   const [myRole, setMyRole] = useState<string>("");
@@ -1058,7 +1061,7 @@ export default function ChatScreen() {
   if (loading) {
     return (
       <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color={GREEN} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Carregando conversas…</Text>
       </View>
     );
@@ -1069,7 +1072,7 @@ export default function ChatScreen() {
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -1127,7 +1130,7 @@ export default function ChatScreen() {
                   onPress={handleOpenNewContact}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="create-outline" size={18} color={GREEN} />
+                  <Ionicons name="create-outline" size={18} color={colors.primary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1203,7 +1206,7 @@ export default function ChatScreen() {
                     onPress={() => setActiveContactId("")}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="arrow-back" size={22} color={GREEN} />
+                    <Ionicons name="arrow-back" size={22} color={colors.primary} />
                   </TouchableOpacity>
                 )}
                 <View style={styles.chatAvatarBox}>
@@ -1356,7 +1359,7 @@ export default function ChatScreen() {
                                   <Ionicons
                                     name={documentIconFor(msg.mediaName)}
                                     size={20}
-                                    color={isMine ? "#fff" : GREEN}
+                                    color={isMine ? "#fff" : colors.primary}
                                   />
                                 </View>
                                 <View style={styles.fileInfo}>
@@ -1488,7 +1491,7 @@ export default function ChatScreen() {
                   disabled={sendingAttachment}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="attach-outline" size={24} color={GREEN} />
+                  <Ionicons name="attach-outline" size={24} color={colors.primary} />
                 </TouchableOpacity>
                 <TextInput
                   style={styles.input}
@@ -1581,7 +1584,7 @@ export default function ChatScreen() {
             {/* Lista */}
             {contactsLoading ? (
               <View style={styles.modalLoading}>
-                <ActivityIndicator color={GREEN} />
+                <ActivityIndicator color={colors.primary} />
                 <Text style={styles.modalLoadingText}>Carregando…</Text>
               </View>
             ) : filteredContacts.length === 0 ? (
@@ -1654,21 +1657,22 @@ export default function ChatScreen() {
 }
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.pageBg,
   },
   loadingScreen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.pageBg,
     alignItems: "center",
     justifyContent: "center",
     gap: 14,
   },
   loadingText: {
     fontSize: 15,
-    color: GREEN_DARK,
+    color: colors.primaryStrong,
     fontWeight: "600",
   },
 
@@ -1688,7 +1692,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: GREEN_DARK,
+    backgroundColor: colors.primaryStrong,
     top: -55,
     left: -70,
     opacity: 0.28,
@@ -1699,7 +1703,7 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 22,
     paddingHorizontal: 24,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1721,7 +1725,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   headerTitle: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 24,
     fontWeight: "800",
     letterSpacing: -0.4,
@@ -1761,10 +1765,10 @@ const styles = StyleSheet.create({
 
   // Card de conversas (lista vertical)
   inboxCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
     shadowColor: "#1f5442",
     shadowOpacity: 0.05,
@@ -1790,7 +1794,7 @@ const styles = StyleSheet.create({
     color: "#183d32",
   },
   cardBadge: {
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -1798,7 +1802,7 @@ const styles = StyleSheet.create({
   cardBadgeText: {
     fontSize: 12,
     fontWeight: "700",
-    color: GREEN,
+    color: colors.primary,
   },
   emptyConvWrap: {
     alignItems: "center",
@@ -1824,11 +1828,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 16, fontWeight: "800", color: GREEN },
+  avatarText: { fontSize: 16, fontWeight: "800", color: colors.primary },
   onlineDot: {
     position: "absolute",
     right: -1,
@@ -1838,7 +1842,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: "#45c486",
     borderWidth: 2,
-    borderColor: WHITE,
+    borderColor: colors.white,
   },
   convRowMid: { flex: 1, justifyContent: "center" },
   convName: { fontSize: 15.5, fontWeight: "700", color: "#111b21" },
@@ -1854,15 +1858,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 6,
   },
-  unreadBadgeText: { color: WHITE, fontSize: 11, fontWeight: "800" },
+  unreadBadgeText: { color: colors.white, fontSize: 11, fontWeight: "800" },
 
   // Card de chat
   chatCard: {
     flex: 1,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
     shadowColor: "#1f5442",
     shadowOpacity: 0.05,
@@ -1896,12 +1900,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  chatAvatarText: { fontSize: 16, fontWeight: "800", color: GREEN },
+  chatAvatarText: { fontSize: 16, fontWeight: "800", color: colors.primary },
   chatName: { fontSize: 16, fontWeight: "800", color: "#183d32" },
   chatSub: { marginTop: 2, fontSize: 13, color: "#6f877d" },
   chatHeaderRight: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -2022,7 +2026,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderTopWidth: 1,
     borderTopColor: "#edf4f0",
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     gap: 10,
   },
   input: {
@@ -2040,7 +2044,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2051,7 +2055,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2109,7 +2113,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  fileIconWrapIn: { backgroundColor: GREEN_LIGHT },
+  fileIconWrapIn: { backgroundColor: colors.primaryTint },
   fileIconWrapOut: { backgroundColor: "rgba(255,255,255,0.22)" },
   fileInfo: { flexShrink: 1 },
   fileName: { fontSize: 14.5, fontWeight: "700" },
@@ -2120,10 +2124,10 @@ const styles = StyleSheet.create({
   // Empty state (sem conversa selecionada)
   noChatCard: {
     flex: 1,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
     gap: 14,
@@ -2150,7 +2154,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2162,7 +2166,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalSheet: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingBottom: 34,
@@ -2195,7 +2199,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2237,14 +2241,14 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 15,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
   contactAvatarText: {
     fontSize: 15,
     fontWeight: "800",
-    color: GREEN,
+    color: colors.primary,
   },
   contactInfo: {
     flex: 1,
@@ -2261,7 +2265,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   contactExistingTag: {
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     borderRadius: 999,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -2269,7 +2273,7 @@ const styles = StyleSheet.create({
   contactExistingText: {
     fontSize: 11,
     fontWeight: "700",
-    color: GREEN,
+    color: colors.primary,
   },
 
   // Modal loading / empty

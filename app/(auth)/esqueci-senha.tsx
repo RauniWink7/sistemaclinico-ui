@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -15,6 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { requestPasswordReset } from "../../services/api";
 
 interface FloatingInputProps {
@@ -26,18 +28,17 @@ interface FloatingInputProps {
   error?: string;
 }
 
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#5aab8a";
-const GREEN_BG = "#f0faf5";
-const WHITE = "#ffffff";
-
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-    <View style={styles.circle3} />
-  </>
-);
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+      <View style={styles.circle3} />
+    </>
+  );
+};
 
 const FloatingInput = ({
   label,
@@ -47,6 +48,9 @@ const FloatingInput = ({
   autoCapitalize,
   error,
 }: FloatingInputProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [focused, setFocused] = useState(false);
   const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -70,7 +74,7 @@ const FloatingInput = ({
     inputRange: [0, 1],
     outputRange: [
       "#9bbfb0",
-      error ? "#e05c5c" : focused ? GREEN : GREEN_LIGHT,
+      error ? "#e05c5c" : focused ? colors.primary : colors.primaryAccent,
     ],
   });
 
@@ -114,6 +118,9 @@ const FloatingInput = ({
 };
 
 export default function ForgotPasswordScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [apiError, setApiError] = useState("");
@@ -164,7 +171,7 @@ export default function ForgotPasswordScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={GREEN_BG} />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.authBg} />
       <DecorativeBackground />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -200,7 +207,7 @@ export default function ForgotPasswordScreen() {
             {sent ? (
               <View style={styles.successBox}>
                 <View style={styles.successIcon}>
-                  <Ionicons name="checkmark" size={30} color={GREEN} />
+                  <Ionicons name="checkmark" size={30} color={colors.primary} />
                 </View>
                 <Text style={styles.successTitle}>Verifique seu e-mail</Text>
                 <Text style={styles.successText}>
@@ -257,7 +264,7 @@ export default function ForgotPasswordScreen() {
               onPress={() => router.replace("/login")}
               activeOpacity={0.85}
             >
-              <Ionicons name="arrow-back-outline" size={18} color={GREEN} />
+              <Ionicons name="arrow-back-outline" size={18} color={colors.primary} />
               <Text style={styles.secondaryBtnText}>Voltar para login</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -267,209 +274,210 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: GREEN_BG },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 80,
-    paddingBottom: 40,
-    justifyContent: "center",
-  },
-  circle1: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "#c8eedd",
-    opacity: 0.45,
-    top: -80,
-    right: -80,
-  },
-  circle2: {
-    position: "absolute",
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "#a8dfc8",
-    opacity: 0.3,
-    bottom: 120,
-    left: -50,
-  },
-  circle3: {
-    position: "absolute",
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: GREEN,
-    opacity: 0.08,
-    top: 220,
-    left: 20,
-  },
-  header: { alignItems: "center", marginBottom: 32 },
-  logoMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: GREEN,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  appName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: GREEN_LIGHT,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#1a3d31",
-    marginBottom: 6,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#6b9e8a",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 24,
-    maxWidth: 480,
-    alignSelf: 'center' as const,
-    width: '100%' as const,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 6,
-  },
-  inputWrapper: { marginBottom: 14 },
-  inputContainer: {
-    height: 58,
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    borderRadius: 14,
-    backgroundColor: "#fafffe",
-    justifyContent: "flex-end",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    position: "relative",
-  },
-  inputContainerFocused: {
-    borderColor: GREEN,
-    backgroundColor: WHITE,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  inputContainerError: {
-    borderColor: "#e05c5c",
-    backgroundColor: "#fff8f8",
-  },
-  floatingLabel: {
-    position: "absolute",
-    left: 16,
-    fontWeight: "500",
-  },
-  textInput: {
-    fontSize: 15,
-    color: "#1a3d31",
-    fontWeight: "500",
-  },
-  errorText: {
-    fontSize: 12,
-    color: "#e05c5c",
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  apiErrorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff1f1",
-    borderWidth: 1,
-    borderColor: "#f5c0c0",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  apiErrorText: {
-    fontSize: 13,
-    color: "#c0392b",
-    fontWeight: "500",
-    flex: 1,
-  },
-  primaryBtn: {
-    backgroundColor: GREEN,
-    borderRadius: 14,
-    height: 54,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  primaryBtnDisabled: { opacity: 0.7 },
-  primaryBtnText: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  secondaryBtn: {
-    marginTop: 12,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#cfe7dc",
-    backgroundColor: "#f8fdfb",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  secondaryBtnText: {
-    color: GREEN,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  successBox: { alignItems: "center", paddingVertical: 8 },
-  successIcon: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: "#e8f7f1",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  successTitle: {
-    fontSize: 21,
-    fontWeight: "800",
-    color: "#1a3d31",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  successText: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#6b9e8a",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.authBg },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 80,
+      paddingBottom: 40,
+      justifyContent: "center",
+    },
+    circle1: {
+      position: "absolute",
+      width: 260,
+      height: 260,
+      borderRadius: 130,
+      backgroundColor: colors.primaryTint,
+      opacity: 0.45,
+      top: -80,
+      right: -80,
+    },
+    circle2: {
+      position: "absolute",
+      width: 160,
+      height: 160,
+      borderRadius: 80,
+      backgroundColor: colors.primaryAccent,
+      opacity: 0.3,
+      bottom: 120,
+      left: -50,
+    },
+    circle3: {
+      position: "absolute",
+      width: 90,
+      height: 90,
+      borderRadius: 45,
+      backgroundColor: colors.primary,
+      opacity: 0.08,
+      top: 220,
+      left: 20,
+    },
+    header: { alignItems: "center", marginBottom: 32 },
+    logoMark: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 10,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    appName: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.primaryAccent,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: "#1a3d31",
+      marginBottom: 6,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: "#6b9e8a",
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    card: {
+      backgroundColor: colors.white,
+      borderRadius: 24,
+      padding: 24,
+      maxWidth: 480,
+      alignSelf: 'center' as const,
+      width: '100%' as const,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 24,
+      elevation: 6,
+    },
+    inputWrapper: { marginBottom: 14 },
+    inputContainer: {
+      height: 58,
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      borderRadius: 14,
+      backgroundColor: "#fafffe",
+      justifyContent: "flex-end",
+      paddingHorizontal: 16,
+      paddingBottom: 8,
+      position: "relative",
+    },
+    inputContainerFocused: {
+      borderColor: colors.primary,
+      backgroundColor: colors.white,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    inputContainerError: {
+      borderColor: "#e05c5c",
+      backgroundColor: "#fff8f8",
+    },
+    floatingLabel: {
+      position: "absolute",
+      left: 16,
+      fontWeight: "500",
+    },
+    textInput: {
+      fontSize: 15,
+      color: "#1a3d31",
+      fontWeight: "500",
+    },
+    errorText: {
+      fontSize: 12,
+      color: "#e05c5c",
+      marginTop: 4,
+      marginLeft: 4,
+    },
+    apiErrorBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#fff1f1",
+      borderWidth: 1,
+      borderColor: "#f5c0c0",
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 16,
+    },
+    apiErrorText: {
+      fontSize: 13,
+      color: "#c0392b",
+      fontWeight: "500",
+      flex: 1,
+    },
+    primaryBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      height: 54,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+    primaryBtnDisabled: { opacity: 0.7 },
+    primaryBtnText: {
+      color: colors.white,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    secondaryBtn: {
+      marginTop: 12,
+      height: 52,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#cfe7dc",
+      backgroundColor: "#f8fdfb",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    secondaryBtnText: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    successBox: { alignItems: "center", paddingVertical: 8 },
+    successIcon: {
+      width: 66,
+      height: 66,
+      borderRadius: 33,
+      backgroundColor: colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    successTitle: {
+      fontSize: 21,
+      fontWeight: "800",
+      color: "#1a3d31",
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    successText: {
+      fontSize: 14,
+      lineHeight: 21,
+      color: "#6b9e8a",
+      textAlign: "center",
+      marginBottom: 8,
+    },
+  });

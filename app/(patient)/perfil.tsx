@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import React, { useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Animated,
+    Image,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -12,7 +14,9 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { showAlert } from "../../services/feedback";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
+import { showAlert, showToast } from "../../services/feedback";
 import { DateField } from "../../components/DateTimeField";
 import {
     getMe,
@@ -20,6 +24,7 @@ import {
     logout,
     updateMe,
     updatePatientProfile,
+    updatePatientProfilePhoto,
 } from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
@@ -47,24 +52,6 @@ interface EditableFields {
   emergencyPhone: string;
 }
 
-// ─── Section Header ───────────────────────────────────────────────────────────
-const SectionHeader = ({ icon, title }: { icon: string; title: string }) => (
-  <View style={styles.sectionHeader}>
-    <View style={styles.sectionIconBox}>
-      <Ionicons name={icon as any} size={15} color={GREEN} />
-    </View>
-    <Text style={styles.sectionTitle}>{title}</Text>
-  </View>
-);
-
-// ─── Info Row (read-only) ─────────────────────────────────────────────────────
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <View style={styles.infoRow}>
-    <Text style={styles.infoLabel}>{label}</Text>
-    <Text style={styles.infoValue}>{value}</Text>
-  </View>
-);
-
 // ─── Editable Row ─────────────────────────────────────────────────────────────
 interface EditableRowProps {
   label: string;
@@ -80,6 +67,33 @@ interface EditableRowProps {
   type?: "text" | "date";
 }
 
+// Componentes no escopo do módulo (não dentro de ProfileScreen) para não
+// perder identidade/estado do TextInput a cada re-render do pai — cada um lê
+// a paleta da clínica direto via useTheme().
+const SectionHeader = ({ icon, title }: { icon: string; title: string }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIconBox}>
+        <Ionicons name={icon as any} size={15} color={colors.primary} />
+      </View>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+};
+
+const InfoRow = ({ label, value }: { label: string; value: string }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+};
+
 const EditableRow = ({
   label,
   value,
@@ -91,42 +105,52 @@ const EditableRow = ({
   numberOfLines,
   minHeight,
   type,
-}: EditableRowProps) => (
-  <View style={styles.editableRow}>
-    <Text style={styles.infoLabel}>{label}</Text>
-    {editable && !readOnly ? (
-      type === "date" ? (
-        <DateField
-          value={value}
-          onChange={onChangeText}
-          max={TODAY_STR}
-          variant="underline"
-        />
+}: EditableRowProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.editableRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      {editable && !readOnly ? (
+        type === "date" ? (
+          <DateField
+            value={value}
+            onChange={onChangeText}
+            max={TODAY_STR}
+            variant="underline"
+          />
+        ) : (
+          <TextInput
+            style={[styles.editInput, multiline && { minHeight: minHeight ?? 80 }]}
+            value={value}
+            onChangeText={onChangeText}
+            keyboardType={keyboardType ?? "default"}
+            autoCapitalize="none"
+            placeholderTextColor={colors.placeholder}
+            multiline={multiline}
+            numberOfLines={numberOfLines}
+          />
+        )
       ) : (
-        <TextInput
-          style={[styles.editInput, multiline && { minHeight: minHeight ?? 80 }]}
-          value={value}
-          onChangeText={onChangeText}
-          keyboardType={keyboardType ?? "default"}
-          autoCapitalize="none"
-          placeholderTextColor="#9bbfb0"
-          multiline={multiline}
-          numberOfLines={numberOfLines}
-        />
-      )
-    ) : (
-      <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
-        {value}
-      </Text>
-    )}
-  </View>
-);
+        <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
+          {value}
+        </Text>
+      )}
+    </View>
+  );
+};
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [fields, setFields] = useState<EditableFields>({
     name: "",
     phone: "",
@@ -164,6 +188,8 @@ export default function ProfileScreen() {
       }
 
       const profile = profileResult.data;
+      setUserId(meResult.data.id);
+      setPhotoUrl(profile.photo || null);
       setFields({
         name: profile.user.full_name || profile.user.email || "",
         phone: profile.user.phone || "",
@@ -214,6 +240,69 @@ export default function ProfileScreen() {
   const handleCancel = () => {
     setFields({ ...original });
     setEditing(false);
+  };
+
+  const doPickPhoto = async () => {
+    if (!userId || photoBusy) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setPhotoBusy(true);
+      const uploadResult = await updatePatientProfilePhoto(userId, {
+        uri: asset.uri,
+        name: asset.name || "foto.jpg",
+        type: asset.mimeType || "image/jpeg",
+      });
+      setPhotoBusy(false);
+
+      if (!uploadResult.ok) {
+        showToast(uploadResult.error || "Não foi possível salvar a foto.", "error");
+        return;
+      }
+      setPhotoUrl(uploadResult.data?.photo || null);
+      showToast("Foto de perfil atualizada.", "success");
+    } catch {
+      setPhotoBusy(false);
+      showAlert("Erro", "Não foi possível selecionar a imagem.");
+    }
+  };
+
+  const doRemovePhoto = () => {
+    if (!userId || photoBusy) return;
+    confirmAction(
+      "Remover foto",
+      "Tem certeza que deseja remover sua foto de perfil?",
+      async () => {
+        setPhotoBusy(true);
+        const result = await updatePatientProfilePhoto(userId, null);
+        setPhotoBusy(false);
+        if (!result.ok) {
+          showToast(result.error || "Não foi possível remover a foto.", "error");
+          return;
+        }
+        setPhotoUrl(null);
+        showToast("Foto removida.", "success");
+      },
+      { confirmText: "Remover", cancelText: "Cancelar" },
+    );
+  };
+
+  const handleAvatarPress = () => {
+    if (photoBusy) return;
+    if (!photoUrl) {
+      void doPickPhoto();
+      return;
+    }
+    showAlert("Foto de perfil", undefined, [
+      { text: "Trocar foto", onPress: () => void doPickPhoto() },
+      { text: "Remover foto", style: "destructive", onPress: doRemovePhoto },
+      { text: "Cancelar", style: "cancel" },
+    ]);
   };
 
   const handleLogout = () => {
@@ -296,7 +385,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -318,17 +407,33 @@ export default function ProfileScreen() {
 
       {/* ── Avatar ── */}
       <View style={styles.avatarSection}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(fields.name || "")
-              .trim()
-              .split(" ")
-              .filter(Boolean)
-              .map((n) => n[0] ?? "")
-              .slice(0, 2)
-              .join("")}
-          </Text>
-        </View>
+        <TouchableOpacity
+          style={styles.avatar}
+          onPress={handleAvatarPress}
+          activeOpacity={0.85}
+          disabled={loading || photoBusy}
+        >
+          {loading || photoBusy ? (
+            <ActivityIndicator color={colors.white} />
+          ) : photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.avatarImg} />
+          ) : (
+            <Text style={styles.avatarText}>
+              {(fields.name || "")
+                .trim()
+                .split(" ")
+                .filter(Boolean)
+                .map((n) => n[0] ?? "")
+                .slice(0, 2)
+                .join("")}
+            </Text>
+          )}
+          {!loading && (
+            <View style={styles.avatarEditBadge}>
+              <Ionicons name="camera-outline" size={13} color={colors.primary} />
+            </View>
+          )}
+        </TouchableOpacity>
         <Text style={styles.avatarName}>{fields.name || "Paciente"}</Text>
         <Text style={styles.avatarEmail}>{email || "carregando..."}</Text>
       </View>
@@ -391,7 +496,7 @@ export default function ProfileScreen() {
               activeOpacity={0.85}
             >
               <View style={styles.clinicIconBox}>
-                <Ionicons name="business-outline" size={18} color={GREEN} />
+                <Ionicons name="business-outline" size={18} color={colors.primary} />
               </View>
               <View style={styles.clinicBtnTextBox}>
                 <Text style={styles.clinicBtnTitle}>Informações da clínica</Text>
@@ -461,19 +566,15 @@ export default function ProfileScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const WHITE = "#ffffff";
-const BG = "#f0faf5";
-
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.authBg,
   },
 
   // Header
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 52,
     paddingBottom: 16,
     paddingHorizontal: 20,
@@ -492,7 +593,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: WHITE,
+    color: colors.white,
     letterSpacing: 0.2,
   },
   editBtn: {
@@ -505,7 +606,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   editBtnText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -516,14 +617,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.18)",
   },
   cancelBtnText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 13,
     fontWeight: "600",
   },
 
   // Avatar section
   avatarSection: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     alignItems: "center",
     paddingBottom: 28,
     paddingTop: 4,
@@ -538,16 +639,31 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.35)",
+    overflow: "hidden",
+  },
+  avatarImg: { width: "100%", height: "100%" },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   avatarText: {
     fontSize: 26,
     fontWeight: "800",
-    color: WHITE,
+    color: colors.white,
   },
   avatarName: {
     fontSize: 18,
     fontWeight: "800",
-    color: WHITE,
+    color: colors.white,
     letterSpacing: -0.3,
   },
   avatarEmail: {
@@ -565,11 +681,11 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 20,
     padding: 18,
     marginBottom: 16,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -628,7 +744,7 @@ const styles = StyleSheet.create({
     color: "#1a3d31",
     fontWeight: "500",
     borderBottomWidth: 1.5,
-    borderBottomColor: GREEN,
+    borderBottomColor: colors.primary,
     paddingBottom: 4,
     paddingTop: 2,
   },
@@ -666,7 +782,7 @@ const styles = StyleSheet.create({
 
   // Save button
   saveBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderRadius: 16,
     height: 54,
     flexDirection: "row",
@@ -674,7 +790,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     marginTop: 4,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -684,7 +800,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   saveBtnText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.2,
@@ -695,11 +811,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 20,
     padding: 18,
     marginBottom: 16,
-    shadowColor: GREEN,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,

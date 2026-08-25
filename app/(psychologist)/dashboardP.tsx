@@ -12,6 +12,8 @@ import {
     useWindowDimensions,
     View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
     getMe,
@@ -22,8 +24,7 @@ import {
 } from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
+// ─── Cores semânticas fixas (categorias de atalho, não mudam com a paleta) ────
 const BLUE = "#2d6cdf";
 const BLUE_LIGHT = "#eaf1ff";
 const ORANGE = "#c46a1a";
@@ -32,12 +33,9 @@ const PURPLE = "#7c3aed";
 const PURPLE_LIGHT = "#f3eeff";
 const TEAL = "#0d9488";
 const TEAL_LIGHT = "#e3f4f1";
+const INDIGO = "#4f46e5";
+const INDIGO_LIGHT = "#eef2ff";
 
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#17352b";
-const TEXT_MUTED = "#5f7a6f";
 const LABEL = "#78938a";
 
 const MAX_WIDTH = 1120;
@@ -58,7 +56,7 @@ const formatDate = (isoDate: string) => {
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 };
 
-const QUICK_ACTIONS = [
+const buildQuickActions = (green: string, greenLight: string) => [
   {
     id: "agenda",
     title: "Agenda",
@@ -69,12 +67,21 @@ const QUICK_ACTIONS = [
     route: "/(psychologist)/agenda",
   },
   {
+    id: "calendario",
+    title: "Calendário",
+    description: "Veja o mês inteiro e as consultas de cada dia.",
+    icon: "grid-outline",
+    color: INDIGO,
+    bg: INDIGO_LIGHT,
+    route: "/(psychologist)/calendario",
+  },
+  {
     id: "patients",
     title: "Pacientes",
     description: "Acesse o acompanhamento clínico dos pacientes.",
     icon: "people-outline",
-    color: GREEN,
-    bg: GREEN_LIGHT,
+    color: green,
+    bg: greenLight,
     route: "/(psychologist)/lista",
   },
   {
@@ -116,6 +123,13 @@ const QUICK_ACTIONS = [
 ];
 
 export default function PsychologistDashboardScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const QUICK_ACTIONS = useMemo(
+    () => buildQuickActions(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const [profileName, setProfileName] = useState("");
   const [profileCrp, setProfileCrp] = useState("CRP não informado");
   const [loading, setLoading] = useState(true);
@@ -250,7 +264,7 @@ export default function PsychologistDashboardScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Barra de identidade ── */}
       <View style={styles.header}>
@@ -311,7 +325,7 @@ export default function PsychologistDashboardScreen() {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando dados...</Text>
           </View>
         ) : (
@@ -324,8 +338,8 @@ export default function PsychologistDashboardScreen() {
             {/* ── Resumo do dia ── */}
             <Text style={styles.sectionTitle}>Resumo do dia</Text>
             <View style={styles.kpiBanner}>
-              <View style={[styles.kpiIcon, { backgroundColor: GREEN_LIGHT }]}>
-                <Ionicons name="calendar-outline" size={20} color={GREEN} />
+              <View style={[styles.kpiIcon, { backgroundColor: colors.primaryTint }]}>
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.kpiBannerText}>
                 <Text style={styles.kpiValue}>
@@ -347,7 +361,7 @@ export default function PsychologistDashboardScreen() {
                 >
                   <View style={styles.nextPatient}>
                     <View style={styles.nextIcon}>
-                      <Ionicons name="person-outline" size={18} color={GREEN} />
+                      <Ionicons name="person-outline" size={18} color={colors.primary} />
                     </View>
                     <View style={styles.nextPatientText}>
                       <Text style={styles.nextLabel}>Paciente</Text>
@@ -368,14 +382,14 @@ export default function PsychologistDashboardScreen() {
                         <Ionicons
                           name="calendar-outline"
                           size={15}
-                          color={GREEN}
+                          color={colors.primary}
                         />
                         <Text style={styles.nextBadgeText}>
                           {formatDate(proxima.scheduled_at)}
                         </Text>
                       </View>
                       <View style={styles.nextBadge}>
-                        <Ionicons name="time-outline" size={15} color={GREEN} />
+                        <Ionicons name="time-outline" size={15} color={colors.primary} />
                         <Text style={styles.nextBadgeText}>
                           {formatTime(proxima.scheduled_at)}
                         </Text>
@@ -399,7 +413,7 @@ export default function PsychologistDashboardScreen() {
                         <Ionicons
                           name="arrow-forward-outline"
                           size={16}
-                          color={WHITE}
+                          color={colors.white}
                         />
                       </TouchableOpacity>
                     ) : null}
@@ -464,13 +478,13 @@ export default function PsychologistDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: PAGE_BG,
+    backgroundColor: colors.pageBg,
   },
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 52,
     paddingBottom: 20,
   },
@@ -499,7 +513,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 18,
     fontWeight: "800",
     letterSpacing: 0.5,
@@ -513,7 +527,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   headerName: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 21,
     fontWeight: "800",
     letterSpacing: -0.3,
@@ -551,7 +565,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   notifBadgeText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 10,
     fontWeight: "800",
   },
@@ -566,7 +580,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   logoutText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -586,7 +600,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT_DARK,
+    color: colors.textDark,
     letterSpacing: -0.2,
     marginBottom: 12,
     marginTop: 4,
@@ -596,10 +610,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 18,
     marginBottom: 26,
     shadowColor: "#1f5442",
@@ -621,22 +635,22 @@ const styles = StyleSheet.create({
   kpiValue: {
     fontSize: 26,
     fontWeight: "800",
-    color: TEXT_DARK,
+    color: colors.textDark,
     letterSpacing: -0.5,
   },
   kpiLabel: {
     marginTop: 4,
     fontSize: 12.5,
     lineHeight: 17,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontWeight: "600",
   },
   // Próxima consulta
   nextCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 18,
     marginBottom: 26,
     shadowColor: "#1f5442",
@@ -663,7 +677,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -681,7 +695,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT_DARK,
+    color: colors.textDark,
   },
   nextMeta: {
     gap: 14,
@@ -698,7 +712,7 @@ const styles = StyleSheet.create({
   nextBadge: {
     backgroundColor: "#f2f9f5",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -713,7 +727,7 @@ const styles = StyleSheet.create({
   },
   nextDetailsBtn: {
     alignSelf: "flex-start",
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
     paddingHorizontal: 18,
@@ -722,7 +736,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   nextDetailsBtnText: {
-    color: WHITE,
+    color: colors.white,
     fontSize: 14,
     fontWeight: "800",
   },
@@ -734,7 +748,7 @@ const styles = StyleSheet.create({
   },
   nextEmptyText: {
     fontSize: 14,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontWeight: "600",
   },
   // Atalhos
@@ -745,10 +759,10 @@ const styles = StyleSheet.create({
   },
   actionTile: {
     flexGrow: 1,
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -772,13 +786,13 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: 15.5,
     fontWeight: "800",
-    color: TEXT_DARK,
+    color: colors.textDark,
   },
   actionDescription: {
     marginTop: 4,
     fontSize: 12.5,
     lineHeight: 17,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
   },
   loadingContainer: {
     flex: 1,
@@ -789,7 +803,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: GREEN,
+    color: colors.primary,
     fontWeight: "600",
   },
 });

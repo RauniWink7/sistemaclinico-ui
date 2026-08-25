@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ScrollView,
   StatusBar,
@@ -13,15 +13,9 @@ import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { createPatientAsAdmin, createProfessionalAsAdmin } from '../../services/api';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 const MAX_WIDTH = 1120;
 
 const CARD_SHADOW = {
@@ -40,6 +34,9 @@ const ROLE_OPTIONS: { key: Role; label: string; icon: string; desc: string }[] =
 ];
 
 export default function CadastrarUsuarioScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<Role>('professional');
   const [form, setForm] = useState({ fullName: '', email: '', phone: '' });
@@ -70,18 +67,18 @@ export default function CadastrarUsuarioScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+            <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
           </TouchableOpacity>
           <View style={styles.headerTextBox}>
             <Text style={styles.headerTitle}>Novo usuário</Text>
           </View>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.replace('/(admin)')}>
-            <Ionicons name="home-outline" size={20} color="#fff" />
+            <Ionicons name="home-outline" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -102,7 +99,7 @@ export default function CadastrarUsuarioScreen() {
                   activeOpacity={0.85}
                 >
                   <View style={[styles.roleIcon, role === opt.key && styles.roleIconActive]}>
-                    <Ionicons name={opt.icon as any} size={20} color={role === opt.key ? WHITE : GREEN} />
+                    <Ionicons name={opt.icon as any} size={20} color={role === opt.key ? colors.white : colors.primary} />
                   </View>
                   <Text style={[styles.roleLabel, role === opt.key && styles.roleLabelActive]}>{opt.label}</Text>
                   <Text style={styles.roleDesc}>{opt.desc}</Text>
@@ -119,7 +116,7 @@ export default function CadastrarUsuarioScreen() {
             <TextInput
               style={styles.input}
               placeholder="Digite o nome completo"
-              placeholderTextColor="#94b3a6"
+              placeholderTextColor={colors.placeholder}
               value={form.fullName}
               onChangeText={patch('fullName')}
             />
@@ -128,7 +125,7 @@ export default function CadastrarUsuarioScreen() {
             <TextInput
               style={styles.input}
               placeholder="Digite o e-mail"
-              placeholderTextColor="#94b3a6"
+              placeholderTextColor={colors.placeholder}
               value={form.email}
               onChangeText={patch('email')}
               keyboardType="email-address"
@@ -139,7 +136,7 @@ export default function CadastrarUsuarioScreen() {
             <TextInput
               style={styles.input}
               placeholder="(00) 00000-0000"
-              placeholderTextColor="#94b3a6"
+              placeholderTextColor={colors.placeholder}
               value={form.phone}
               onChangeText={patch('phone')}
               keyboardType="phone-pad"
@@ -153,10 +150,10 @@ export default function CadastrarUsuarioScreen() {
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={colors.white} size="small" />
             ) : (
               <>
-                <Ionicons name="person-add-outline" size={20} color="#fff" />
+                <Ionicons name="person-add-outline" size={20} color={colors.white} />
                 <Text style={styles.submitText}>Cadastrar usuário</Text>
               </>
             )}
@@ -171,49 +168,50 @@ export default function CadastrarUsuarioScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
-  headerInner: {
-    width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-  },
-  iconBtn: {
-    width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
-  container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
-  card: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
-    padding: 18, marginBottom: 16, ...CARD_SHADOW,
-  },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.2 },
-  cardSubtitle: { marginTop: 6, fontSize: 13, color: TEXT_MUTED, lineHeight: 20 },
-  roleGrid: { marginTop: 16, gap: 10 },
-  roleCard: { borderRadius: 14, borderWidth: 1.5, borderColor: BORDER, backgroundColor: '#f6faf8', padding: 16 },
-  roleCardActive: { borderColor: GREEN, backgroundColor: GREEN_LIGHT },
-  roleIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: GREEN_LIGHT, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  roleIconActive: { backgroundColor: GREEN },
-  roleLabel: { fontSize: 15, fontWeight: '800', color: TEXT_DARK },
-  roleLabelActive: { color: GREEN },
-  roleDesc: { marginTop: 4, fontSize: 13, color: TEXT_MUTED, lineHeight: 19 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6a887d', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
-  input: {
-    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,
-    paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: '#1f4036',
-    // @ts-ignore — remove o contorno azul no web
-    outlineStyle: 'none',
-  },
-  submitButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: GREEN, borderRadius: 14, paddingVertical: 16, marginBottom: 8,
-  },
-  submitDisabled: { opacity: 0.6 },
-  submitText: { color: WHITE, fontSize: 16, fontWeight: '800' },
-  cancelButton: { alignItems: 'center', paddingVertical: 14 },
-  cancelText: { fontSize: 15, fontWeight: '600', color: TEXT_MUTED },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.pageBg },
+    header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
+    headerInner: {
+      width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    },
+    iconBtn: {
+      width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    headerTextBox: { flex: 1 },
+    headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
+    container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
+    card: {
+      backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+      padding: 18, marginBottom: 16, ...CARD_SHADOW,
+    },
+    cardTitle: { fontSize: 16, fontWeight: '800', color: colors.textDark, letterSpacing: -0.2 },
+    cardSubtitle: { marginTop: 6, fontSize: 13, color: colors.textMuted, lineHeight: 20 },
+    roleGrid: { marginTop: 16, gap: 10 },
+    roleCard: { borderRadius: 14, borderWidth: 1.5, borderColor: colors.border, backgroundColor: '#f6faf8', padding: 16 },
+    roleCardActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+    roleIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+    roleIconActive: { backgroundColor: colors.primary },
+    roleLabel: { fontSize: 15, fontWeight: '800', color: colors.textDark },
+    roleLabelActive: { color: colors.primary },
+    roleDesc: { marginTop: 4, fontSize: 13, color: colors.textMuted, lineHeight: 19 },
+    fieldLabel: { fontSize: 12, fontWeight: '700', color: '#6a887d', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 16, marginBottom: 8 },
+    input: {
+      borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border,
+      paddingHorizontal: 14, paddingVertical: 13, fontSize: 14, color: '#1f4036',
+      // @ts-ignore — remove o contorno azul no web
+      outlineStyle: 'none',
+    },
+    submitButton: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+      backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 16, marginBottom: 8,
+    },
+    submitDisabled: { opacity: 0.6 },
+    submitText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+    cancelButton: { alignItems: 'center', paddingVertical: 14 },
+    cancelText: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
+  });

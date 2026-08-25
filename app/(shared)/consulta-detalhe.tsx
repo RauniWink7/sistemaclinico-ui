@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -26,12 +26,8 @@ import {
 } from '../../services/api';
 import { partsToISO, toInputParts, todayISODate } from '../../services/dateInput';
 import { DateField, TimeField } from '../../components/DateTimeField';
-
-const GREEN = '#2e8b6e';
-const GREEN_DARK = '#1f684f';
-const GREEN_LIGHT = '#e8f7f1';
-const BG = '#f0faf5';
-const WHITE = '#ffffff';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface StatusConfig {
   label: string;
@@ -40,13 +36,15 @@ interface StatusConfig {
   icon: string;
 }
 
-const STATUS_MAP: Record<string, StatusConfig> = {
+// "completed" usa a cor de marca da clínica (colors.primary/primaryTint) —
+// os demais status têm hues fixos, sem relação com a paleta escolhida.
+const buildStatusMap = (colors: ThemeColors): Record<string, StatusConfig> => ({
   scheduled:   { label: 'Agendada',       color: '#2d6cdf', bg: '#eaf1ff', icon: 'time-outline' },
-  completed:   { label: 'Concluida',      color: '#2e8b6e', bg: '#e8f7f1', icon: 'checkmark-circle-outline' },
+  completed:   { label: 'Concluida',      color: colors.primary, bg: colors.primaryTint, icon: 'checkmark-circle-outline' },
   cancelled:   { label: 'Cancelada',      color: '#d95c5c', bg: '#fdeeee', icon: 'close-circle-outline' },
   no_show:     { label: 'Nao compareceu', color: '#c46a1a', bg: '#fef3e8', icon: 'alert-circle-outline' },
   rescheduled: { label: 'Remarcada',      color: '#8a55d9', bg: '#f3ecff', icon: 'refresh-circle-outline' },
-};
+});
 
 // Estado derivado: consulta em aberto cujo dia ja passou.
 const OVERDUE_CONFIG: StatusConfig = {
@@ -81,7 +79,7 @@ const getInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const DecorativeBackground = () => (
+const DecorativeBackground = ({ styles }: { styles: ReturnType<typeof createStyles> }) => (
   <>
     <View style={styles.circle1} />
     <View style={styles.circle2} />
@@ -89,6 +87,10 @@ const DecorativeBackground = () => (
 );
 
 export default function ConsultaDetalheScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const statusMap = useMemo(() => buildStatusMap(colors), [colors]);
+
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [appointment, setAppointment] = useState<any>(null);
@@ -175,7 +177,7 @@ export default function ConsultaDetalheScreen() {
   // continuam sendo as do status real (agendada/remarcada).
   const statusCfg = isAppointmentOverdue(status, scheduledAt)
     ? OVERDUE_CONFIG
-    : (STATUS_MAP[status] ?? STATUS_MAP.scheduled);
+    : (statusMap[status] ?? statusMap.scheduled);
   const durationMinutes = appointment?.duration_minutes;
 
   const professionalId = appointment?.professional ?? '';
@@ -276,8 +278,8 @@ export default function ConsultaDetalheScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-        <DecorativeBackground />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <DecorativeBackground styles={styles} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back-outline" size={22} color="#fff" />
@@ -289,7 +291,7 @@ export default function ConsultaDetalheScreen() {
           <View style={{ width: 42 }} />
         </View>
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Carregando detalhes...</Text>
         </View>
       </View>
@@ -299,7 +301,7 @@ export default function ConsultaDetalheScreen() {
   if (!appointment) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back-outline" size={22} color="#fff" />
@@ -319,8 +321,8 @@ export default function ConsultaDetalheScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
-      <DecorativeBackground />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <DecorativeBackground styles={styles} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -382,14 +384,14 @@ export default function ConsultaDetalheScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Informacoes</Text>
             <View style={styles.detailsGrid}>
-              <InfoRow icon="calendar-outline" label="Data" value={formatDate(scheduledAt)} />
-              <InfoRow icon="time-outline" label="Horario" value={formatTime(scheduledAt)} />
+              <InfoRow icon="calendar-outline" label="Data" value={formatDate(scheduledAt)} styles={styles} />
+              <InfoRow icon="time-outline" label="Horario" value={formatTime(scheduledAt)} styles={styles} />
               {durationMinutes && (
-                <InfoRow icon="hourglass-outline" label="Duracao" value={`${durationMinutes} minutos`} />
+                <InfoRow icon="hourglass-outline" label="Duracao" value={`${durationMinutes} minutos`} styles={styles} />
               )}
-              <InfoRow icon="pulse-outline" label="Status" value={statusCfg.label} valueColor={statusCfg.color} />
+              <InfoRow icon="pulse-outline" label="Status" value={statusCfg.label} valueColor={statusCfg.color} styles={styles} />
               {appointment?.clinic_detail?.name && (
-                <InfoRow icon="business-outline" label="Clinica" value={appointment.clinic_detail.name} />
+                <InfoRow icon="business-outline" label="Clinica" value={appointment.clinic_detail.name} styles={styles} />
               )}
             </View>
           </View>
@@ -410,7 +412,7 @@ export default function ConsultaDetalheScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Notas da sessao</Text>
               <View style={styles.noteBox}>
-                <Ionicons name="document-text-outline" size={18} color={GREEN} />
+                <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                 <Text style={styles.noteText}>{sessionNotes}</Text>
               </View>
             </View>
@@ -428,8 +430,8 @@ export default function ConsultaDetalheScreen() {
                     onPress={() => setStatusModalVisible(true)}
                     activeOpacity={0.8}
                   >
-                    <View style={[styles.actionIcon, { backgroundColor: GREEN_LIGHT }]}>
-                      <Ionicons name="create-outline" size={20} color={GREEN} />
+                    <View style={[styles.actionIcon, { backgroundColor: colors.primaryTint }]}>
+                      <Ionicons name="create-outline" size={20} color={colors.primary} />
                     </View>
                     <View style={styles.actionTextBox}>
                       <Text style={styles.actionLabel}>Alterar status</Text>
@@ -530,7 +532,7 @@ export default function ConsultaDetalheScreen() {
 
             <View style={{ gap: 10, marginBottom: 16 }}>
               {([
-                { value: 'completed' as const, label: 'Concluida', icon: 'checkmark-circle-outline', color: GREEN, bg: GREEN_LIGHT },
+                { value: 'completed' as const, label: 'Concluida', icon: 'checkmark-circle-outline', color: colors.primary, bg: colors.primaryTint },
                 { value: 'rescheduled' as const, label: 'Remarcada', icon: 'refresh-circle-outline', color: '#8a55d9', bg: '#f3ecff' },
                 { value: 'no_show' as const, label: 'Nao compareceu', icon: 'alert-circle-outline', color: '#c46a1a', bg: '#fef3e8' },
               ]).map((opt) => (
@@ -618,7 +620,7 @@ export default function ConsultaDetalheScreen() {
 }
 
 // ─── InfoRow ──────────────────────────────────────────────────────────────────
-const InfoRow = ({ icon, label, value, valueColor }: { icon: string; label: string; value: string; valueColor?: string }) => (
+const InfoRow = ({ icon, label, value, valueColor, styles }: { icon: string; label: string; value: string; valueColor?: string; styles: ReturnType<typeof createStyles> }) => (
   <View style={styles.infoRow}>
     <Ionicons name={icon as any} size={16} color="#6c8c80" />
     <Text style={styles.infoLabel}>{label}</Text>
@@ -627,18 +629,18 @@ const InfoRow = ({ icon, label, value, valueColor }: { icon: string; label: stri
 );
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.authBg },
   circle1: {
     position: 'absolute', width: 280, height: 280, borderRadius: 140,
     backgroundColor: '#27795f', top: -110, right: -70, opacity: 0.45,
   },
   circle2: {
     position: 'absolute', width: 180, height: 180, borderRadius: 90,
-    backgroundColor: GREEN_DARK, top: -55, left: -70, opacity: 0.28,
+    backgroundColor: colors.primaryStrong, top: -55, left: -70, opacity: 0.28,
   },
   header: {
-    paddingTop: 56, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: GREEN,
+    paddingTop: 56, paddingBottom: 24, paddingHorizontal: 24, backgroundColor: colors.primary,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   backBtn: {
@@ -647,10 +649,10 @@ const styles = StyleSheet.create({
   },
   headerTextBox: { flex: 1, marginHorizontal: 14 },
   headerEyebrow: { color: '#bce3d5', fontSize: 13, fontWeight: '600' },
-  headerTitle: { color: WHITE, fontSize: 24, fontWeight: '800', marginTop: 2, letterSpacing: -0.4 },
+  headerTitle: { color: colors.white, fontSize: 24, fontWeight: '800', marginTop: 2, letterSpacing: -0.4 },
 
   loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
 
   scroll: { flex: 1 },
   scrollContent: { padding: 22, paddingBottom: 40, maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
@@ -669,7 +671,7 @@ const styles = StyleSheet.create({
 
   // Cards
   card: {
-    backgroundColor: WHITE, borderRadius: 22, padding: 20, marginBottom: 14,
+    backgroundColor: colors.white, borderRadius: 22, padding: 20, marginBottom: 14,
     shadowColor: '#174c3e', shadowOpacity: 0.06, shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
@@ -698,7 +700,7 @@ const styles = StyleSheet.create({
 
   // Actions
   actionsCard: {
-    backgroundColor: WHITE, borderRadius: 22, padding: 20, marginBottom: 14,
+    backgroundColor: colors.white, borderRadius: 22, padding: 20, marginBottom: 14,
     shadowColor: '#174c3e', shadowOpacity: 0.06, shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
@@ -715,7 +717,7 @@ const styles = StyleSheet.create({
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalBox: { backgroundColor: WHITE, borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 },
+  modalBox: { backgroundColor: colors.white, borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 },
   modalIconBox: {
     width: 64, height: 64, borderRadius: 20, backgroundColor: '#fef8e8',
     alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 16,
@@ -738,12 +740,12 @@ const styles = StyleSheet.create({
     flex: 1, height: 48, borderRadius: 14, backgroundColor: '#d95c5c',
     alignItems: 'center', justifyContent: 'center',
   },
-  modalDangerBtnText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  modalDangerBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
   modalConfirmBtn: {
-    flex: 1, height: 48, borderRadius: 14, backgroundColor: GREEN,
+    flex: 1, height: 48, borderRadius: 14, backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  modalConfirmBtnText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  modalConfirmBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
   dateFieldRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   dateCol: { flex: 1.4, minWidth: 0 },
   timeCol: { flex: 1, minWidth: 0 },

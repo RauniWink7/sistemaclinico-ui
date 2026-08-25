@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -14,17 +14,26 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { getRouteForRole, login } from "../../services/api";
 import { registerForPushNotifications } from "../../services/push";
 
 // ─── Decorative Background ───────────────────────────────────────────────────
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-    <View style={styles.circle3} />
-  </>
-);
+// Componente-irmão declarado no escopo do módulo: monta seu próprio tema/estilos
+// memoizados em vez de depender de `styles` do componente pai (evita recriar
+// componentes memoizados a cada render, o que derrubaria o foco dos inputs).
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+      <View style={styles.circle3} />
+    </>
+  );
+};
 
 // ─── FloatingInput Types ─────────────────────────────────────────────────────
 interface FloatingInputProps {
@@ -57,6 +66,9 @@ const FloatingInput = ({
   onSubmitEditing,
   inputRef,
 }: FloatingInputProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [focused, setFocused] = useState(false);
   const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -92,7 +104,7 @@ const FloatingInput = ({
     inputRange: [0, 1],
     outputRange: [
       "#9bbfb0",
-      error ? "#e05c5c" : focused ? "#2e8b6e" : "#5aab8a",
+      error ? "#e05c5c" : focused ? colors.primary : colors.primaryAccent,
     ],
   });
 
@@ -157,6 +169,9 @@ interface FormState {
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function LoginScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [form, setForm] = useState<FormState>({ email: "", senha: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSenha, setShowSenha] = useState(false);
@@ -242,7 +257,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f0faf5" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.authBg} />
       <DecorativeBackground />
 
       {/*
@@ -338,7 +353,7 @@ export default function LoginScreen() {
                 onPress={() => router.replace("/homep")}
                 activeOpacity={0.85}
               >
-                <Ionicons name="flash-outline" size={18} color={GREEN} />
+                <Ionicons name="flash-outline" size={18} color={colors.primary} />
                 <Text style={styles.demoBtnText}>Entrar em modo demo</Text>
               </TouchableOpacity>
 
@@ -350,7 +365,7 @@ export default function LoginScreen() {
                 <Ionicons
                   name="shield-checkmark-outline"
                   size={18}
-                  color="#1f684f"
+                  color={colors.primaryStrong}
                 />
                 <Text style={styles.adminBtnText}>Entrar como admin</Text>
               </TouchableOpacity>
@@ -375,300 +390,296 @@ export default function LoginScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#5aab8a";
-const GREEN_BG = "#f0faf5";
-const WHITE = "#ffffff";
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.authBg,
+    },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 80,
+      paddingBottom: 40,
+      justifyContent: "center",
+    },
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: GREEN_BG,
-  },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 80,
-    paddingBottom: 40,
-    justifyContent: "center",
-  },
+    // Decorative
+    circle1: {
+      position: "absolute",
+      width: 260,
+      height: 260,
+      borderRadius: 130,
+      backgroundColor: colors.primaryTint,
+      opacity: 0.45,
+      top: -80,
+      right: -80,
+    },
+    circle2: {
+      position: "absolute",
+      width: 160,
+      height: 160,
+      borderRadius: 80,
+      backgroundColor: colors.primaryAccent,
+      opacity: 0.3,
+      bottom: 120,
+      left: -50,
+    },
+    circle3: {
+      position: "absolute",
+      width: 90,
+      height: 90,
+      borderRadius: 45,
+      backgroundColor: colors.primary,
+      opacity: 0.08,
+      top: 220,
+      left: 20,
+    },
 
-  // Decorative
-  circle1: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "#c8eedd",
-    opacity: 0.45,
-    top: -80,
-    right: -80,
-  },
-  circle2: {
-    position: "absolute",
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "#a8dfc8",
-    opacity: 0.3,
-    bottom: 120,
-    left: -50,
-  },
-  circle3: {
-    position: "absolute",
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: "#2e8b6e",
-    opacity: 0.08,
-    top: 220,
-    left: 20,
-  },
+    // Header
+    header: {
+      alignItems: "center",
+      marginBottom: 32,
+    },
+    logoMark: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 10,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    appName: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: colors.primaryAccent,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      marginBottom: 8,
+      textAlign: "center",
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: "#1a3d31",
+      marginBottom: 6,
+      letterSpacing: -0.5,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: "#6b9e8a",
+      textAlign: "center",
+    },
 
-  // Header
-  header: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  logoMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: GREEN,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  appName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: GREEN_LIGHT,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#1a3d31",
-    marginBottom: 6,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#6b9e8a",
-    textAlign: "center",
-  },
+    // Card
+    card: {
+      backgroundColor: colors.white,
+      borderRadius: 24,
+      padding: 24,
+      maxWidth: 480,
+      alignSelf: "center",
+      width: "100%",
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 24,
+      elevation: 6,
+    },
 
-  // Card
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 24,
-    maxWidth: 480,
-    alignSelf: "center",
-    width: "100%",
-    shadowColor: "#2e8b6e",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 6,
-  },
+    // Input
+    inputWrapper: {
+      marginBottom: 14,
+    },
+    inputContainer: {
+      height: 58,
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      borderRadius: 14,
+      backgroundColor: "#fafffe",
+      justifyContent: "flex-end",
+      paddingHorizontal: 16,
+      paddingBottom: 8,
+      position: "relative",
+    },
+    inputContainerFocused: {
+      borderColor: colors.primary,
+      backgroundColor: colors.white,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    inputContainerError: {
+      borderColor: "#e05c5c",
+      backgroundColor: "#fff8f8",
+    },
+    floatingLabel: {
+      position: "absolute",
+      left: 16,
+      fontWeight: "500",
+    },
+    textInput: {
+      height: 24,
+      fontSize: 15,
+      color: "#1a3d31",
+      fontWeight: "500",
+      paddingRight: 36,
+      paddingVertical: 0,
+    },
+    eyeBtn: {
+      position: "absolute",
+      right: 12,
+      top: 16,
+      padding: 4,
+    },
+    errorText: {
+      fontSize: 12,
+      color: "#e05c5c",
+      marginTop: 4,
+      marginLeft: 4,
+    },
 
-  // Input
-  inputWrapper: {
-    marginBottom: 14,
-  },
-  inputContainer: {
-    height: 58,
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    borderRadius: 14,
-    backgroundColor: "#fafffe",
-    justifyContent: "flex-end",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    position: "relative",
-  },
-  inputContainerFocused: {
-    borderColor: GREEN,
-    backgroundColor: WHITE,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  inputContainerError: {
-    borderColor: "#e05c5c",
-    backgroundColor: "#fff8f8",
-  },
-  floatingLabel: {
-    position: "absolute",
-    left: 16,
-    fontWeight: "500",
-  },
-  textInput: {
-    height: 24,
-    fontSize: 15,
-    color: "#1a3d31",
-    fontWeight: "500",
-    paddingRight: 36,
-    paddingVertical: 0,
-  },
-  eyeBtn: {
-    position: "absolute",
-    right: 12,
-    top: 16,
-    padding: 4,
-  },
-  errorText: {
-    fontSize: 12,
-    color: "#e05c5c",
-    marginTop: 4,
-    marginLeft: 4,
-  },
+    // Forgot password
+    forgotBtn: {
+      alignSelf: "flex-end",
+      marginBottom: 8,
+      marginTop: -4,
+    },
+    forgotText: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: "600",
+    },
 
-  // Forgot password
-  forgotBtn: {
-    alignSelf: "flex-end",
-    marginBottom: 8,
-    marginTop: -4,
-  },
-  forgotText: {
-    fontSize: 13,
-    color: GREEN,
-    fontWeight: "600",
-  },
+    // API Error
+    apiErrorBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#fff1f1",
+      borderWidth: 1,
+      borderColor: "#f5c0c0",
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 16,
+    },
+    apiErrorText: {
+      fontSize: 13,
+      color: "#c0392b",
+      fontWeight: "500",
+      flex: 1,
+    },
 
-  // API Error
-  apiErrorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff1f1",
-    borderWidth: 1,
-    borderColor: "#f5c0c0",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  apiErrorText: {
-    fontSize: 13,
-    color: "#c0392b",
-    fontWeight: "500",
-    flex: 1,
-  },
+    // Button
+    primaryBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      height: 54,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+    primaryBtnDisabled: {
+      opacity: 0.7,
+    },
+    primaryBtnText: {
+      color: colors.white,
+      fontSize: 16,
+      fontWeight: "700",
+      letterSpacing: 0.3,
+    },
+    demoBtn: {
+      marginTop: 12,
+      height: 52,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#cfe7dc",
+      backgroundColor: "#f8fdfb",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    demoBtnText: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    adminBtn: {
+      marginTop: 10,
+      height: 52,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#b9dccd",
+      backgroundColor: "#eef8f3",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    adminBtnText: {
+      color: colors.primaryStrong,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    psychologistBtn: {
+      marginTop: 10,
+      height: 52,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#cddff8",
+      backgroundColor: "#f3f8ff",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    psychologistBtnText: {
+      color: "#2d6cdf",
+      fontSize: 15,
+      fontWeight: "700",
+    },
 
-  // Button
-  primaryBtn: {
-    backgroundColor: GREEN,
-    borderRadius: 14,
-    height: 54,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  primaryBtnDisabled: {
-    opacity: 0.7,
-  },
-  primaryBtnText: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  demoBtn: {
-    marginTop: 12,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#cfe7dc",
-    backgroundColor: "#f8fdfb",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  demoBtnText: {
-    color: GREEN,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  adminBtn: {
-    marginTop: 10,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#b9dccd",
-    backgroundColor: "#eef8f3",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  adminBtnText: {
-    color: "#1f684f",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  psychologistBtn: {
-    marginTop: 10,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#cddff8",
-    backgroundColor: "#f3f8ff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  psychologistBtnText: {
-    color: "#2d6cdf",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+    // Divider
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 20,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: "#e0f0e8",
+    },
+    dividerText: {
+      marginHorizontal: 12,
+      color: "#9bbfb0",
+      fontSize: 13,
+      fontWeight: "500",
+    },
 
-  // Divider
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#e0f0e8",
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    color: "#9bbfb0",
-    fontSize: 13,
-    fontWeight: "500",
-  },
-
-  // Register link
-  registerLink: {
-    alignItems: "center",
-    paddingVertical: 4,
-  },
-  registerLinkText: {
-    fontSize: 14,
-    color: "#6b9e8a",
-  },
-  registerLinkBold: {
-    color: GREEN,
-    fontWeight: "700",
-  },
-});
+    // Register link
+    registerLink: {
+      alignItems: "center",
+      paddingVertical: 4,
+    },
+    registerLinkText: {
+      fontSize: 14,
+      color: "#6b9e8a",
+    },
+    registerLinkBold: {
+      color: colors.primary,
+      fontWeight: "700",
+    },
+  });

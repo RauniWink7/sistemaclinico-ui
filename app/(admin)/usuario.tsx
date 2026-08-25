@@ -17,22 +17,16 @@ import { confirmAction } from '../../services/confirm';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { deleteAdminUser, getAdminUsers, getMe, toggleUserStatus } from '../../services/api';
+import { ThemeColors } from '../../constants/theme-palettes';
+import { useTheme } from '../../contexts/ThemeContext';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
+// ─── Cores semânticas fixas (categorias de perfil/status, não mudam com a paleta) ─
 const BLUE = '#2d6cdf';
 const BLUE_LIGHT = '#eaf1ff';
 const ORANGE = '#c46a1a';
 const ORANGE_LIGHT = '#fef3e8';
 const RED = '#d95c5c';
 const RED_LIGHT = '#fdeeee';
-
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 
 const MAX_WIDTH = 1120;
 const DESKTOP_BREAKPOINT = 900;
@@ -54,13 +48,25 @@ interface UserRow {
   is_active: boolean;
 }
 
-const ROLE_META: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+// GREEN/GREEN_LIGHT (marca da clínica) entram como parâmetros porque mudam
+// conforme a paleta escolhida pelo admin — as demais cores são fixas.
+const buildRoleMeta = (
+  green: string,
+  greenLight: string,
+): Record<string, { label: string; color: string; bg: string; icon: string }> => ({
   admin: { label: 'Admin', color: ORANGE, bg: ORANGE_LIGHT, icon: 'shield-checkmark-outline' },
   professional: { label: 'Psicólogo', color: BLUE, bg: BLUE_LIGHT, icon: 'medkit-outline' },
-  patient: { label: 'Paciente', color: GREEN, bg: GREEN_LIGHT, icon: 'person-outline' },
-};
+  patient: { label: 'Paciente', color: green, bg: greenLight, icon: 'person-outline' },
+});
 
 export default function AdminUsuariosScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const ROLE_META = useMemo(
+    () => buildRoleMeta(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'todos' | 'admin' | 'professional' | 'patient'>('todos');
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -181,13 +187,13 @@ export default function AdminUsuariosScreen() {
     <View style={styles.header}>
       <View style={styles.headerInner}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back-outline" size={22} color="#fff" />
+          <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
         </TouchableOpacity>
         <View style={styles.headerTextBox}>
           <Text style={styles.headerTitle}>Usuários</Text>
         </View>
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.replace('/(admin)')}>
-          <Ionicons name="home-outline" size={20} color="#fff" />
+          <Ionicons name="home-outline" size={20} color={colors.white} />
         </TouchableOpacity>
       </View>
     </View>
@@ -196,10 +202,10 @@ export default function AdminUsuariosScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <Header />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Carregando usuários...</Text>
         </View>
       </View>
@@ -208,7 +214,7 @@ export default function AdminUsuariosScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <Header />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -242,14 +248,14 @@ export default function AdminUsuariosScreen() {
             }
             activeOpacity={0.85}
           >
-            <Ionicons name="person-add-outline" size={20} color="#fff" />
+            <Ionicons name="person-add-outline" size={20} color={colors.white} />
             <Text style={styles.newButtonText}>Cadastrar novo usuário</Text>
           </TouchableOpacity>
 
           {/* ── Busca e filtros ── */}
           <View style={styles.searchCard}>
             <View style={styles.searchBox}>
-              <Ionicons name="search-outline" size={18} color={TEXT_MUTED} />
+              <Ionicons name="search-outline" size={18} color={colors.textMuted} />
               <TextInput
                 style={styles.searchInput}
                 value={query}
@@ -321,13 +327,13 @@ export default function AdminUsuariosScreen() {
                     <View style={styles.cardFooter}>
                       {u.phone ? (
                         <View style={styles.infoRow}>
-                          <Ionicons name="call-outline" size={14} color={TEXT_MUTED} />
+                          <Ionicons name="call-outline" size={14} color={colors.textMuted} />
                           <Text style={styles.infoText}>{u.phone}</Text>
                         </View>
                       ) : <View />}
-                      <View style={[styles.statusDot, { backgroundColor: u.is_active ? GREEN_LIGHT : RED_LIGHT }]}>
-                        <View style={[styles.dot, { backgroundColor: u.is_active ? GREEN : RED }]} />
-                        <Text style={[styles.statusText, { color: u.is_active ? GREEN : RED }]}>
+                      <View style={[styles.statusDot, { backgroundColor: u.is_active ? colors.primaryTint : RED_LIGHT }]}>
+                        <View style={[styles.dot, { backgroundColor: u.is_active ? colors.primary : RED }]} />
+                        <Text style={[styles.statusText, { color: u.is_active ? colors.primary : RED }]}>
                           {u.is_active ? 'Ativo' : 'Inativo'}
                         </Text>
                       </View>
@@ -342,15 +348,15 @@ export default function AdminUsuariosScreen() {
                           disabled={busy}
                         >
                           {busy ? (
-                            <ActivityIndicator size="small" color={GREEN} />
+                            <ActivityIndicator size="small" color={colors.primary} />
                           ) : (
                             <>
                               <Ionicons
                                 name={u.is_active ? 'pause-circle-outline' : 'play-circle-outline'}
                                 size={16}
-                                color={u.is_active ? ORANGE : GREEN}
+                                color={u.is_active ? ORANGE : colors.primary}
                               />
-                              <Text style={[styles.toggleBtnText, { color: u.is_active ? ORANGE : GREEN }]}>
+                              <Text style={[styles.toggleBtnText, { color: u.is_active ? ORANGE : colors.primary }]}>
                                 {u.is_active ? 'Desativar' : 'Reativar'}
                               </Text>
                             </>
@@ -400,8 +406,8 @@ export default function AdminUsuariosScreen() {
               disabled={deleting}
               onPress={() => void confirmDelete(true)}
             >
-              <View style={[styles.modalOptionIcon, { backgroundColor: GREEN_LIGHT }]}>
-                <Ionicons name="archive-outline" size={20} color={GREEN} />
+              <View style={[styles.modalOptionIcon, { backgroundColor: colors.primaryTint }]}>
+                <Ionicons name="archive-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.modalOptionText}>
                 <Text style={styles.modalOptionTitle}>Preservar dados clínicos</Text>
@@ -437,7 +443,7 @@ export default function AdminUsuariosScreen() {
 
             {deleting ? (
               <View style={styles.modalDeletingRow}>
-                <ActivityIndicator size="small" color={GREEN} />
+                <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={styles.modalDeletingText}>Excluindo...</Text>
               </View>
             ) : (
@@ -452,129 +458,130 @@ export default function AdminUsuariosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
-  headerInner: {
-    width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-  },
-  iconBtn: {
-    width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
-  container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: '600' },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.pageBg },
+    header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
+    headerInner: {
+      width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    },
+    iconBtn: {
+      width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.14)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    headerTextBox: { flex: 1 },
+    headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
+    container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
+    loadingText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
 
-  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  summaryCard: {
-    flex: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
-    alignItems: 'center', paddingVertical: 16, ...CARD_SHADOW,
-  },
-  summaryValue: { fontSize: 24, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.5 },
-  summaryLabel: { marginTop: 4, fontSize: 12, fontWeight: '700', color: TEXT_MUTED, textAlign: 'center' },
+    summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+    summaryCard: {
+      flex: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+      alignItems: 'center', paddingVertical: 16, ...CARD_SHADOW,
+    },
+    summaryValue: { fontSize: 24, fontWeight: '800', color: colors.textDark, letterSpacing: -0.5 },
+    summaryLabel: { marginTop: 4, fontSize: 12, fontWeight: '700', color: colors.textMuted, textAlign: 'center' },
 
-  newButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: GREEN, borderRadius: 14, paddingVertical: 15, marginBottom: 16,
-  },
-  newButtonText: { color: WHITE, fontSize: 15, fontWeight: '800' },
+    newButton: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+      backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 15, marginBottom: 16,
+    },
+    newButtonText: { color: colors.white, fontSize: 15, fontWeight: '800' },
 
-  searchCard: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
-    padding: 14, marginBottom: 22, ...CARD_SHADOW,
-  },
-  searchBox: {
-    borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,
-    paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center',
-  },
-  searchInput: {
-    flex: 1, marginLeft: 10, fontSize: 14, color: TEXT_DARK,
-    // @ts-ignore — remove o contorno azul no web
-    outlineStyle: 'none',
-  },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 10 },
-  filterChip: { borderRadius: 999, backgroundColor: '#edf5f1', paddingVertical: 9, paddingHorizontal: 14 },
-  filterChipActive: { backgroundColor: GREEN },
-  filterChipText: { fontSize: 13, fontWeight: '700', color: '#5f7e73' },
-  filterChipTextActive: { color: WHITE },
+    searchCard: {
+      backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+      padding: 14, marginBottom: 22, ...CARD_SHADOW,
+    },
+    searchBox: {
+      borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border,
+      paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center',
+    },
+    searchInput: {
+      flex: 1, marginLeft: 10, fontSize: 14, color: colors.textDark,
+      // @ts-ignore — remove o contorno azul no web
+      outlineStyle: 'none',
+    },
+    filterRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 10 },
+    filterChip: { borderRadius: 999, backgroundColor: '#edf5f1', paddingVertical: 9, paddingHorizontal: 14 },
+    filterChipActive: { backgroundColor: colors.primary },
+    filterChipText: { fontSize: 13, fontWeight: '700', color: '#5f7e73' },
+    filterChipTextActive: { color: colors.white },
 
-  listHeader: { marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: TEXT_DARK, letterSpacing: -0.2 },
-  countBadge: {
-    minWidth: 30, height: 26, paddingHorizontal: 10, borderRadius: 999,
-    backgroundColor: GREEN_LIGHT, alignItems: 'center', justifyContent: 'center',
-  },
-  resultCount: { fontSize: 14, fontWeight: '800', color: GREEN },
+    listHeader: { marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.textDark, letterSpacing: -0.2 },
+    countBadge: {
+      minWidth: 30, height: 26, paddingHorizontal: 10, borderRadius: 999,
+      backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center',
+    },
+    resultCount: { fontSize: 14, fontWeight: '800', color: colors.primary },
 
-  cardsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  userCard: {
-    flexGrow: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
-    padding: 16, ...CARD_SHADOW,
-  },
-  userTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  userMainInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  avatarText: { fontSize: 16, fontWeight: '800' },
-  nameBox: { flex: 1 },
-  userName: { fontSize: 15.5, fontWeight: '800', color: TEXT_DARK },
-  userMeta: { marginTop: 3, fontSize: 13, color: TEXT_MUTED },
-  roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 11 },
-  roleText: { fontSize: 12, fontWeight: '700' },
-  cardFooter: {
-    marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#edf4f0',
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-  },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  infoText: { fontSize: 13, color: TEXT_MUTED },
-  statusDot: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 11 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 12, fontWeight: '700' },
+    cardsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    userCard: {
+      flexGrow: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+      padding: 16, ...CARD_SHADOW,
+    },
+    userTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+    userMainInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+    avatar: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    avatarText: { fontSize: 16, fontWeight: '800' },
+    nameBox: { flex: 1 },
+    userName: { fontSize: 15.5, fontWeight: '800', color: colors.textDark },
+    userMeta: { marginTop: 3, fontSize: 13, color: colors.textMuted },
+    roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 11 },
+    roleText: { fontSize: 12, fontWeight: '700' },
+    cardFooter: {
+      marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#edf4f0',
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    },
+    infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    infoText: { fontSize: 13, color: colors.textMuted },
+    statusDot: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 11 },
+    dot: { width: 8, height: 8, borderRadius: 4 },
+    statusText: { fontSize: 12, fontWeight: '700' },
 
-  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  toggleBtn: {
-    flex: 1, borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: BORDER,
-    paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-  },
-  toggleBtnText: { fontSize: 13, fontWeight: '800' },
-  deleteBtn: {
-    flex: 1, borderRadius: 12, backgroundColor: RED_LIGHT, borderWidth: 1, borderColor: '#f5d0d0',
-    paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-  },
-  deleteBtnText: { fontSize: 13, fontWeight: '800', color: RED },
+    actionsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+    toggleBtn: {
+      flex: 1, borderRadius: 12, backgroundColor: '#f6faf8', borderWidth: 1, borderColor: colors.border,
+      paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    },
+    toggleBtnText: { fontSize: 13, fontWeight: '800' },
+    deleteBtn: {
+      flex: 1, borderRadius: 12, backgroundColor: RED_LIGHT, borderWidth: 1, borderColor: '#f5d0d0',
+      paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    },
+    deleteBtnText: { fontSize: 13, fontWeight: '800', color: RED },
 
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50, gap: 14 },
-  emptyStateText: { fontSize: 15, fontWeight: '600', color: TEXT_MUTED },
+    emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 50, gap: 14 },
+    emptyStateText: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
 
-  // Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24,
-  },
-  modalBox: { backgroundColor: WHITE, borderRadius: 20, padding: 22, width: '100%', maxWidth: 420 },
-  modalIcon: {
-    alignSelf: 'center', width: 52, height: 52, borderRadius: 26, backgroundColor: RED_LIGHT,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-  },
-  modalTitle: { fontSize: 19, fontWeight: '800', color: TEXT_DARK, textAlign: 'center' },
-  modalSubtitle: { fontSize: 14, color: TEXT_MUTED, textAlign: 'center', marginTop: 4, fontWeight: '600' },
-  modalQuestion: { fontSize: 13.5, color: '#5d7a6e', textAlign: 'center', marginTop: 12, marginBottom: 16, lineHeight: 20 },
-  modalOption: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14,
-    borderWidth: 1, borderColor: BORDER, backgroundColor: '#fbfefd', marginBottom: 10,
-  },
-  modalOptionDanger: { borderColor: '#f5d0d0', backgroundColor: '#fff8f8' },
-  modalOptionDisabled: { opacity: 0.6 },
-  modalOptionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  modalOptionText: { flex: 1 },
-  modalOptionTitle: { fontSize: 14.5, fontWeight: '800', color: TEXT_DARK },
-  modalOptionDesc: { marginTop: 3, fontSize: 12, color: TEXT_MUTED, lineHeight: 17 },
-  modalCancelBtn: { alignItems: 'center', paddingVertical: 12, marginTop: 2 },
-  modalCancelText: { fontSize: 15, fontWeight: '700', color: TEXT_MUTED },
-  modalDeletingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 12 },
-  modalDeletingText: { fontSize: 14, fontWeight: '700', color: GREEN },
-});
+    // Modal
+    modalOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24,
+    },
+    modalBox: { backgroundColor: colors.white, borderRadius: 20, padding: 22, width: '100%', maxWidth: 420 },
+    modalIcon: {
+      alignSelf: 'center', width: 52, height: 52, borderRadius: 26, backgroundColor: RED_LIGHT,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+    },
+    modalTitle: { fontSize: 19, fontWeight: '800', color: colors.textDark, textAlign: 'center' },
+    modalSubtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 4, fontWeight: '600' },
+    modalQuestion: { fontSize: 13.5, color: '#5d7a6e', textAlign: 'center', marginTop: 12, marginBottom: 16, lineHeight: 20 },
+    modalOption: {
+      flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14,
+      borderWidth: 1, borderColor: colors.border, backgroundColor: '#fbfefd', marginBottom: 10,
+    },
+    modalOptionDanger: { borderColor: '#f5d0d0', backgroundColor: '#fff8f8' },
+    modalOptionDisabled: { opacity: 0.6 },
+    modalOptionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    modalOptionText: { flex: 1 },
+    modalOptionTitle: { fontSize: 14.5, fontWeight: '800', color: colors.textDark },
+    modalOptionDesc: { marginTop: 3, fontSize: 12, color: colors.textMuted, lineHeight: 17 },
+    modalCancelBtn: { alignItems: 'center', paddingVertical: 12, marginTop: 2 },
+    modalCancelText: { fontSize: 15, fontWeight: '700', color: colors.textMuted },
+    modalDeletingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 12 },
+    modalDeletingText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  });

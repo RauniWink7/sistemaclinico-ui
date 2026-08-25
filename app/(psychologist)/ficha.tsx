@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -31,14 +31,11 @@ import {
   updatePatientProfile,
   updateSessionNote,
 } from "../../services/api";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
+// ─── Cores semânticas fixas (categorias, não mudam com a paleta) ──────────────
 const BLUE_LIGHT = "#eaf1ff";
-const BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
 const MAX_WIDTH = 1120;
 
 // A mesma URL base da api.ts
@@ -114,13 +111,18 @@ const formatDate = (iso: string): string => {
 };
 
 // ─── Status das consultas (para o histórico) ──────────────────────────────────
-const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  scheduled: { label: "Agendada", color: GREEN, bg: GREEN_LIGHT },
+// GREEN/GREEN_LIGHT (marca da clínica) entram como parâmetros porque mudam
+// conforme a paleta escolhida pelo admin — as demais cores são fixas.
+const buildStatusMeta = (
+  green: string,
+  greenLight: string,
+): Record<string, { label: string; color: string; bg: string }> => ({
+  scheduled: { label: "Agendada", color: green, bg: greenLight },
   completed: { label: "Realizada", color: "#2d6cdf", bg: BLUE_LIGHT },
   rescheduled: { label: "Remarcada", color: "#c46a1a", bg: "#fef3e8" },
   no_show: { label: "Não compareceu", color: "#b03030", bg: "#fdeaea" },
   cancelled: { label: "Cancelada", color: "#888", bg: "#f2f2f2" },
-};
+});
 
 // Consulta em aberto cujo dia já passou vira "Dia Ultrapassado" — rótulo
 // automático, sem ação do usuário e nunca antes/durante o dia da consulta.
@@ -130,13 +132,25 @@ const OVERDUE_META = {
   bg: "#fdf1e3",
 };
 
-const getStatusMeta = (status?: string, scheduledAt?: string) => {
+const getStatusMeta = (
+  statusMeta: Record<string, { label: string; color: string; bg: string }>,
+  status?: string,
+  scheduledAt?: string,
+) => {
   if (isAppointmentOverdue(status, scheduledAt)) return OVERDUE_META;
-  return STATUS_META[status ?? "scheduled"] ?? STATUS_META.scheduled;
+  return statusMeta[status ?? "scheduled"] ?? statusMeta.scheduled;
 };
 
 // ─── ReadOnly Row ─────────────────────────────────────────────────────────────
-const ReadOnlyRow = ({ label, value }: { label: string; value: string }) => (
+const ReadOnlyRow = ({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createStyles>;
+}) => (
   <View style={styles.infoRow}>
     <Text style={styles.infoLabel}>{label}</Text>
     <Text style={styles.infoValue}>{value}</Text>
@@ -148,9 +162,11 @@ interface DocCardProps {
   item: PatientDocument;
   onDownload: (item: PatientDocument) => void;
   onDelete: (id: string) => void;
+  color: string;
+  styles: ReturnType<typeof createStyles>;
 }
 
-const DocCard = ({ item, onDownload, onDelete }: DocCardProps) => {
+const DocCard = ({ item, onDownload, onDelete, color, styles }: DocCardProps) => {
   const cfg = FILE_CONFIG[item.file_type] ?? FILE_CONFIG["Outros"];
   return (
     <View style={styles.docCard}>
@@ -178,7 +194,7 @@ const DocCard = ({ item, onDownload, onDelete }: DocCardProps) => {
             onPress={() => onDownload(item)}
             activeOpacity={0.8}
           >
-            <Ionicons name="download-outline" size={13} color={GREEN} />
+            <Ionicons name="download-outline" size={13} color={color} />
             <Text style={styles.downloadBtnText}>Download</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -207,9 +223,10 @@ interface UploadModalProps {
     fileName: string,
     mimeType?: string,
   ) => Promise<void>;
+  styles: ReturnType<typeof createStyles>;
 }
 
-const UploadModal = ({ visible, onClose, onUpload }: UploadModalProps) => {
+const UploadModal = ({ visible, onClose, onUpload, styles }: UploadModalProps) => {
   const [title, setTitle] = useState("");
   const [fileType, setFileType] = useState<FileType>("PDF");
   const [loading, setLoading] = useState(false);
@@ -401,6 +418,13 @@ const UploadModal = ({ visible, onClose, onUpload }: UploadModalProps) => {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PsychologistPatientRecordScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const STATUS_META = useMemo(
+    () => buildStatusMeta(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const params = useLocalSearchParams<{
     patientId?: string; // user.id do paciente
     patientProfileId?: string; // profile.id — exigido pelo backend no upload
@@ -747,7 +771,7 @@ export default function PsychologistPatientRecordScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -774,7 +798,7 @@ export default function PsychologistPatientRecordScreen() {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando ficha...</Text>
           </View>
         ) : patient ? (
@@ -808,7 +832,7 @@ export default function PsychologistPatientRecordScreen() {
                 </View>
               </View>
               <View style={styles.heroBadge}>
-                <Ionicons name="calendar-outline" size={14} color={GREEN} />
+                <Ionicons name="calendar-outline" size={14} color={colors.primary} />
                 <Text style={styles.heroBadgeText}>
                   Membro desde:{" "}
                   {patient.user?.created_at
@@ -824,6 +848,7 @@ export default function PsychologistPatientRecordScreen() {
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Dados pessoais</Text>
               <ReadOnlyRow
+                styles={styles}
                 label="Nome"
                 value={
                   patient.user?.full_name ??
@@ -832,17 +857,20 @@ export default function PsychologistPatientRecordScreen() {
                 }
               />
               <ReadOnlyRow
+                styles={styles}
                 label="E-mail"
                 value={patient.user?.email ?? "Não informado"}
               />
               <ReadOnlyRow
+                styles={styles}
                 label="Telefone"
                 value={
                   patient.user?.phone ?? params.patientPhone ?? "Não informado"
                 }
               />
-              <ReadOnlyRow label="CPF" value={patient.cpf || "Não informado"} />
+              <ReadOnlyRow styles={styles} label="CPF" value={patient.cpf || "Não informado"} />
               <ReadOnlyRow
+                styles={styles}
                 label="Data de nascimento"
                 value={
                   patient.birth_date
@@ -897,12 +925,12 @@ export default function PsychologistPatientRecordScreen() {
               {loadingAppointments ? (
                 <ActivityIndicator
                   size="small"
-                  color={GREEN}
+                  color={colors.primary}
                   style={{ marginVertical: 20 }}
                 />
               ) : appointments.length > 0 ? (
                 appointments.map((appt) => {
-                  const meta = getStatusMeta(appt.status, appt.scheduled_at);
+                  const meta = getStatusMeta(STATUS_META, appt.status, appt.scheduled_at);
                   return (
                     <TouchableOpacity
                       key={appt.id}
@@ -914,7 +942,7 @@ export default function PsychologistPatientRecordScreen() {
                         <Ionicons
                           name="calendar-outline"
                           size={20}
-                          color={GREEN}
+                          color={colors.primary}
                         />
                       </View>
                       <View style={styles.histInfo}>
@@ -942,7 +970,7 @@ export default function PsychologistPatientRecordScreen() {
                         <Ionicons
                           name="document-text-outline"
                           size={14}
-                          color={GREEN}
+                          color={colors.primary}
                         />
                         <Text style={styles.histNoteBtnText}>Nota</Text>
                       </View>
@@ -1026,7 +1054,7 @@ export default function PsychologistPatientRecordScreen() {
               {loadingDocs ? (
                 <ActivityIndicator
                   size="small"
-                  color={GREEN}
+                  color={colors.primary}
                   style={{ marginVertical: 20 }}
                 />
               ) : filteredDocs.length > 0 ? (
@@ -1036,6 +1064,8 @@ export default function PsychologistPatientRecordScreen() {
                     item={doc}
                     onDownload={handleDownload}
                     onDelete={handleDeletePress}
+                    color={colors.primary}
+                    styles={styles}
                   />
                 ))
               ) : (
@@ -1091,7 +1121,7 @@ export default function PsychologistPatientRecordScreen() {
               }
               activeOpacity={0.85}
             >
-              <Ionicons name="calendar-outline" size={18} color={GREEN} />
+              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
               <Text style={styles.scheduleButtonText}>
                 Agendar consulta para este paciente
               </Text>
@@ -1100,7 +1130,7 @@ export default function PsychologistPatientRecordScreen() {
             {/* Toast de sucesso */}
             {saved && (
               <Animated.View style={[styles.toastBox, { opacity: saveAnim }]}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#2e8b6e" />
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.primary} />
                 <Text style={styles.toastText}>Anotações salvas com sucesso</Text>
               </Animated.View>
             )}
@@ -1113,6 +1143,7 @@ export default function PsychologistPatientRecordScreen() {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onUpload={handleUpload}
+        styles={styles}
       />
 
       {/* Modal confirmação exclusão */}
@@ -1177,7 +1208,7 @@ export default function PsychologistPatientRecordScreen() {
 
             {loadingNote ? (
               <ActivityIndicator
-                color={GREEN}
+                color={colors.primary}
                 size="small"
                 style={{ marginVertical: 40 }}
               />
@@ -1233,551 +1264,552 @@ export default function PsychologistPatientRecordScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
-  header: {
-    backgroundColor: GREEN,
-    paddingTop: 52,
-    paddingBottom: 20,
-  },
-  headerInner: {
-    width: "100%",
-    maxWidth: MAX_WIDTH,
-    alignSelf: "center",
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  homeBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTextBox: { flex: 1, marginHorizontal: 14 },
-  headerTitle: {
-    color: WHITE,
-    fontSize: 21,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 40,
-    width: "100%",
-    maxWidth: MAX_WIDTH,
-    alignSelf: "center",
-  },
-  heroCard: {
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 20,
-    marginBottom: 22,
-    shadowColor: "#1f5442",
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  heroTopRow: { flexDirection: "row", alignItems: "center" },
-  avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
-    backgroundColor: BLUE_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  avatarText: { fontSize: 18, fontWeight: "800", color: "#2d6cdf" },
-  heroTextBox: { flex: 1 },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#163c31",
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: "#5d7c71",
-    lineHeight: 20,
-  },
-  heroBadge: {
-    alignSelf: "flex-start",
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: GREEN_LIGHT,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  heroBadgeText: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: "700",
-    color: GREEN,
-  },
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: "#1f5442",
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#163c31",
-    marginBottom: 14,
-  },
-  sectionHint: {
-    marginTop: -6,
-    marginBottom: 12,
-    fontSize: 13,
-    color: "#6a887d",
-  },
-  infoRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#edf4f0",
-  },
-  infoLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#789286",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  infoValue: {
-    marginTop: 6,
-    fontSize: 15,
-    lineHeight: 21,
-    color: "#1f4036",
-    fontWeight: "600",
-  },
-  textArea: {
-    minHeight: 140,
-    borderRadius: 18,
-    backgroundColor: "#f4faf7",
-    borderWidth: 1,
-    borderColor: "#e3efe8",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 14,
-    color: "#1f4036",
-  },
-  saveButton: {
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: GREEN,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  saveButtonText: { color: WHITE, fontSize: 15, fontWeight: "700" },
-  scheduleButton: {
-    height: 52,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: GREEN,
-    backgroundColor: WHITE,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 12,
-  },
-  scheduleButtonText: { color: GREEN, fontSize: 15, fontWeight: "700" },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 100,
-  },
-  loadingText: { marginTop: 16, fontSize: 16, color: GREEN, fontWeight: "600" },
-  docSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  addDocBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: GREEN,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  addDocBtnText: { color: WHITE, fontSize: 12, fontWeight: "700" },
-  docSearchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#f0faf5",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#d4ede3",
-    marginBottom: 10,
-  },
-  docSearchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: "#1a3d31",
-    fontWeight: "500",
-  },
-  docFiltersRow: { gap: 8, paddingBottom: 12 },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: "#f0faf5",
-    borderWidth: 1,
-    borderColor: "#d4ede3",
-  },
-  filterChipActive: { backgroundColor: GREEN, borderColor: GREEN },
-  filterChipText: { fontSize: 11, color: "#4a7a66", fontWeight: "600" },
-  filterChipTextActive: { color: WHITE },
-  docCard: {
-    backgroundColor: "#fafffe",
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    marginBottom: 10,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#edf4f0",
-  },
-  fileIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  docCardInfo: { flex: 1 },
-  docCardTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1a3d31",
-    marginBottom: 4,
-  },
-  docCardMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-    flexWrap: "wrap",
-  },
-  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  typeText: { fontSize: 10, fontWeight: "700" },
-  docCardDate: { fontSize: 11, color: "#7aab96", fontWeight: "500" },
-  docCardSize: { fontSize: 11, color: "#b2dfcf", fontWeight: "500" },
-  docCardActions: { flexDirection: "row", gap: 8 },
-  downloadBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#e8f7f1",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  downloadBtnText: { fontSize: 11, fontWeight: "700", color: GREEN },
-  deleteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#fdeaea",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  deleteBtnText: { fontSize: 11, fontWeight: "700", color: "#e05c5c" },
-  histRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "#fafffe",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#edf4f0",
-    padding: 12,
-    marginBottom: 10,
-  },
-  histIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: GREEN_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  histInfo: { flex: 1, gap: 6 },
-  histDate: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
-  histRealized: { fontSize: 12, fontWeight: "600", color: "#2d6cdf" },
-  histBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  histBadgeText: { fontSize: 11, fontWeight: "700" },
-  histNoteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#e8f7f1",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  histNoteBtnText: { fontSize: 11, fontWeight: "700", color: GREEN },
-  noteArea: {
-    minHeight: 160,
-    borderRadius: 16,
-    backgroundColor: "#f4faf7",
-    borderWidth: 1,
-    borderColor: "#e3efe8",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 14,
-    color: "#1f4036",
-    marginBottom: 20,
-  },
-  emptyDocBox: { alignItems: "center", paddingVertical: 28, gap: 8 },
-  emptyDocTitle: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
-  emptyDocBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: GREEN,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  emptyDocBtnText: { color: WHITE, fontSize: 13, fontWeight: "700" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: WHITE,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#d4ede3",
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1a3d31",
-    marginBottom: 4,
-  },
-  modalSubtitle: { fontSize: 13, color: "#7aab96", marginBottom: 20 },
-  modalLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#1a3d31",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  modalInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: "#fafffe",
-  },
-  modalInputError: { borderColor: "#e05c5c" },
-  modalInputText: {
-    flex: 1,
-    fontSize: 14,
-    color: "#1a3d31",
-    fontWeight: "500",
-  },
-  modalInputErrorText: { fontSize: 12, color: "#e05c5c", marginTop: 4 },
-  typeGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 20,
-  },
-  typeOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    backgroundColor: "#fafffe",
-  },
-  typeOptionText: { fontSize: 12, fontWeight: "700", color: "#9bbfb0" },
-  filePicker: {
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    borderStyle: "dashed",
-    borderRadius: 14,
-    padding: 24,
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#fafffe",
-    marginBottom: 24,
-  },
-  filePickerText: { fontSize: 14, fontWeight: "600", color: "#7aab96" },
-  filePickerSub: { fontSize: 11, color: "#b2dfcf" },
-  modalButtons: { flexDirection: "row", gap: 12 },
-  cancelModalBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cancelModalBtnText: { fontSize: 15, fontWeight: "700", color: "#7aab96" },
-  uploadConfirmBtn: {
-    flex: 2,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: GREEN,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  uploadConfirmBtnText: { fontSize: 15, fontWeight: "700", color: WHITE },
-  confirmOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-  },
-  confirmSheet: {
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 28,
-    width: "100%",
-    maxWidth: 360,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  confirmIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "#fdeaea",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  confirmTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#1a3d31",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  confirmMsg: {
-    fontSize: 14,
-    color: "#4a7a66",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  confirmDocName: { fontWeight: "700", color: "#1a3d31" },
-  confirmButtons: { flexDirection: "row", gap: 12, width: "100%" },
-  confirmCancelBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#d4ede3",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmCancelText: { fontSize: 15, fontWeight: "700", color: "#7aab96" },
-  confirmDeleteBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#e05c5c",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmDeleteText: { fontSize: 15, fontWeight: "700", color: WHITE },
-  toastBox: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#e8f7f1",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#b2dfcf",
-  },
-  toastText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2e8b6e",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.pageBg },
+    header: {
+      backgroundColor: colors.primary,
+      paddingTop: 52,
+      paddingBottom: 20,
+    },
+    headerInner: {
+      width: "100%",
+      maxWidth: MAX_WIDTH,
+      alignSelf: "center",
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    backBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    homeBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTextBox: { flex: 1, marginHorizontal: 14 },
+    headerTitle: {
+      color: colors.white,
+      fontSize: 21,
+      fontWeight: "800",
+      letterSpacing: -0.3,
+    },
+    scroll: { flex: 1 },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 22,
+      paddingBottom: 40,
+      width: "100%",
+      maxWidth: MAX_WIDTH,
+      alignSelf: "center",
+    },
+    heroCard: {
+      backgroundColor: colors.white,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+      marginBottom: 22,
+      shadowColor: "#1f5442",
+      shadowOpacity: 0.05,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    },
+    heroTopRow: { flexDirection: "row", alignItems: "center" },
+    avatar: {
+      width: 58,
+      height: 58,
+      borderRadius: 20,
+      backgroundColor: BLUE_LIGHT,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 14,
+    },
+    avatarText: { fontSize: 18, fontWeight: "800", color: "#2d6cdf" },
+    heroTextBox: { flex: 1 },
+    heroTitle: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: "#163c31",
+      letterSpacing: -0.4,
+    },
+    heroSubtitle: {
+      marginTop: 6,
+      fontSize: 14,
+      color: "#5d7c71",
+      lineHeight: 20,
+    },
+    heroBadge: {
+      alignSelf: "flex-start",
+      marginTop: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.primaryTint,
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    heroBadgeText: {
+      marginLeft: 6,
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+    card: {
+      backgroundColor: colors.white,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 18,
+      marginBottom: 16,
+      shadowColor: "#1f5442",
+      shadowOpacity: 0.05,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: "#163c31",
+      marginBottom: 14,
+    },
+    sectionHint: {
+      marginTop: -6,
+      marginBottom: 12,
+      fontSize: 13,
+      color: "#6a887d",
+    },
+    infoRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: "#edf4f0",
+    },
+    infoLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#789286",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    infoValue: {
+      marginTop: 6,
+      fontSize: 15,
+      lineHeight: 21,
+      color: "#1f4036",
+      fontWeight: "600",
+    },
+    textArea: {
+      minHeight: 140,
+      borderRadius: 18,
+      backgroundColor: "#f4faf7",
+      borderWidth: 1,
+      borderColor: "#e3efe8",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 14,
+      color: "#1f4036",
+    },
+    saveButton: {
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 4,
+    },
+    saveButtonText: { color: colors.white, fontSize: 15, fontWeight: "700" },
+    scheduleButton: {
+      height: 52,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      backgroundColor: colors.white,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 12,
+    },
+    scheduleButtonText: { color: colors.primary, fontSize: 15, fontWeight: "700" },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingTop: 100,
+    },
+    loadingText: { marginTop: 16, fontSize: 16, color: colors.primary, fontWeight: "600" },
+    docSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    addDocBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+    },
+    addDocBtnText: { color: colors.white, fontSize: 12, fontWeight: "700" },
+    docSearchBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: "#f0faf5",
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: "#d4ede3",
+      marginBottom: 10,
+    },
+    docSearchInput: {
+      flex: 1,
+      fontSize: 13,
+      color: "#1a3d31",
+      fontWeight: "500",
+    },
+    docFiltersRow: { gap: 8, paddingBottom: 12 },
+    filterChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 20,
+      backgroundColor: "#f0faf5",
+      borderWidth: 1,
+      borderColor: "#d4ede3",
+    },
+    filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    filterChipText: { fontSize: 11, color: "#4a7a66", fontWeight: "600" },
+    filterChipTextActive: { color: colors.white },
+    docCard: {
+      backgroundColor: "#fafffe",
+      borderRadius: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 12,
+      marginBottom: 10,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: "#edf4f0",
+    },
+    fileIconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    docCardInfo: { flex: 1 },
+    docCardTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#1a3d31",
+      marginBottom: 4,
+    },
+    docCardMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 8,
+      flexWrap: "wrap",
+    },
+    typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    typeText: { fontSize: 10, fontWeight: "700" },
+    docCardDate: { fontSize: 11, color: "#7aab96", fontWeight: "500" },
+    docCardSize: { fontSize: 11, color: "#b2dfcf", fontWeight: "500" },
+    docCardActions: { flexDirection: "row", gap: 8 },
+    downloadBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.primaryTint,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+    },
+    downloadBtnText: { fontSize: 11, fontWeight: "700", color: colors.primary },
+    deleteBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "#fdeaea",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+    },
+    deleteBtnText: { fontSize: 11, fontWeight: "700", color: "#e05c5c" },
+    histRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: "#fafffe",
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "#edf4f0",
+      padding: 12,
+      marginBottom: 10,
+    },
+    histIconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      backgroundColor: colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    histInfo: { flex: 1, gap: 6 },
+    histDate: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
+    histRealized: { fontSize: 12, fontWeight: "600", color: "#2d6cdf" },
+    histBadge: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    histBadgeText: { fontSize: 11, fontWeight: "700" },
+    histNoteBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.primaryTint,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+    },
+    histNoteBtnText: { fontSize: 11, fontWeight: "700", color: colors.primary },
+    noteArea: {
+      minHeight: 160,
+      borderRadius: 16,
+      backgroundColor: "#f4faf7",
+      borderWidth: 1,
+      borderColor: "#e3efe8",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 14,
+      color: "#1f4036",
+      marginBottom: 20,
+    },
+    emptyDocBox: { alignItems: "center", paddingVertical: 28, gap: 8 },
+    emptyDocTitle: { fontSize: 14, fontWeight: "700", color: "#1a3d31" },
+    emptyDocBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      marginTop: 4,
+    },
+    emptyDocBtnText: { color: colors.white, fontSize: 13, fontWeight: "700" },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.white,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      padding: 24,
+      paddingBottom: 40,
+    },
+    modalHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: "#d4ede3",
+      alignSelf: "center",
+      marginBottom: 20,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: "#1a3d31",
+      marginBottom: 4,
+    },
+    modalSubtitle: { fontSize: 13, color: "#7aab96", marginBottom: 20 },
+    modalLabel: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#1a3d31",
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    modalInput: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: "#fafffe",
+    },
+    modalInputError: { borderColor: "#e05c5c" },
+    modalInputText: {
+      flex: 1,
+      fontSize: 14,
+      color: "#1a3d31",
+      fontWeight: "500",
+    },
+    modalInputErrorText: { fontSize: 12, color: "#e05c5c", marginTop: 4 },
+    typeGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 20,
+    },
+    typeOption: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      backgroundColor: "#fafffe",
+    },
+    typeOptionText: { fontSize: 12, fontWeight: "700", color: "#9bbfb0" },
+    filePicker: {
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      borderStyle: "dashed",
+      borderRadius: 14,
+      padding: 24,
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "#fafffe",
+      marginBottom: 24,
+    },
+    filePickerText: { fontSize: 14, fontWeight: "600", color: "#7aab96" },
+    filePickerSub: { fontSize: 11, color: "#b2dfcf" },
+    modalButtons: { flexDirection: "row", gap: 12 },
+    cancelModalBtn: {
+      flex: 1,
+      height: 50,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cancelModalBtnText: { fontSize: 15, fontWeight: "700", color: "#7aab96" },
+    uploadConfirmBtn: {
+      flex: 2,
+      height: 50,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    uploadConfirmBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+    confirmOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 32,
+    },
+    confirmSheet: {
+      backgroundColor: colors.white,
+      borderRadius: 24,
+      padding: 28,
+      width: "100%",
+      maxWidth: 360,
+      alignItems: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    confirmIconBox: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: "#fdeaea",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 16,
+    },
+    confirmTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: "#1a3d31",
+      marginBottom: 10,
+      textAlign: "center",
+    },
+    confirmMsg: {
+      fontSize: 14,
+      color: "#4a7a66",
+      textAlign: "center",
+      lineHeight: 22,
+      marginBottom: 24,
+    },
+    confirmDocName: { fontWeight: "700", color: "#1a3d31" },
+    confirmButtons: { flexDirection: "row", gap: 12, width: "100%" },
+    confirmCancelBtn: {
+      flex: 1,
+      height: 48,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#d4ede3",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    confirmCancelText: { fontSize: 15, fontWeight: "700", color: "#7aab96" },
+    confirmDeleteBtn: {
+      flex: 1,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: "#e05c5c",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    confirmDeleteText: { fontSize: 15, fontWeight: "700", color: colors.white },
+    toastBox: {
+      marginTop: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.primaryTint,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: "#b2dfcf",
+    },
+    toastText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.primary,
+    },
+  });

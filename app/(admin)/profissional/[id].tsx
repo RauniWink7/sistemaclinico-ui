@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -14,20 +14,14 @@ import {
 } from 'react-native';
 import { showAlert } from '../../../services/feedback';
 import { getPsychologists, updateProfessionalProfile, ProfessionalApiItem } from '../../../services/api';
+import { ThemeColors } from '../../../constants/theme-palettes';
+import { useTheme } from '../../../contexts/ThemeContext';
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = '#2e8b6e';
-const GREEN_LIGHT = '#e8f7f1';
+// ─── Cores semânticas fixas (categoria "profissional", não muda com a paleta) ──
 const ORANGE = '#c46a1a';
 const ORANGE_LIGHT = '#fef3e8';
 const RED = '#d95c5c';
 const RED_LIGHT = '#fdeeee';
-
-const PAGE_BG = '#e8f1ec';
-const WHITE = '#ffffff';
-const BORDER = '#dfece5';
-const TEXT_DARK = '#17352b';
-const TEXT_MUTED = '#5f7a6f';
 
 const MAX_WIDTH = 1120;
 
@@ -51,20 +45,26 @@ const InfoRow = ({
   icon: string;
   label: string;
   value: string;
-}) => (
-  <View style={styles.infoRow}>
-    <View style={styles.infoIconBox}>
-      <Ionicons name={icon as any} size={16} color={ORANGE} />
+}) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.infoRow}>
+      <View style={styles.infoIconBox}>
+        <Ionicons name={icon as any} size={16} color={ORANGE} />
+      </View>
+      <View style={styles.infoTextBox}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value || '—'}</Text>
+      </View>
     </View>
-    <View style={styles.infoTextBox}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value || '—'}</Text>
-    </View>
-  </View>
-);
+  );
+};
 
 export default function ProfessionalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [professional, setProfessional] = useState<ProfessionalDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,10 +183,10 @@ export default function ProfessionalDetailScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <Header title="Profissional" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Buscando dados do profissional...</Text>
         </View>
       </View>
@@ -197,7 +197,7 @@ export default function ProfessionalDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <Header title="Profissional" />
 
       <ScrollView
@@ -225,16 +225,16 @@ export default function ProfessionalDetailScreen() {
 
               <View style={[
                 styles.statusBadge,
-                { backgroundColor: professional.user.is_active ? GREEN_LIGHT : RED_LIGHT }
+                { backgroundColor: professional.user.is_active ? colors.primaryTint : RED_LIGHT }
               ]}>
                 <Ionicons
                   name={professional.user.is_active ? 'checkmark-circle-outline' : 'pause-circle-outline'}
                   size={13}
-                  color={professional.user.is_active ? GREEN : RED}
+                  color={professional.user.is_active ? colors.primary : RED}
                 />
                 <Text style={[
                   styles.statusText,
-                  { color: professional.user.is_active ? GREEN : RED }
+                  { color: professional.user.is_active ? colors.primary : RED }
                 ]}>
                   {professional.user.is_active ? 'Ativo' : 'Inativo'}
                 </Text>
@@ -361,7 +361,7 @@ export default function ProfessionalDetailScreen() {
               onPress={() => setEditing(true)}
               activeOpacity={0.85}
             >
-              <Ionicons name="create-outline" size={18} color={GREEN} />
+              <Ionicons name="create-outline" size={18} color={colors.primary} />
               <Text style={styles.editButtonText}>Editar perfil clínico</Text>
             </TouchableOpacity>
           )}
@@ -374,8 +374,8 @@ export default function ProfessionalDetailScreen() {
               onPress={() => router.push({ pathname: '/(admin)/agendar', params: { professionalId: professional.id } })}
               activeOpacity={0.85}
             >
-              <View style={[styles.actionIconBox, { backgroundColor: GREEN_LIGHT }]}>
-                <Ionicons name="calendar-outline" size={20} color={GREEN} />
+              <View style={[styles.actionIconBox, { backgroundColor: colors.primaryTint }]}>
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.actionTextBox}>
                 <Text style={styles.actionTitle}>Agendar consulta</Text>
@@ -408,9 +408,9 @@ export default function ProfessionalDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', paddingHorizontal: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -420,18 +420,18 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: '800', letterSpacing: -0.3 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
   container: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
 
   profileCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 26,
     marginBottom: 16,
     alignItems: 'center',
@@ -447,8 +447,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   avatarText: { fontSize: 28, fontWeight: '800', color: ORANGE },
-  profileName: { fontSize: 21, fontWeight: '800', color: TEXT_DARK, textAlign: 'center', letterSpacing: -0.4 },
-  profileEmail: { marginTop: 6, fontSize: 14, color: TEXT_MUTED, textAlign: 'center' },
+  profileName: { fontSize: 21, fontWeight: '800', color: colors.textDark, textAlign: 'center', letterSpacing: -0.4 },
+  profileEmail: { marginTop: 6, fontSize: 14, color: colors.textMuted, textAlign: 'center' },
   badgesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14, justifyContent: 'center' },
   specialtyBadge: {
     flexDirection: 'row',
@@ -471,15 +471,15 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: '700' },
 
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 18,
     marginBottom: 14,
     ...CARD_SHADOW,
   },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: TEXT_DARK, marginBottom: 14, letterSpacing: -0.2 },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.textDark, marginBottom: 14, letterSpacing: -0.2 },
 
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   infoIconBox: {
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f6faf8',
     paddingHorizontal: 16,
     fontSize: 15,
-    color: TEXT_DARK,
+    color: colors.textDark,
     fontWeight: '500',
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: 'none',
@@ -525,19 +525,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelButtonText: { fontSize: 14, fontWeight: '700', color: GREEN },
+  cancelButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
   saveButton: {
     flex: 1,
     height: 48,
     borderRadius: 12,
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   saveButtonDisabled: { opacity: 0.75 },
-  saveButtonText: { fontSize: 14, fontWeight: '700', color: WHITE },
+  saveButtonText: { fontSize: 14, fontWeight: '700', color: colors.white },
 
   editButton: {
     flexDirection: 'row',
@@ -551,11 +551,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fdfb',
     marginBottom: 14,
   },
-  editButtonText: { fontSize: 15, fontWeight: '700', color: GREEN },
+  editButtonText: { fontSize: 15, fontWeight: '700', color: colors.primary },
 
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   actionIconBox: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   actionTextBox: { flex: 1, marginRight: 8 },
-  actionTitle: { fontSize: 15, fontWeight: '700', color: TEXT_DARK },
-  actionSubtitle: { marginTop: 3, fontSize: 12, color: TEXT_MUTED },
+  actionTitle: { fontSize: 15, fontWeight: '700', color: colors.textDark },
+  actionSubtitle: { marginTop: 3, fontSize: 12, color: colors.textMuted },
 });

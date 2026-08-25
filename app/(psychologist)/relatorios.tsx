@@ -21,14 +21,13 @@ import {
   ProfessionalSummaryReportApi,
   ReportPeriodQuery,
 } from "../../services/api";
-
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
-const BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 
 export default function ProfessionalReportsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [report, setReport] = useState<ProfessionalSummaryReportApi | null>(null);
   const [patientReport, setPatientReport] = useState<PatientReportApi | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState("");
@@ -106,11 +105,11 @@ export default function ProfessionalReportsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <View style={styles.header}>
         <View style={styles.headerInner}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
+            <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
           </TouchableOpacity>
           <View style={styles.headerTextBox}>
             <Text style={styles.headerTitle}>Relatórios</Text>
@@ -121,7 +120,7 @@ export default function ProfessionalReportsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando relatorios...</Text>
           </View>
         ) : (
@@ -156,7 +155,7 @@ export default function ProfessionalReportsScreen() {
                 </View>
               </View>
               <TouchableOpacity style={styles.applyBtn} onPress={() => void loadReport()}>
-                <Ionicons name="filter-outline" size={17} color={WHITE} />
+                <Ionicons name="filter-outline" size={17} color={colors.white} />
                 <Text style={styles.applyBtnText}>Aplicar filtros</Text>
               </TouchableOpacity>
             </View>
@@ -164,26 +163,26 @@ export default function ProfessionalReportsScreen() {
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.exportBtn} onPress={() => void exportSummary("pdf")}>
                 {exporting === "pdf" ? (
-                  <ActivityIndicator color={GREEN} />
+                  <ActivityIndicator color={colors.primary} />
                 ) : (
-                  <Ionicons name="document-text-outline" size={18} color={GREEN} />
+                  <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                 )}
                 <Text style={styles.exportBtnText}>PDF</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.exportBtn} onPress={() => void exportSummary("excel")}>
                 {exporting === "excel" ? (
-                  <ActivityIndicator color={GREEN} />
+                  <ActivityIndicator color={colors.primary} />
                 ) : (
-                  <Ionicons name="grid-outline" size={18} color={GREEN} />
+                  <Ionicons name="grid-outline" size={18} color={colors.primary} />
                 )}
                 <Text style={styles.exportBtnText}>Excel</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.metricsGrid}>
-              <Metric label="Consultas" value={report?.summary.total_appointments ?? 0} />
-              <Metric label="Pacientes" value={report?.summary.unique_patients ?? 0} />
-              <Metric label="Cancel." value={`${report?.summary.cancellation_rate_percent ?? 0}%`} />
+              <Metric styles={styles} color={colors.primary} label="Consultas" value={report?.summary.total_appointments ?? 0} />
+              <Metric styles={styles} color={colors.primary} label="Pacientes" value={report?.summary.unique_patients ?? 0} />
+              <Metric styles={styles} color={colors.primary} label="Cancel." value={`${report?.summary.cancellation_rate_percent ?? 0}%`} />
             </View>
 
             <Text style={styles.sectionTitle}>Pacientes atendidos</Text>
@@ -203,13 +202,13 @@ export default function ProfessionalReportsScreen() {
                     {patient.total_appointments} consultas • {patient.completed} realizadas
                   </Text>
                 </View>
-                <Ionicons name="analytics-outline" size={21} color={GREEN} />
+                <Ionicons name="analytics-outline" size={21} color={colors.primary} />
               </TouchableOpacity>
             ))}
 
             {loadingPatient ? (
               <View style={styles.patientReportCard}>
-                <ActivityIndicator color={GREEN} />
+                <ActivityIndicator color={colors.primary} />
               </View>
             ) : patientReport ? (
               <View style={styles.patientReportCard}>
@@ -220,9 +219,9 @@ export default function ProfessionalReportsScreen() {
                   </View>
                   <TouchableOpacity style={styles.smallExportBtn} onPress={exportPatient}>
                     {exporting === "patient" ? (
-                      <ActivityIndicator color={GREEN} />
+                      <ActivityIndicator color={colors.primary} />
                     ) : (
-                      <Ionicons name="download-outline" size={18} color={GREEN} />
+                      <Ionicons name="download-outline" size={18} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 </View>
@@ -245,53 +244,64 @@ export default function ProfessionalReportsScreen() {
   );
 }
 
-const Metric = ({ label, value }: { label: string; value: number | string }) => (
+const Metric = ({
+  label,
+  value,
+  color,
+  styles,
+}: {
+  label: string;
+  value: number | string;
+  color: string;
+  styles: ReturnType<typeof createStyles>;
+}) => (
   <View style={styles.metricCard}>
     <View style={styles.metricIcon}>
-      <Ionicons name="stats-chart-outline" size={19} color={GREEN} />
+      <Ionicons name="stats-chart-outline" size={19} color={color} />
     </View>
     <Text style={styles.metricValue}>{value}</Text>
     <Text style={styles.metricLabel}>{label}</Text>
   </View>
 );
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
-  headerInner: { width: "100%", maxWidth: 1120, alignSelf: "center", paddingHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 14 },
-  iconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
-  headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 40, maxWidth: 1120, alignSelf: 'center' as const, width: '100%' as const },
-  loadingContainer: { minHeight: 360, alignItems: "center", justifyContent: "center", gap: 12 },
-  loadingText: { color: GREEN, fontWeight: "700" },
-  heroCard: { backgroundColor: WHITE, borderRadius: 18, borderWidth: 1, borderColor: BORDER, padding: 20, marginBottom: 16, shadowColor: "#1f5442", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
-  heroTitle: { fontSize: 22, fontWeight: "800", color: "#173d31" },
-  heroSubtitle: { marginTop: 8, fontSize: 14, lineHeight: 21, color: "#5d7a6e" },
-  filterCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
-  sectionTitle: { fontSize: 17, fontWeight: "800", color: "#173d31", marginBottom: 12 },
-  inputRow: { flexDirection: "row", gap: 10 },
-  dateField: { flex: 1, gap: 6 },
-  inputLabel: { fontSize: 12, fontWeight: "700", color: "#6c8c80", marginLeft: 2 },
-  applyBtn: { marginTop: 12, height: 46, borderRadius: 12, backgroundColor: GREEN, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  applyBtnText: { color: WHITE, fontWeight: "800" },
-  actionRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  exportBtn: { flex: 1, height: 46, borderRadius: 12, backgroundColor: GREEN_LIGHT, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  exportBtnText: { color: GREEN, fontWeight: "800" },
-  metricsGrid: { flexDirection: "row", gap: 10, marginBottom: 22 },
-  metricCard: { flex: 1, backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 14, minHeight: 122, shadowColor: "#1f5442", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
-  metricIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: GREEN_LIGHT, alignItems: "center", justifyContent: "center", marginBottom: 10 },
-  metricValue: { fontSize: 22, fontWeight: "800", color: "#173d31" },
-  metricLabel: { fontSize: 12, color: "#6c8c80", fontWeight: "700", marginTop: 2 },
-  patientCard: { backgroundColor: WHITE, borderRadius: 16, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: BORDER },
-  patientCardActive: { borderColor: GREEN, backgroundColor: "#f6faf8" },
-  patientName: { fontSize: 15, fontWeight: "800", color: "#173d31" },
-  patientMeta: { marginTop: 3, fontSize: 12, color: "#7a9d8f", fontWeight: "600" },
-  patientReportCard: { backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 16, marginTop: 10 },
-  patientReportHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  smallExportBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: GREEN_LIGHT, alignItems: "center", justifyContent: "center" },
-  row: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: "#edf5f1" },
-  rowLabel: { color: "#557366", fontWeight: "700" },
-  rowValue: { color: "#173d31", fontWeight: "800" },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.pageBg },
+    header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
+    headerInner: { width: "100%", maxWidth: 1120, alignSelf: "center", paddingHorizontal: 20, flexDirection: "row", alignItems: "center", gap: 14 },
+    iconBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)", alignItems: "center", justifyContent: "center" },
+    headerTextBox: { flex: 1 },
+    headerTitle: { color: colors.white, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 40, maxWidth: 1120, alignSelf: 'center' as const, width: '100%' as const },
+    loadingContainer: { minHeight: 360, alignItems: "center", justifyContent: "center", gap: 12 },
+    loadingText: { color: colors.primary, fontWeight: "700" },
+    heroCard: { backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 20, marginBottom: 16, shadowColor: "#1f5442", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
+    heroTitle: { fontSize: 22, fontWeight: "800", color: colors.textDark },
+    heroSubtitle: { marginTop: 8, fontSize: 14, lineHeight: 21, color: colors.textMuted },
+    filterCard: { backgroundColor: colors.white, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
+    sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.textDark, marginBottom: 12 },
+    inputRow: { flexDirection: "row", gap: 10 },
+    dateField: { flex: 1, gap: 6 },
+    inputLabel: { fontSize: 12, fontWeight: "700", color: colors.textMuted, marginLeft: 2 },
+    applyBtn: { marginTop: 12, height: 46, borderRadius: 12, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+    applyBtnText: { color: colors.white, fontWeight: "800" },
+    actionRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+    exportBtn: { flex: 1, height: 46, borderRadius: 12, backgroundColor: colors.primaryTint, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+    exportBtnText: { color: colors.primary, fontWeight: "800" },
+    metricsGrid: { flexDirection: "row", gap: 10, marginBottom: 22 },
+    metricCard: { flex: 1, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, minHeight: 122, shadowColor: "#1f5442", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 2 },
+    metricIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+    metricValue: { fontSize: 22, fontWeight: "800", color: colors.textDark },
+    metricLabel: { fontSize: 12, color: colors.textMuted, fontWeight: "700", marginTop: 2 },
+    patientCard: { backgroundColor: colors.white, borderRadius: 16, padding: 16, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: colors.border },
+    patientCardActive: { borderColor: colors.primary, backgroundColor: "#f6faf8" },
+    patientName: { fontSize: 15, fontWeight: "800", color: colors.textDark },
+    patientMeta: { marginTop: 3, fontSize: 12, color: "#7a9d8f", fontWeight: "600" },
+    patientReportCard: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, marginTop: 10 },
+    patientReportHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+    smallExportBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+    row: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: "#edf5f1" },
+    rowLabel: { color: "#557366", fontWeight: "700" },
+    rowValue: { color: colors.textDark, fontWeight: "800" },
+  });

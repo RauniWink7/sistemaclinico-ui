@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import FeedbackHost from '../components/FeedbackHost';
+import { ThemeProvider as ClinicThemeProvider } from '../contexts/ThemeContext';
 import { getAccessToken } from '../services/api';
 import { registerForPushNotifications, setupNotificationListeners } from '../services/push';
 
@@ -23,10 +24,12 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
-      <StatusBar style="auto" />
-      <FeedbackHost />
-    </ThemeProvider>
+    <ClinicThemeProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+        <StatusBar style="auto" />
+        <FeedbackHost />
+      </ThemeProvider>
+    </ClinicThemeProvider>
   );
 }

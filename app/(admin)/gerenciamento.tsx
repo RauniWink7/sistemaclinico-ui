@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,17 +14,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { showAlert } from "../../services/feedback";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
+import { showAlert, showToast } from "../../services/feedback";
+import { confirmAction } from "../../services/confirm";
 import { TimeField } from "../../components/DateTimeField";
-import { getClinicData, getMe, updateClinic } from "../../services/api";
+import {
+  getClinicData,
+  getMe,
+  updateClinic,
+  updateClinicLogo,
+} from "../../services/api";
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#17352b";
-const TEXT_MUTED = "#5f7a6f";
 const MAX_WIDTH = 1120;
 
 const CARD_SHADOW = {
@@ -54,21 +57,29 @@ const InputField = ({
   onChangeText: (value: string) => void;
   placeholder: string;
   keyboardType?: "default" | "email-address" | "phone-pad";
-}) => (
-  <View style={styles.inputGroup}>
-    <Text style={styles.inputLabel}>{label}</Text>
-    <TextInput
-      style={styles.input}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor="#94b3a6"
-      keyboardType={keyboardType ?? "default"}
-    />
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.placeholder}
+        keyboardType={keyboardType ?? "default"}
+      />
+    </View>
+  );
+};
 
 export default function AdminClinicManagementScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const emptyForm: ClinicForm = {
     name: "",
     address: "",
@@ -82,6 +93,8 @@ export default function AdminClinicManagementScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [clinicId, setClinicId] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -145,6 +158,7 @@ export default function AdminClinicManagementScreen() {
           openingTime: clinicData.open_from || "",
           closingTime: clinicData.open_until || "",
         });
+        setLogoUrl(clinicData.logo || null);
       } catch (err: any) {
         showAlert(
           "Erro",
@@ -160,6 +174,56 @@ export default function AdminClinicManagementScreen() {
 
   const setField = (field: keyof ClinicForm) => (value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handlePickLogo = async () => {
+    if (!clinicId || logoBusy) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setLogoBusy(true);
+      const uploadResult = await updateClinicLogo(clinicId, {
+        uri: asset.uri,
+        name: asset.name || "logo.jpg",
+        type: asset.mimeType || "image/jpeg",
+      });
+      setLogoBusy(false);
+
+      if (!uploadResult.ok) {
+        showToast(uploadResult.error || "Não foi possível salvar a logo.", "error");
+        return;
+      }
+      setLogoUrl(uploadResult.data?.logo || null);
+      showToast("Logo da clínica atualizada.", "success");
+    } catch {
+      setLogoBusy(false);
+      showAlert("Erro", "Não foi possível selecionar a imagem.");
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    if (!clinicId || logoBusy) return;
+    confirmAction(
+      "Remover logo",
+      "Tem certeza que deseja remover a logo da clínica?",
+      async () => {
+        setLogoBusy(true);
+        const result = await updateClinicLogo(clinicId, null);
+        setLogoBusy(false);
+        if (!result.ok) {
+          showToast(result.error || "Não foi possível remover a logo.", "error");
+          return;
+        }
+        setLogoUrl(null);
+        showToast("Logo removida.", "success");
+      },
+      { confirmText: "Remover", cancelText: "Cancelar" },
+    );
   };
 
   const handleSave = async () => {
@@ -227,10 +291,10 @@ export default function AdminClinicManagementScreen() {
   if (loadingInitial) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
         <Header />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Carregando dados...</Text>
         </View>
       </View>
@@ -239,7 +303,7 @@ export default function AdminClinicManagementScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <Header />
 
       <ScrollView
@@ -250,6 +314,49 @@ export default function AdminClinicManagementScreen() {
         <Animated.View
           style={[styles.container, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         >
+          <View style={styles.formCard}>
+            <Text style={styles.sectionTitle}>Logo da clínica</Text>
+            <Text style={styles.sectionSubtitle}>
+              Aparece no perfil da clínica. Formatos de imagem, até 5MB.
+            </Text>
+
+            <View style={styles.logoRow}>
+              <View style={styles.logoPreview}>
+                {logoBusy ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : logoUrl ? (
+                  <Image source={{ uri: logoUrl }} style={styles.logoImg} />
+                ) : (
+                  <Ionicons name="business-outline" size={30} color={colors.placeholder} />
+                )}
+              </View>
+              <View style={styles.logoActions}>
+                <TouchableOpacity
+                  style={styles.logoBtn}
+                  onPress={handlePickLogo}
+                  activeOpacity={0.85}
+                  disabled={logoBusy}
+                >
+                  <Ionicons name="image-outline" size={16} color={colors.primary} />
+                  <Text style={styles.logoBtnText}>
+                    {logoUrl ? "Trocar logo" : "Selecionar logo"}
+                  </Text>
+                </TouchableOpacity>
+                {logoUrl && (
+                  <TouchableOpacity
+                    style={styles.logoRemove}
+                    onPress={handleRemoveLogo}
+                    activeOpacity={0.85}
+                    disabled={logoBusy}
+                  >
+                    <Ionicons name="trash-outline" size={15} color="#d95c5c" />
+                    <Text style={styles.logoRemoveText}>Remover</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+
           <View style={styles.formCard}>
             <Text style={styles.sectionTitle}>Informações da clínica</Text>
 
@@ -326,47 +433,67 @@ export default function AdminClinicManagementScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
-  headerInner: {
-    width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
-  },
-  iconBtn: {
-    width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)",
-    alignItems: "center", justifyContent: "center",
-  },
-  headerTextBox: { flex: 1 },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
-  loadingText: { fontSize: 15, color: GREEN, fontWeight: "600" },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
-  container: { width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center" },
-  formCard: {
-    backgroundColor: WHITE, borderRadius: 16, borderWidth: 1, borderColor: BORDER,
-    padding: 18, marginBottom: 16, ...CARD_SHADOW,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: TEXT_DARK, marginBottom: 12, letterSpacing: -0.2 },
-  sectionSubtitle: { fontSize: 13, lineHeight: 19, color: TEXT_MUTED, marginBottom: 14 },
-  inputGroup: { marginBottom: 14 },
-  inputLabel: {
-    fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8,
-    textTransform: "uppercase", letterSpacing: 0.5,
-  },
-  input: {
-    minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
-    backgroundColor: "#f6faf8", paddingHorizontal: 16, fontSize: 15, color: TEXT_DARK, fontWeight: "500",
-    // @ts-ignore — remove o contorno azul no web
-    outlineStyle: "none",
-  },
-  timeRow: { flexDirection: "row", gap: 12 },
-  timeCard: { flex: 1 },
-  saveButton: {
-    height: 54, borderRadius: 14, backgroundColor: GREEN,
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-  },
-  saveButtonDisabled: { opacity: 0.75 },
-  saveButtonText: { color: WHITE, fontSize: 16, fontWeight: "800" },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.pageBg },
+    header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
+    headerInner: {
+      width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center", paddingHorizontal: 20,
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
+    },
+    iconBtn: {
+      width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.14)",
+      alignItems: "center", justifyContent: "center",
+    },
+    headerTextBox: { flex: 1 },
+    headerTitle: { color: colors.white, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+    loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
+    loadingText: { fontSize: 15, color: colors.primary, fontWeight: "600" },
+    scroll: { flex: 1 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 44 },
+    container: { width: "100%", maxWidth: MAX_WIDTH, alignSelf: "center" },
+    formCard: {
+      backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+      padding: 18, marginBottom: 16, ...CARD_SHADOW,
+    },
+    sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.textDark, marginBottom: 12, letterSpacing: -0.2 },
+    sectionSubtitle: { fontSize: 13, lineHeight: 19, color: colors.textMuted, marginBottom: 14 },
+    logoRow: { flexDirection: "row", alignItems: "center", gap: 16, marginTop: 4 },
+    logoPreview: {
+      width: 76, height: 76, borderRadius: 18, backgroundColor: "#f6faf8",
+      borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center",
+      overflow: "hidden",
+    },
+    logoImg: { width: "100%", height: "100%" },
+    logoActions: { flex: 1, gap: 8 },
+    logoBtn: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      borderRadius: 12, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.primaryTint,
+      paddingVertical: 11, paddingHorizontal: 14, alignSelf: "flex-start",
+    },
+    logoBtnText: { fontSize: 14, fontWeight: "700", color: colors.primary },
+    logoRemove: {
+      flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start",
+      paddingVertical: 4, paddingHorizontal: 4,
+    },
+    logoRemoveText: { fontSize: 13, fontWeight: "600", color: "#d95c5c" },
+    inputGroup: { marginBottom: 14 },
+    inputLabel: {
+      fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8,
+      textTransform: "uppercase", letterSpacing: 0.5,
+    },
+    input: {
+      minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+      backgroundColor: "#f6faf8", paddingHorizontal: 16, fontSize: 15, color: colors.textDark, fontWeight: "500",
+      // @ts-ignore — remove o contorno azul no web
+      outlineStyle: "none",
+    },
+    timeRow: { flexDirection: "row", gap: 12 },
+    timeCard: { flex: 1 },
+    saveButton: {
+      height: 54, borderRadius: 14, backgroundColor: colors.primary,
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    },
+    saveButtonDisabled: { opacity: 0.75 },
+    saveButtonText: { color: colors.white, fontSize: 16, fontWeight: "800" },
+  });

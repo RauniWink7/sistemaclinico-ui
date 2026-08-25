@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,16 +13,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { changePassword } from "../../services/api";
 import { showToast } from "../../services/feedback";
 
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#173d31";
-const MUTED = "#6c8c80";
 const MAX_WIDTH = 480;
 
 // Remove o contorno azul do input no web (sem quebrar a tipagem do RN).
@@ -36,6 +31,7 @@ const PasswordField = ({
   error,
   onChangeText,
   onToggleVisible,
+  styles,
 }: {
   label: string;
   value: string;
@@ -43,6 +39,7 @@ const PasswordField = ({
   error?: string;
   onChangeText: (value: string) => void;
   onToggleVisible: () => void;
+  styles: ReturnType<typeof createStyles>;
 }) => (
   <View style={styles.fieldWrapper}>
     <Text style={styles.fieldLabel}>{label}</Text>
@@ -68,6 +65,9 @@ const PasswordField = ({
 );
 
 export default function ChangePasswordScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -111,12 +111,12 @@ export default function ChangePasswordScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       <View style={styles.header}>
         <View style={styles.headerInner}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back-outline" size={22} color={WHITE} />
+            <Ionicons name="arrow-back-outline" size={22} color={colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Alterar senha</Text>
           <View style={styles.iconBtn} />
@@ -134,7 +134,7 @@ export default function ChangePasswordScreen() {
         >
           <View style={styles.card}>
             <View style={styles.lockIcon}>
-              <Ionicons name="lock-closed-outline" size={24} color={GREEN} />
+              <Ionicons name="lock-closed-outline" size={24} color={colors.primary} />
             </View>
             <Text style={styles.cardTitle}>Defina uma nova senha</Text>
             <Text style={styles.cardSubtitle}>
@@ -152,6 +152,7 @@ export default function ChangePasswordScreen() {
                 setApiError("");
               }}
               onToggleVisible={() => setShowCurrent((p) => !p)}
+              styles={styles}
             />
             <PasswordField
               label="Nova senha"
@@ -164,6 +165,7 @@ export default function ChangePasswordScreen() {
                 setApiError("");
               }}
               onToggleVisible={() => setShowNext((p) => !p)}
+              styles={styles}
             />
             <PasswordField
               label="Confirmar nova senha"
@@ -176,6 +178,7 @@ export default function ChangePasswordScreen() {
                 setApiError("");
               }}
               onToggleVisible={() => setShowConfirm((p) => !p)}
+              styles={styles}
             />
 
             {apiError ? (
@@ -192,7 +195,7 @@ export default function ChangePasswordScreen() {
               activeOpacity={0.85}
             >
               {loading ? (
-                <ActivityIndicator color={WHITE} />
+                <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={styles.primaryBtnText}>Salvar nova senha</Text>
               )}
@@ -204,9 +207,9 @@ export default function ChangePasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: PAGE_BG },
-  header: { backgroundColor: GREEN, paddingTop: 52, paddingBottom: 20 },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
+  header: { backgroundColor: colors.primary, paddingTop: 52, paddingBottom: 20 },
   headerInner: {
     width: "100%",
     maxWidth: 720,
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: WHITE, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+  headerTitle: { color: colors.white, fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 20,
@@ -236,10 +239,10 @@ const styles = StyleSheet.create({
     width: "100%" as const,
   },
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.white,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 22,
     shadowColor: "#1f5442",
     shadowOpacity: 0.06,
@@ -251,16 +254,16 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.primaryTint,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
   },
-  cardTitle: { fontSize: 19, fontWeight: "800", color: TEXT_DARK },
+  cardTitle: { fontSize: 19, fontWeight: "800", color: colors.textDark },
   cardSubtitle: {
     fontSize: 13,
     lineHeight: 19,
-    color: MUTED,
+    color: colors.textMuted,
     marginTop: 6,
     marginBottom: 18,
   },
@@ -268,7 +271,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: MUTED,
+    color: colors.textMuted,
     marginBottom: 6,
     marginLeft: 2,
   },
@@ -286,7 +289,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: TEXT_DARK,
+    color: colors.textDark,
     fontWeight: "500",
   },
   eyeBtn: { padding: 4, marginLeft: 8 },
@@ -304,12 +307,12 @@ const styles = StyleSheet.create({
   },
   apiErrorText: { fontSize: 13, color: "#c0392b", fontWeight: "500", flex: 1 },
   primaryBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     borderRadius: 14,
     height: 52,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 4,
   },
-  primaryBtnText: { color: WHITE, fontSize: 16, fontWeight: "800" },
+  primaryBtnText: { color: colors.white, fontSize: 16, fontWeight: "800" },
 });

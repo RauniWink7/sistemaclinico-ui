@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,8 +14,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { showAlert } from "../../services/feedback";
-import { getMe, getPsychologists, logout, updateMe, updateProfessionalProfile } from "../../services/api";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
+import { showAlert, showToast } from "../../services/feedback";
+import {
+  getMe,
+  getPsychologists,
+  logout,
+  updateMe,
+  updateProfessionalProfile,
+  updateProfessionalProfilePhoto,
+} from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,23 +36,7 @@ interface EditableFields {
   bio: string;
 }
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
-const BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
 const MAX_WIDTH = 1120;
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-const SectionHeader = ({ icon, title }: { icon: string; title: string }) => (
-  <View style={styles.sectionHeader}>
-    <View style={styles.sectionIconBox}>
-      <Ionicons name={icon as any} size={15} color={GREEN} />
-    </View>
-    <Text style={styles.sectionTitle}>{title}</Text>
-  </View>
-);
 
 interface EditableRowProps {
   label: string;
@@ -53,6 +48,22 @@ interface EditableRowProps {
   readOnly?: boolean;
 }
 
+// Componentes no escopo do módulo (não dentro do componente principal) para
+// não perder identidade/estado do TextInput a cada re-render do pai — cada um
+// lê a paleta da clínica direto via useTheme().
+const SectionHeader = ({ icon, title }: { icon: string; title: string }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIconBox}>
+        <Ionicons name={icon as any} size={15} color={colors.primary} />
+      </View>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+};
+
 const EditableRow = ({
   label,
   value,
@@ -61,35 +72,44 @@ const EditableRow = ({
   editable,
   multiline,
   readOnly,
-}: EditableRowProps) => (
-  <View style={styles.editableRow}>
-    <Text style={styles.infoLabel}>{label}</Text>
-    {editable && !readOnly ? (
-      <TextInput
-        style={[styles.editInput, multiline && styles.editInputMultiline]}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType ?? "default"}
-        autoCapitalize="none"
-        placeholderTextColor="#9bbfb0"
-        multiline={multiline}
-        numberOfLines={multiline ? 3 : 1}
-      />
-    ) : (
-      <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
-        {value || "—"}
-      </Text>
-    )}
-  </View>
-);
+}: EditableRowProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.editableRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      {editable && !readOnly ? (
+        <TextInput
+          style={[styles.editInput, multiline && styles.editInputMultiline]}
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType ?? "default"}
+          autoCapitalize="none"
+          placeholderTextColor={colors.placeholder}
+          multiline={multiline}
+          numberOfLines={multiline ? 3 : 1}
+        />
+      ) : (
+        <Text style={[styles.infoValue, readOnly && styles.infoValueMuted]}>
+          {value || "—"}
+        </Text>
+      )}
+    </View>
+  );
+};
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PsychologistProfileScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState("");
   const [professionalId, setProfessionalId] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [fields, setFields] = useState<EditableFields>({
     name: "",
     phone: "",
@@ -129,6 +149,7 @@ export default function PsychologistProfileScreen() {
         setFields(loaded);
         setOriginal(loaded);
         setEmail(meResult.data.email || "");
+        setPhotoUrl(myProfile.photo || null);
       }
 
       setLoading(false);
@@ -155,6 +176,69 @@ export default function PsychologistProfileScreen() {
   const handleCancel = () => {
     setFields({ ...original });
     setEditing(false);
+  };
+
+  const doPickPhoto = async () => {
+    if (!professionalId || photoBusy) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setPhotoBusy(true);
+      const uploadResult = await updateProfessionalProfilePhoto(professionalId, {
+        uri: asset.uri,
+        name: asset.name || "foto.jpg",
+        type: asset.mimeType || "image/jpeg",
+      });
+      setPhotoBusy(false);
+
+      if (!uploadResult.ok) {
+        showToast(uploadResult.error || "Não foi possível salvar a foto.", "error");
+        return;
+      }
+      setPhotoUrl(uploadResult.data?.photo || null);
+      showToast("Foto de perfil atualizada.", "success");
+    } catch {
+      setPhotoBusy(false);
+      showAlert("Erro", "Não foi possível selecionar a imagem.");
+    }
+  };
+
+  const doRemovePhoto = () => {
+    if (!professionalId || photoBusy) return;
+    confirmAction(
+      "Remover foto",
+      "Tem certeza que deseja remover sua foto de perfil?",
+      async () => {
+        setPhotoBusy(true);
+        const result = await updateProfessionalProfilePhoto(professionalId, null);
+        setPhotoBusy(false);
+        if (!result.ok) {
+          showToast(result.error || "Não foi possível remover a foto.", "error");
+          return;
+        }
+        setPhotoUrl(null);
+        showToast("Foto removida.", "success");
+      },
+      { confirmText: "Remover", cancelText: "Cancelar" },
+    );
+  };
+
+  const handleAvatarPress = () => {
+    if (photoBusy) return;
+    if (!photoUrl) {
+      void doPickPhoto();
+      return;
+    }
+    showAlert("Foto de perfil", undefined, [
+      { text: "Trocar foto", onPress: () => void doPickPhoto() },
+      { text: "Remover foto", style: "destructive", onPress: doRemovePhoto },
+      { text: "Cancelar", style: "cancel" },
+    ]);
   };
 
   const handleSave = async () => {
@@ -213,7 +297,7 @@ export default function PsychologistProfileScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -237,18 +321,30 @@ export default function PsychologistProfileScreen() {
 
       {/* ── Avatar ── */}
       <View style={styles.avatarSection}>
-        <View style={styles.avatar}>
-          {loading ? (
-            <ActivityIndicator color={WHITE} />
+        <TouchableOpacity
+          style={styles.avatar}
+          onPress={handleAvatarPress}
+          activeOpacity={0.85}
+          disabled={loading || photoBusy}
+        >
+          {loading || photoBusy ? (
+            <ActivityIndicator color={colors.white} />
+          ) : photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.avatarImg} />
           ) : (
             <Text style={styles.avatarText}>{initials || "P"}</Text>
           )}
-        </View>
+          {!loading && (
+            <View style={styles.avatarEditBadge}>
+              <Ionicons name="camera-outline" size={13} color={colors.primary} />
+            </View>
+          )}
+        </TouchableOpacity>
         <Text style={styles.avatarName}>{fields.name || "Profissional"}</Text>
         <Text style={styles.avatarEmail}>{email || "carregando..."}</Text>
         {fields.crp ? (
           <View style={styles.crpBadge}>
-            <Ionicons name="ribbon-outline" size={12} color={GREEN} />
+            <Ionicons name="ribbon-outline" size={12} color={colors.primary} />
             <Text style={styles.crpBadgeText}>CRP {fields.crp}</Text>
           </View>
         ) : null}
@@ -320,11 +416,11 @@ export default function PsychologistProfileScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.pageBg },
 
   header: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     paddingTop: 52,
     paddingBottom: 16,
   },
@@ -342,37 +438,45 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: WHITE, letterSpacing: 0.2 },
+  headerTitle: { fontSize: 17, fontWeight: "700", color: colors.white, letterSpacing: 0.2 },
   editBtn: {
     flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: "rgba(255,255,255,0.18)",
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
   },
-  editBtnText: { color: WHITE, fontSize: 13, fontWeight: "700" },
+  editBtnText: { color: colors.white, fontSize: 13, fontWeight: "700" },
   cancelBtn: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.18)",
   },
-  cancelBtnText: { color: WHITE, fontSize: 13, fontWeight: "600" },
+  cancelBtnText: { color: colors.white, fontSize: 13, fontWeight: "600" },
 
   avatarSection: {
-    backgroundColor: GREEN, alignItems: "center", paddingBottom: 28, paddingTop: 4,
+    backgroundColor: colors.primary, alignItems: "center", paddingBottom: 28, paddingTop: 4,
   },
   avatar: {
     width: 76, height: 76, borderRadius: 24,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center", justifyContent: "center",
     marginBottom: 10, borderWidth: 2, borderColor: "rgba(255,255,255,0.35)",
+    overflow: "hidden",
   },
-  avatarText: { fontSize: 26, fontWeight: "800", color: WHITE },
-  avatarName: { fontSize: 18, fontWeight: "800", color: WHITE, letterSpacing: -0.3 },
+  avatarImg: { width: "100%", height: "100%" },
+  avatarEditBadge: {
+    position: "absolute", bottom: -2, right: -2,
+    width: 24, height: 24, borderRadius: 12, backgroundColor: colors.white,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: colors.primary,
+  },
+  avatarText: { fontSize: 26, fontWeight: "800", color: colors.white },
+  avatarName: { fontSize: 18, fontWeight: "800", color: colors.white, letterSpacing: -0.3 },
   avatarEmail: { fontSize: 13, color: "#b2dfcf", marginTop: 3 },
   crpBadge: {
     marginTop: 8, flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: "rgba(255,255,255,0.18)",
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
   },
-  crpBadgeText: { fontSize: 12, fontWeight: "700", color: WHITE },
+  crpBadgeText: { fontSize: 12, fontWeight: "700", color: colors.white },
 
   scroll: { flex: 1 },
   scrollContent: {
@@ -385,15 +489,15 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: WHITE, borderRadius: 16, padding: 18, marginBottom: 16,
-    borderWidth: 1, borderColor: BORDER,
+    backgroundColor: colors.white, borderRadius: 16, padding: 18, marginBottom: 16,
+    borderWidth: 1, borderColor: colors.border,
     shadowColor: "#1f5442", shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.05, shadowRadius: 14, elevation: 2,
   },
 
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
   sectionIconBox: {
-    width: 26, height: 26, borderRadius: 8, backgroundColor: GREEN_LIGHT,
+    width: 26, height: 26, borderRadius: 8, backgroundColor: colors.primaryTint,
     alignItems: "center", justifyContent: "center",
   },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: "#1a3d31", letterSpacing: 0.1 },
@@ -408,39 +512,39 @@ const styles = StyleSheet.create({
   editableRow: { paddingVertical: 10 },
   editInput: {
     fontSize: 15, color: "#1a3d31", fontWeight: "500",
-    borderBottomWidth: 1.5, borderBottomColor: GREEN,
+    borderBottomWidth: 1.5, borderBottomColor: colors.primary,
     paddingBottom: 4, paddingTop: 2,
   },
   editInputMultiline: {
-    minHeight: 60, borderWidth: 1.5, borderColor: GREEN,
+    minHeight: 60, borderWidth: 1.5, borderColor: colors.primary,
     borderRadius: 8, padding: 8, borderBottomWidth: 1.5,
   },
 
   rowDivider: { height: 1, backgroundColor: "#f0f8f4" },
 
   availabilityLink: {
-    backgroundColor: WHITE, borderRadius: 20, padding: 18, marginBottom: 16,
+    backgroundColor: colors.white, borderRadius: 20, padding: 18, marginBottom: 16,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    shadowColor: GREEN, shadowOffset: { width: 0, height: 4 },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
   },
   availabilityLinkLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
   availabilityLinkIcon: {
-    width: 44, height: 44, borderRadius: 14, backgroundColor: GREEN_LIGHT,
+    width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primaryTint,
     alignItems: "center", justifyContent: "center",
   },
   availabilityLinkTitle: { fontSize: 15, fontWeight: "700", color: "#1a3d31" },
   availabilityLinkSub: { fontSize: 12, color: "#7aab96", marginTop: 2 },
 
   saveBtn: {
-    backgroundColor: GREEN, borderRadius: 16, height: 54,
+    backgroundColor: colors.primary, borderRadius: 16, height: 54,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     marginTop: 4, marginBottom: 16,
-    shadowColor: GREEN, shadowOffset: { width: 0, height: 6 },
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
   },
   saveBtnDisabled: { opacity: 0.7 },
-  saveBtnText: { color: WHITE, fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
+  saveBtnText: { color: colors.white, fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
 
   logoutBtn: {
     borderRadius: 16,

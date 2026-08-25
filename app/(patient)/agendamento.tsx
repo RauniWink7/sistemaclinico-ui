@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -13,6 +13,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import {
   AppointmentAvailabilityApiItem,
   createAppointment,
@@ -96,7 +98,13 @@ const formatInitials = (name: string) =>
     .slice(0, 2)
     .join("");
 
-const normalizeProfessional = (item: ProfessionalApiItem): Psychologist => {
+// `fallbackColor`/`fallbackBg` vêm da paleta da clínica (colors.primary/primaryTint)
+// — usados só quando o item da API não define cor própria.
+const normalizeProfessional = (
+  item: ProfessionalApiItem,
+  fallbackColor: string,
+  fallbackBg: string,
+): Psychologist => {
   const name =
     item.user?.full_name?.trim() ||
     item.name?.trim() ||
@@ -119,8 +127,8 @@ const normalizeProfessional = (item: ProfessionalApiItem): Psychologist => {
     bio: item.bio?.trim() || "",
     photo: item.photo || null,
     initials: item.initials || formatInitials(name),
-    color: item.color || "#2e8b6e",
-    bg: item.bg || "#e8f7f1",
+    color: item.color || fallbackColor,
+    bg: item.bg || fallbackBg,
     sessionDuration: item.session_duration_minutes || 50,
   };
 };
@@ -129,6 +137,9 @@ type AvailabilityItem = AppointmentAvailabilityApiItem;
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function ScheduleScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const { width: screenWidth } = useWindowDimensions();
   const cellSize = Math.min(46, Math.max(36, (screenWidth - 60) / 7));
 
@@ -182,13 +193,15 @@ export default function ScheduleScreen() {
       setLoadingPros(true);
       const result = await getMyAssignedProfessional();
       setActivePsychologist(
-        result.ok && result.data ? normalizeProfessional(result.data) : null,
+        result.ok && result.data
+          ? normalizeProfessional(result.data, colors.primary, colors.primaryTint)
+          : null,
       );
       setLoadingPros(false);
     };
 
     void loadAssignedProfessional();
-  }, []);
+  }, [colors]);
 
   React.useEffect(() => {
     const loadAvailability = async () => {
@@ -389,7 +402,7 @@ export default function ScheduleScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Header ── */}
       <View style={styles.header}>
@@ -409,7 +422,7 @@ export default function ScheduleScreen() {
         >
           {loadingPros ? (
             <View style={styles.card}>
-              <ActivityIndicator color={GREEN} />
+              <ActivityIndicator color={colors.primary} />
             </View>
           ) : activePsychologist ? (
             <>
@@ -458,7 +471,7 @@ export default function ScheduleScreen() {
                     </Text>
                   </View>
                   <View style={styles.availabilityRow}>
-                    <Ionicons name="calendar-outline" size={14} color={GREEN} />
+                    <Ionicons name="calendar-outline" size={14} color={colors.primary} />
                     <Text style={styles.availabilityText}>
                       {availableWeekdays.length > 0
                         ? availableWeekdays.join(", ")
@@ -476,7 +489,7 @@ export default function ScheduleScreen() {
                     <Ionicons
                       name="chevron-back-outline"
                       size={18}
-                      color={GREEN}
+                      color={colors.primary}
                     />
                   </TouchableOpacity>
                   <Text style={styles.monthLabel}>
@@ -486,7 +499,7 @@ export default function ScheduleScreen() {
                     <Ionicons
                       name="chevron-forward-outline"
                       size={18}
-                      color={GREEN}
+                      color={colors.primary}
                     />
                   </TouchableOpacity>
                 </View>
@@ -569,9 +582,9 @@ export default function ScheduleScreen() {
                       style={[
                         styles.legendDot,
                         {
-                          backgroundColor: "#e8f7f1",
+                          backgroundColor: colors.primaryTint,
                           borderWidth: 1,
-                          borderColor: GREEN,
+                          borderColor: colors.primary,
                         },
                       ]}
                     />
@@ -579,7 +592,7 @@ export default function ScheduleScreen() {
                   </View>
                   <View style={styles.legendItem}>
                     <View
-                      style={[styles.legendDot, { backgroundColor: GREEN }]}
+                      style={[styles.legendDot, { backgroundColor: colors.primary }]}
                     />
                     <Text style={styles.legendText}>Selecionado</Text>
                   </View>
@@ -605,7 +618,7 @@ export default function ScheduleScreen() {
           {selectedDate && (
             <View style={styles.card}>
               <View style={styles.slotHeader}>
-                <Ionicons name="time-outline" size={16} color={GREEN} />
+                <Ionicons name="time-outline" size={16} color={colors.primary} />
                 <Text style={styles.slotTitle}>
                   Horários — {formatDate(selectedDate)}
                 </Text>
@@ -613,7 +626,7 @@ export default function ScheduleScreen() {
 
               {loadingSlots ? (
                 <ActivityIndicator
-                  color={GREEN}
+                  color={colors.primary}
                   style={{ paddingVertical: 18 }}
                 />
               ) : slots.length === 0 ? (
@@ -651,26 +664,26 @@ export default function ScheduleScreen() {
           {selectedDate && selectedTime && (
             <View style={styles.summaryCard}>
               <View style={styles.summaryRow}>
-                <Ionicons name="person-outline" size={15} color={GREEN} />
+                <Ionicons name="person-outline" size={15} color={colors.primary} />
                 <Text style={styles.summaryText}>
                   {activePsychologist?.name ?? ""}
                 </Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryRow}>
-                <Ionicons name="calendar-outline" size={15} color={GREEN} />
+                <Ionicons name="calendar-outline" size={15} color={colors.primary} />
                 <Text style={styles.summaryText}>
                   {formatDate(selectedDate)}
                 </Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryRow}>
-                <Ionicons name="time-outline" size={15} color={GREEN} />
+                <Ionicons name="time-outline" size={15} color={colors.primary} />
                 <Text style={styles.summaryText}>{selectedTime}</Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryRow}>
-                <Ionicons name="notifications-outline" size={15} color={GREEN} />
+                <Ionicons name="notifications-outline" size={15} color={colors.primary} />
                 <Text style={styles.summaryText}>
                   Você receberá um aviso nas notificações
                 </Text>
@@ -718,334 +731,332 @@ export default function ScheduleScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const WHITE = "#ffffff";
-const BG = "#f0faf5";
 const CELL = 42;
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.authBg },
 
-  // Header
-  header: {
-    backgroundColor: GREEN,
-    paddingTop: 52,
-    paddingBottom: 18,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: WHITE,
-  },
+    // Header
+    header: {
+      backgroundColor: colors.primary,
+      paddingTop: 52,
+      paddingBottom: 18,
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.white,
+    },
 
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 48,
-    gap: 16,
-    width: "100%",
-    maxWidth: 980,
-    alignSelf: "center",
-  },
+    scrollContent: {
+      padding: 20,
+      paddingBottom: 48,
+      gap: 16,
+      width: "100%",
+      maxWidth: 980,
+      alignSelf: "center",
+    },
 
 
-  // Psychologist card
-  psychCard: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  psychAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  psychAvatarText: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  psychAvatarImg: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 16,
-  },
-  psychInfo: { flex: 1, gap: 3 },
-  psychName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#1a3d31",
-  },
-  psychCrp: {
-    fontSize: 12,
-    color: "#7aab96",
-  },
-  specialtyBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginTop: 2,
-  },
-  specialtyText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  availabilityRow: {
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  availabilityText: {
-    fontSize: 12,
-    color: "#4c7f6d",
-    fontWeight: "600",
-    flexShrink: 1,
-  },
+    // Psychologist card
+    psychCard: {
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+    psychAvatar: {
+      width: 54,
+      height: 54,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    psychAvatarText: {
+      fontSize: 18,
+      fontWeight: "800",
+    },
+    psychAvatarImg: {
+      width: "100%",
+      height: "100%",
+      borderRadius: 16,
+    },
+    psychInfo: { flex: 1, gap: 3 },
+    psychName: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: "#1a3d31",
+    },
+    psychCrp: {
+      fontSize: 12,
+      color: "#7aab96",
+    },
+    specialtyBadge: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      marginTop: 2,
+    },
+    specialtyText: {
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    availabilityRow: {
+      marginTop: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      flexWrap: "wrap",
+    },
+    availabilityText: {
+      fontSize: 12,
+      color: "#4c7f6d",
+      fontWeight: "600",
+      flexShrink: 1,
+    },
 
-  // Card wrapper
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
+    // Card wrapper
+    card: {
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 18,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
 
-  // Month navigation
-  monthNav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  navBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#e8f7f1",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  monthLabel: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#1a3d31",
-  },
+    // Month navigation
+    monthNav: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+    },
+    navBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    monthLabel: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#1a3d31",
+    },
 
-  // Weekdays
-  weekdaysRow: {
-    flexDirection: "row",
-    marginBottom: 8,
-  },
-  weekdayText: {
-    width: CELL,
-    textAlign: "center",
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#7aab96",
-    textTransform: "uppercase",
-  },
+    // Weekdays
+    weekdaysRow: {
+      flexDirection: "row",
+      marginBottom: 8,
+    },
+    weekdayText: {
+      width: CELL,
+      textAlign: "center",
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#7aab96",
+      textTransform: "uppercase",
+    },
 
-  // Days grid
-  daysGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  dayCell: {
-    width: CELL,
-    height: CELL,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-    borderRadius: CELL / 2,
-    position: "relative",
-  },
-  dayCellAvailable: {
-    backgroundColor: "#e8f7f1",
-    borderWidth: 1,
-    borderColor: "#b2dfcf",
-  },
-  dayCellSelected: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
-  },
-  dayCellPast: {
-    opacity: 0.3,
-  },
-  dayText: {
-    fontSize: 13,
-    color: "#9bbfb0",
-    fontWeight: "500",
-  },
-  dayTextAvailable: {
-    color: "#1a3d31",
-    fontWeight: "700",
-  },
-  dayTextSelected: {
-    color: WHITE,
-    fontWeight: "800",
-  },
-  dayTextPast: {
-    color: "#c0c0c0",
-  },
-  availDot: {
-    position: "absolute",
-    bottom: 4,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: GREEN,
-  },
+    // Days grid
+    daysGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+    },
+    dayCell: {
+      width: CELL,
+      height: CELL,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+      borderRadius: CELL / 2,
+      position: "relative",
+    },
+    dayCellAvailable: {
+      backgroundColor: colors.primaryTint,
+      borderWidth: 1,
+      borderColor: "#b2dfcf",
+    },
+    dayCellSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    dayCellPast: {
+      opacity: 0.3,
+    },
+    dayText: {
+      fontSize: 13,
+      color: "#9bbfb0",
+      fontWeight: "500",
+    },
+    dayTextAvailable: {
+      color: "#1a3d31",
+      fontWeight: "700",
+    },
+    dayTextSelected: {
+      color: colors.white,
+      fontWeight: "800",
+    },
+    dayTextPast: {
+      color: "#c0c0c0",
+    },
+    availDot: {
+      position: "absolute",
+      bottom: 4,
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.primary,
+    },
 
-  // Legend
-  legend: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-    marginTop: 12,
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    fontSize: 11,
-    color: "#7aab96",
-    fontWeight: "500",
-  },
+    // Legend
+    legend: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 16,
+      marginTop: 12,
+    },
+    legendItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    legendDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+    },
+    legendText: {
+      fontSize: 11,
+      color: "#7aab96",
+      fontWeight: "500",
+    },
 
-  // Time slots
-  slotHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 14,
-  },
-  slotTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1a3d31",
-  },
-  noSlots: {
-    fontSize: 13,
-    color: "#7aab96",
-    textAlign: "center",
-    paddingVertical: 8,
-  },
-  slotsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  slotBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "#e8f7f1",
-    borderWidth: 1.5,
-    borderColor: "#b2dfcf",
-  },
-  slotBtnSelected: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
-  },
-  slotText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1a3d31",
-  },
-  slotTextSelected: {
-    color: WHITE,
-  },
+    // Time slots
+    slotHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      marginBottom: 14,
+    },
+    slotTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#1a3d31",
+    },
+    noSlots: {
+      fontSize: 13,
+      color: "#7aab96",
+      textAlign: "center",
+      paddingVertical: 8,
+    },
+    slotsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    slotBtn: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.primaryTint,
+      borderWidth: 1.5,
+      borderColor: "#b2dfcf",
+    },
+    slotBtnSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    slotText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#1a3d31",
+    },
+    slotTextSelected: {
+      color: colors.white,
+    },
 
-  // Summary
-  summaryCard: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-  },
-  summaryText: {
-    fontSize: 14,
-    color: "#1a3d31",
-    fontWeight: "500",
-    flex: 1,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: "#f0f8f4",
-  },
+    // Summary
+    summaryCard: {
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 18,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 3,
+    },
+    summaryRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 10,
+    },
+    summaryText: {
+      fontSize: 14,
+      color: "#1a3d31",
+      fontWeight: "500",
+      flex: 1,
+    },
+    summaryDivider: {
+      height: 1,
+      backgroundColor: "#f0f8f4",
+    },
 
-  // Confirm button
-  confirmBtn: {
-    backgroundColor: GREEN,
-    borderRadius: 16,
-    height: 54,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    shadowColor: GREEN,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  confirmBtnDisabled: {
-    backgroundColor: "#e0e0e0",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  confirmBtnText: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  confirmBtnTextDisabled: {
-    color: "#aaa",
-  },
+    // Confirm button
+    confirmBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 16,
+      height: 54,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+    confirmBtnDisabled: {
+      backgroundColor: "#e0e0e0",
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    confirmBtnText: {
+      color: colors.white,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    confirmBtnTextDisabled: {
+      color: "#aaa",
+    },
 
-  // Modal — perfil do psicólogo
-});
+    // Modal — perfil do psicólogo
+  });

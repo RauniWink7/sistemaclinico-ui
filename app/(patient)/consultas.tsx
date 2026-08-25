@@ -13,6 +13,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
     AppointmentApiItem,
@@ -86,18 +88,16 @@ const normalizeAppointment = (
   };
 };
 
-const GREEN = "#2e8b6e";
-const GREEN_DARK = "#1e6b54";
-const GREEN_LIGHT = "#e8f7f1";
-const BG = "#f0faf5";
-const WHITE = "#ffffff";
-
-const DecorativeBackground = () => (
-  <>
-    <View style={styles.circle1} />
-    <View style={styles.circle2} />
-  </>
-);
+const DecorativeBackground = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <>
+      <View style={styles.circle1} />
+      <View style={styles.circle2} />
+    </>
+  );
+};
 
 const SectionTitle = ({
   title,
@@ -105,14 +105,24 @@ const SectionTitle = ({
 }: {
   title: string;
   subtitle: string;
-}) => (
-  <View style={styles.sectionHeading}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <Text style={styles.sectionSubtitle}>{subtitle}</Text>
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  return (
+    <View style={styles.sectionHeading}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    </View>
+  );
+};
 
-const getStatusMeta = (status: AppointmentStatus, scheduledAt?: string) => {
+// "Agendada" acompanha a marca da clínica; "realizada"/"cancelada"/atrasada
+// são status semânticos fixos (azul, vermelho, laranja), não mudam com a paleta.
+const getStatusMeta = (
+  status: AppointmentStatus,
+  scheduledAt: string | undefined,
+  colors: ThemeColors,
+) => {
   // Consulta em aberto cujo dia já passou: rótulo automático, sem ação do
   // usuário. Não aparece antes nem durante o dia da consulta.
   if (isAppointmentOverdue(status, scheduledAt)) {
@@ -129,8 +139,8 @@ const getStatusMeta = (status: AppointmentStatus, scheduledAt?: string) => {
       return {
         label: "Agendada",
         icon: "calendar-outline",
-        color: "#2e8b6e",
-        bg: "#e8f7f1",
+        color: colors.primary,
+        bg: colors.primaryTint,
       };
     case "realizada":
       return {
@@ -150,6 +160,9 @@ const getStatusMeta = (status: AppointmentStatus, scheduledAt?: string) => {
 };
 
 export default function ConsultasScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -339,7 +352,7 @@ export default function ConsultasScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       <DecorativeBackground />
 
       <View style={styles.header}>
@@ -363,8 +376,8 @@ export default function ConsultasScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#2e8b6e"]}
-            tintColor="#2e8b6e"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >
@@ -440,6 +453,7 @@ export default function ConsultasScreen() {
               const status = getStatusMeta(
                 appointment.status,
                 appointment.scheduledAt,
+                colors,
               );
               const initials = appointment.psychologist
                 .split(" ")
@@ -477,7 +491,7 @@ export default function ConsultasScreen() {
                           <Ionicons
                             name="time-outline"
                             size={15}
-                            color={GREEN}
+                            color={colors.primary}
                           />
                           <Text style={styles.infoText}>
                             {formatDate(appointment.date)} as {appointment.time}
@@ -592,375 +606,376 @@ export default function ConsultasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  circle1: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "#27795f",
-    top: -110,
-    right: -70,
-    opacity: 0.45,
-  },
-  circle2: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: GREEN_DARK,
-    top: -55,
-    left: -70,
-    opacity: 0.28,
-  },
-  header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    backgroundColor: GREEN,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  backBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTextBox: {
-    flex: 1,
-    marginHorizontal: 14,
-  },
-  headerEyebrow: {
-    color: "#bce3d5",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  headerTitle: {
-    color: WHITE,
-    fontSize: 24,
-    fontWeight: "800",
-    marginTop: 2,
-    letterSpacing: -0.4,
-  },
-  headerSpacer: {
-    width: 42,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 22,
-    paddingBottom: 40,
-  },
-  heroCard: {
-    backgroundColor: WHITE,
-    borderRadius: 26,
-    padding: 22,
-    marginTop: -18,
-    marginBottom: 24,
-    shadowColor: "#0f5132",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  heroTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#163c31",
-    letterSpacing: -0.4,
-  },
-  heroSubtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#5a756a",
-  },
-  summaryRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 18,
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: GREEN_LIGHT,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: "center",
-  },
-  summaryValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: GREEN,
-  },
-  summaryLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#56796d",
-    textAlign: "center",
-  },
-  sectionHeading: {
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#163c31",
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#68857a",
-    lineHeight: 19,
-  },
-  loadingText: {
-    marginTop: 24,
-    textAlign: "center",
-    color: "#4f7667",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  filterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
-  },
-  filterChip: {
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    backgroundColor: WHITE,
-    borderWidth: 1.5,
-    borderColor: "#d4e8de",
-  },
-  filterChipActive: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#5a756a",
-  },
-  filterChipTextActive: {
-    color: WHITE,
-  },
-  emptyText: {
-    marginTop: 24,
-    textAlign: "center",
-    color: "#7a9a86",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  appointmentCard: {
-    backgroundColor: WHITE,
-    borderRadius: 24,
-    marginBottom: 16,
-    overflow: "hidden",
-    flexDirection: "row",
-    shadowColor: "#174c3e",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  statusStripe: {
-    width: 6,
-  },
-  appointmentBody: {
-    flex: 1,
-    padding: 18,
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  dateBox: {
-    width: 62,
-    borderRadius: 18,
-    backgroundColor: "#f3fbf7",
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    alignItems: "center",
-    marginRight: 14,
-  },
-  dateDay: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: GREEN,
-    lineHeight: 26,
-  },
-  dateMonth: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#5d7c71",
-    textTransform: "lowercase",
-  },
-  infoBox: {
-    flex: 1,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-    marginBottom: 12,
-  },
-  infoText: {
-    marginLeft: 8,
-    flex: 1,
-    fontSize: 14,
-    color: "#456459",
-    lineHeight: 20,
-  },
-  professionalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: GREEN_LIGHT,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: GREEN,
-  },
-  professionalTextBox: {
-    flex: 1,
-  },
-  professionalName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#183d32",
-  },
-  professionalRole: {
-    marginTop: 2,
-    fontSize: 13,
-    color: "#698378",
-  },
-  bottomRow: {
-    marginTop: 18,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#edf4f0",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  statusText: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-  primaryAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#df5d5d",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  primaryActionText: {
-    marginLeft: 6,
-    color: WHITE,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 24,
-    width: "90%",
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#163c31",
-    textAlign: "center",
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: "#5a756a",
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  commentInput: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 80,
-    textAlignVertical: "top",
-    marginBottom: 20,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  modalCancelBtnText: {
-    color: "#666",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  modalDangerBtn: {
-    flex: 1,
-    backgroundColor: "#df5d5d",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  modalConfirmBtnText: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.authBg,
+    },
+    circle1: {
+      position: "absolute",
+      width: 280,
+      height: 280,
+      borderRadius: 140,
+      backgroundColor: colors.primaryStrong,
+      top: -110,
+      right: -70,
+      opacity: 0.45,
+    },
+    circle2: {
+      position: "absolute",
+      width: 180,
+      height: 180,
+      borderRadius: 90,
+      backgroundColor: colors.primaryStrong,
+      top: -55,
+      left: -70,
+      opacity: 0.28,
+    },
+    header: {
+      paddingTop: 56,
+      paddingBottom: 24,
+      paddingHorizontal: 24,
+      backgroundColor: colors.primary,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    backBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTextBox: {
+      flex: 1,
+      marginHorizontal: 14,
+    },
+    headerEyebrow: {
+      color: "#bce3d5",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    headerTitle: {
+      color: colors.white,
+      fontSize: 24,
+      fontWeight: "800",
+      marginTop: 2,
+      letterSpacing: -0.4,
+    },
+    headerSpacer: {
+      width: 42,
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 22,
+      paddingBottom: 40,
+    },
+    heroCard: {
+      backgroundColor: colors.white,
+      borderRadius: 26,
+      padding: 22,
+      marginTop: -18,
+      marginBottom: 24,
+      shadowColor: "#0f5132",
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 3,
+    },
+    heroTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: "#163c31",
+      letterSpacing: -0.4,
+    },
+    heroSubtitle: {
+      marginTop: 8,
+      fontSize: 14,
+      lineHeight: 21,
+      color: "#5a756a",
+    },
+    summaryRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 18,
+    },
+    summaryCard: {
+      flex: 1,
+      backgroundColor: colors.primaryTint,
+      borderRadius: 18,
+      paddingVertical: 14,
+      paddingHorizontal: 10,
+      alignItems: "center",
+    },
+    summaryValue: {
+      fontSize: 22,
+      fontWeight: "800",
+      color: colors.primary,
+    },
+    summaryLabel: {
+      marginTop: 4,
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#56796d",
+      textAlign: "center",
+    },
+    sectionHeading: {
+      marginBottom: 14,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: "#163c31",
+    },
+    sectionSubtitle: {
+      marginTop: 4,
+      fontSize: 13,
+      color: "#68857a",
+      lineHeight: 19,
+    },
+    loadingText: {
+      marginTop: 24,
+      textAlign: "center",
+      color: "#4f7667",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    filterRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 16,
+    },
+    filterChip: {
+      paddingVertical: 7,
+      paddingHorizontal: 16,
+      borderRadius: 999,
+      backgroundColor: colors.white,
+      borderWidth: 1.5,
+      borderColor: "#d4e8de",
+    },
+    filterChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    filterChipText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#5a756a",
+    },
+    filterChipTextActive: {
+      color: colors.white,
+    },
+    emptyText: {
+      marginTop: 24,
+      textAlign: "center",
+      color: "#7a9a86",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    appointmentCard: {
+      backgroundColor: colors.white,
+      borderRadius: 24,
+      marginBottom: 16,
+      overflow: "hidden",
+      flexDirection: "row",
+      shadowColor: "#174c3e",
+      shadowOpacity: 0.06,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    },
+    statusStripe: {
+      width: 6,
+    },
+    appointmentBody: {
+      flex: 1,
+      padding: 18,
+    },
+    topRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+    },
+    dateBox: {
+      width: 62,
+      borderRadius: 18,
+      backgroundColor: "#f3fbf7",
+      paddingVertical: 12,
+      paddingHorizontal: 6,
+      alignItems: "center",
+      marginRight: 14,
+    },
+    dateDay: {
+      fontSize: 24,
+      fontWeight: "800",
+      color: colors.primary,
+      lineHeight: 26,
+    },
+    dateMonth: {
+      marginTop: 4,
+      fontSize: 12,
+      fontWeight: "700",
+      color: "#5d7c71",
+      textTransform: "lowercase",
+    },
+    infoBox: {
+      flex: 1,
+    },
+    infoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 2,
+      marginBottom: 12,
+    },
+    infoText: {
+      marginLeft: 8,
+      flex: 1,
+      fontSize: 14,
+      color: "#456459",
+      lineHeight: 20,
+    },
+    professionalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    avatar: {
+      width: 46,
+      height: 46,
+      borderRadius: 16,
+      backgroundColor: colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    avatarText: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.primary,
+    },
+    professionalTextBox: {
+      flex: 1,
+    },
+    professionalName: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#183d32",
+    },
+    professionalRole: {
+      marginTop: 2,
+      fontSize: 13,
+      color: "#698378",
+    },
+    bottomRow: {
+      marginTop: 18,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: "#edf4f0",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    statusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    statusText: {
+      marginLeft: 6,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    actionsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+    },
+    primaryAction: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#df5d5d",
+      borderRadius: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+    },
+    primaryActionText: {
+      marginLeft: 6,
+      color: colors.white,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      backgroundColor: colors.white,
+      borderRadius: 20,
+      padding: 24,
+      width: "90%",
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: "#163c31",
+      textAlign: "center",
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: "#5a756a",
+      textAlign: "center",
+      marginTop: 8,
+      marginBottom: 20,
+    },
+    commentInput: {
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 12,
+      padding: 12,
+      fontSize: 16,
+      minHeight: 80,
+      textAlignVertical: "top",
+      marginBottom: 20,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 10,
+    },
+    modalCancelBtn: {
+      flex: 1,
+      backgroundColor: "#f0f0f0",
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    modalCancelBtnText: {
+      color: "#666",
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    modalDangerBtn: {
+      flex: 1,
+      backgroundColor: "#df5d5d",
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    modalConfirmBtnText: {
+      color: colors.white,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+  });

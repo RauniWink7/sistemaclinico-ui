@@ -12,6 +12,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { ThemeColors } from "../../constants/theme-palettes";
+import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import {
   getClinicData,
@@ -22,9 +24,7 @@ import {
 } from "../../services/api";
 import { confirmAction } from "../../services/confirm";
 
-// ─── Tema (mesmo do profissional) ─────────────────────────────────────────────
-const GREEN = "#2e8b6e";
-const GREEN_LIGHT = "#e8f7f1";
+// ─── Cores semânticas fixas (categorias de atalho, não mudam com a paleta) ────
 const BLUE = "#2d6cdf";
 const BLUE_LIGHT = "#eaf1ff";
 const ORANGE = "#c46a1a";
@@ -35,12 +35,6 @@ const TEAL = "#0d9488";
 const TEAL_LIGHT = "#e3f4f1";
 const RED = "#d95c5c";
 const RED_LIGHT = "#fdeeee";
-
-const PAGE_BG = "#e8f1ec";
-const WHITE = "#ffffff";
-const BORDER = "#dfece5";
-const TEXT_DARK = "#17352b";
-const TEXT_MUTED = "#5f7a6f";
 
 const MAX_WIDTH = 1120;
 const DESKTOP_BREAKPOINT = 900;
@@ -63,7 +57,9 @@ interface ClinicStats {
 }
 
 // ─── Atalhos administrativos ──────────────────────────────────────────────────
-const QUICK_ACTIONS = [
+// GREEN/GREEN_LIGHT (marca da clínica) entram aqui como parâmetros porque
+// mudam conforme a paleta escolhida pelo admin — as demais cores são fixas.
+const buildQuickActions = (green: string, greenLight: string) => [
   {
     id: "consultas",
     title: "Consultas",
@@ -78,8 +74,8 @@ const QUICK_ACTIONS = [
     title: "Agendar",
     description: "Marque uma nova consulta para um paciente.",
     icon: "add-circle-outline",
-    color: GREEN,
-    bg: GREEN_LIGHT,
+    color: green,
+    bg: greenLight,
     route: "/(admin)/agendar",
   },
   {
@@ -87,8 +83,8 @@ const QUICK_ACTIONS = [
     title: "Pacientes",
     description: "Liste, busque e acompanhe os pacientes da clínica.",
     icon: "people-outline",
-    color: GREEN,
-    bg: GREEN_LIGHT,
+    color: green,
+    bg: greenLight,
     route: "/(admin)/pacientes",
   },
   {
@@ -148,6 +144,13 @@ const QUICK_ACTIONS = [
 ];
 
 export default function AdminDashboardScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const QUICK_ACTIONS = useMemo(
+    () => buildQuickActions(colors.primary, colors.primaryTint),
+    [colors],
+  );
+
   const [adminName, setAdminName] = useState("Administrador");
   const [clinicName, setClinicName] = useState("");
   const [stats, setStats] = useState<ClinicStats | null>(null);
@@ -262,52 +265,55 @@ export default function AdminDashboardScreen() {
     );
   };
 
-  const metrics = [
-    {
-      id: "total",
-      label: "Total de consultas",
-      value: stats?.total_appointments ?? 0,
-      icon: "calendar-outline",
-      color: GREEN,
-      bg: GREEN_LIGHT,
-    },
-    {
-      id: "done",
-      label: "Concluídas",
-      value: stats?.completed_appointments ?? 0,
-      icon: "checkmark-circle-outline",
-      color: BLUE,
-      bg: BLUE_LIGHT,
-    },
-    {
-      id: "cancel",
-      label: "Canceladas",
-      value: stats?.cancelled_appointments ?? 0,
-      icon: "close-circle-outline",
-      color: RED,
-      bg: RED_LIGHT,
-    },
-    {
-      id: "patients",
-      label: "Pacientes ativos",
-      value: stats?.total_patients ?? 0,
-      icon: "people-outline",
-      color: GREEN,
-      bg: GREEN_LIGHT,
-    },
-    {
-      id: "profs",
-      label: "Psicólogos ativos",
-      value: stats?.total_professionals ?? 0,
-      icon: "person-outline",
-      color: ORANGE,
-      bg: ORANGE_LIGHT,
-    },
-  ];
+  const metrics = useMemo(
+    () => [
+      {
+        id: "total",
+        label: "Total de consultas",
+        value: stats?.total_appointments ?? 0,
+        icon: "calendar-outline",
+        color: colors.primary,
+        bg: colors.primaryTint,
+      },
+      {
+        id: "done",
+        label: "Concluídas",
+        value: stats?.completed_appointments ?? 0,
+        icon: "checkmark-circle-outline",
+        color: BLUE,
+        bg: BLUE_LIGHT,
+      },
+      {
+        id: "cancel",
+        label: "Canceladas",
+        value: stats?.cancelled_appointments ?? 0,
+        icon: "close-circle-outline",
+        color: RED,
+        bg: RED_LIGHT,
+      },
+      {
+        id: "patients",
+        label: "Pacientes ativos",
+        value: stats?.total_patients ?? 0,
+        icon: "people-outline",
+        color: colors.primary,
+        bg: colors.primaryTint,
+      },
+      {
+        id: "profs",
+        label: "Psicólogos ativos",
+        value: stats?.total_professionals ?? 0,
+        icon: "person-outline",
+        color: ORANGE,
+        bg: ORANGE_LIGHT,
+      },
+    ],
+    [stats, colors],
+  );
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={GREEN} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
       {/* ── Barra de identidade ── */}
       <View style={styles.header}>
@@ -370,7 +376,7 @@ export default function AdminDashboardScreen() {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={GREEN} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Carregando dados...</Text>
           </View>
         ) : (
@@ -451,219 +457,220 @@ export default function AdminDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: PAGE_BG,
-  },
-  header: {
-    backgroundColor: GREEN,
-    paddingTop: 52,
-    paddingBottom: 20,
-  },
-  headerInner: {
-    width: "100%",
-    maxWidth: MAX_WIDTH,
-    alignSelf: "center",
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  identity: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: WHITE,
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  identityText: {
-    flex: 1,
-  },
-  headerGreeting: {
-    color: "#c6e6da",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  headerName: {
-    color: WHITE,
-    fontSize: 21,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    marginTop: 1,
-  },
-  headerSub: {
-    color: "#a9d6c6",
-    fontSize: 12.5,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  notifBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifBadge: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 3,
-    backgroundColor: "#f87171",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifBadgeText: {
-    color: WHITE,
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  logoutBtn: {
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
-  logoutText: {
-    color: WHITE,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 44,
-  },
-  container: {
-    width: "100%",
-    maxWidth: MAX_WIDTH,
-    alignSelf: "center",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: TEXT_DARK,
-    letterSpacing: -0.2,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  // KPIs
-  metricsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 26,
-  },
-  metricCard: {
-    flexGrow: 1,
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    ...CARD_SHADOW,
-  },
-  metricIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  metricValue: {
-    marginTop: 14,
-    fontSize: 26,
-    fontWeight: "800",
-    color: TEXT_DARK,
-    letterSpacing: -0.5,
-  },
-  metricLabel: {
-    marginTop: 4,
-    fontSize: 12.5,
-    lineHeight: 17,
-    color: TEXT_MUTED,
-    fontWeight: "600",
-  },
-  // Atalhos
-  actionsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  actionTile: {
-    flexGrow: 1,
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    ...CARD_SHADOW,
-  },
-  actionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionText: {
-    flex: 1,
-  },
-  actionTitle: {
-    fontSize: 15.5,
-    fontWeight: "800",
-    color: TEXT_DARK,
-  },
-  actionDescription: {
-    marginTop: 4,
-    fontSize: 12.5,
-    lineHeight: 17,
-    color: TEXT_MUTED,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 100,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: GREEN,
-    fontWeight: "600",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.pageBg,
+    },
+    header: {
+      backgroundColor: colors.primary,
+      paddingTop: 52,
+      paddingBottom: 20,
+    },
+    headerInner: {
+      width: "100%",
+      maxWidth: MAX_WIDTH,
+      alignSelf: "center",
+      paddingHorizontal: 20,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    identity: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+    },
+    avatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 18,
+      backgroundColor: "rgba(255,255,255,0.16)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarText: {
+      color: colors.white,
+      fontSize: 18,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    identityText: {
+      flex: 1,
+    },
+    headerGreeting: {
+      color: "#c6e6da",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    headerName: {
+      color: colors.white,
+      fontSize: 21,
+      fontWeight: "800",
+      letterSpacing: -0.3,
+      marginTop: 1,
+    },
+    headerSub: {
+      color: "#a9d6c6",
+      fontSize: 12.5,
+      fontWeight: "600",
+      marginTop: 2,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    notifBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.14)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    notifBadge: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      paddingHorizontal: 3,
+      backgroundColor: "#f87171",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    notifBadgeText: {
+      color: colors.white,
+      fontSize: 10,
+      fontWeight: "800",
+    },
+    logoutBtn: {
+      height: 40,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.14)",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    },
+    logoutText: {
+      color: colors.white,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 20,
+      paddingTop: 22,
+      paddingBottom: 44,
+    },
+    container: {
+      width: "100%",
+      maxWidth: MAX_WIDTH,
+      alignSelf: "center",
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: colors.textDark,
+      letterSpacing: -0.2,
+      marginBottom: 12,
+      marginTop: 4,
+    },
+    // KPIs
+    metricsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+      marginBottom: 26,
+    },
+    metricCard: {
+      flexGrow: 1,
+      backgroundColor: colors.white,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      ...CARD_SHADOW,
+    },
+    metricIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    metricValue: {
+      marginTop: 14,
+      fontSize: 26,
+      fontWeight: "800",
+      color: colors.textDark,
+      letterSpacing: -0.5,
+    },
+    metricLabel: {
+      marginTop: 4,
+      fontSize: 12.5,
+      lineHeight: 17,
+      color: colors.textMuted,
+      fontWeight: "600",
+    },
+    // Atalhos
+    actionsGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+    },
+    actionTile: {
+      flexGrow: 1,
+      backgroundColor: colors.white,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      ...CARD_SHADOW,
+    },
+    actionIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    actionText: {
+      flex: 1,
+    },
+    actionTitle: {
+      fontSize: 15.5,
+      fontWeight: "800",
+      color: colors.textDark,
+    },
+    actionDescription: {
+      marginTop: 4,
+      fontSize: 12.5,
+      lineHeight: 17,
+      color: colors.textMuted,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingTop: 100,
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: colors.primary,
+      fontWeight: "600",
+    },
+  });
