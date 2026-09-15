@@ -79,6 +79,15 @@ const buildQuickActions = (green: string, greenLight: string) => [
     route: "/(admin)/agendar",
   },
   {
+    id: "salas",
+    title: "Salas",
+    description: "Gerencie salas e consulte a disponibilidade.",
+    icon: "business-outline",
+    color: TEAL,
+    bg: TEAL_LIGHT,
+    route: "/(admin)/salas",
+  },
+  {
     id: "pacientes",
     title: "Pacientes",
     description: "Liste, busque e acompanhe os pacientes da clínica.",

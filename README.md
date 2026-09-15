@@ -25,6 +25,29 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Testes
+
+A suíte de testes do frontend usa [Vitest](https://vitest.dev) (ambiente `jsdom`).
+Ela cobre a camada de serviços (`services/`) — payloads enviados à API e as
+regras puras de sala usadas pelas telas de agendamento.
+
+```bash
+npm test -- --run                      # toda a suíte
+npm test -- --run services/rooms.test.ts   # um arquivo só
+npm test                               # modo watch
+npm run lint
+```
+
+Arquivos relevantes:
+
+- `vitest.config.ts` — configuração do runner.
+- `test/setup.ts` — mocks mínimos de `react-native` e `AsyncStorage`, necessários
+  porque `services/api.ts` importa os dois.
+- `services/api.rooms.test.ts` — payload de agendamento com/sem sala e a
+  querystring de disponibilidade.
+- `services/rooms.test.ts` — intervalo da consulta, sala selecionável,
+  rótulo de situação e exibição condicional da sala.
+
 ## Get a fresh project
 
 When you're ready, run:

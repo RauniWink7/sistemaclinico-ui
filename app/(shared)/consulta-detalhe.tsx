@@ -25,6 +25,7 @@ import {
   OVERDUE_STATUS_LABEL,
 } from '../../services/api';
 import { partsToISO, toInputParts, todayISODate } from '../../services/dateInput';
+import { resolveAppointmentRoomName } from '../../services/rooms';
 import { DateField, TimeField } from '../../components/DateTimeField';
 import { ThemeColors } from '../../constants/theme-palettes';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -191,6 +192,9 @@ export default function ConsultaDetalheScreen() {
     profInfo?.specialty ??
     appointment?.specialty ??
     '';
+
+  // Sala e opcional: sem sala, a linha simplesmente nao e renderizada.
+  const roomName = resolveAppointmentRoomName(appointment ?? {});
 
   const patientName =
     appointment?.patient_detail?.user?.full_name ??
@@ -392,6 +396,9 @@ export default function ConsultaDetalheScreen() {
               <InfoRow icon="pulse-outline" label="Status" value={statusCfg.label} valueColor={statusCfg.color} styles={styles} />
               {appointment?.clinic_detail?.name && (
                 <InfoRow icon="business-outline" label="Clinica" value={appointment.clinic_detail.name} styles={styles} />
+              )}
+              {roomName && (
+                <InfoRow icon="easel-outline" label="Sala" value={roomName} styles={styles} />
               )}
             </View>
           </View>

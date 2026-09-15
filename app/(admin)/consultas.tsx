@@ -26,6 +26,7 @@ import {
     updateAppointmentStatus,
 } from "../../services/api";
 import { partsToISO, toInputParts, todayISODate } from "../../services/dateInput";
+import { resolveAppointmentRoomName } from "../../services/rooms";
 import { DateField, TimeField } from "../../components/DateTimeField";
 import { ThemeColors } from "../../constants/theme-palettes";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -61,6 +62,8 @@ interface NormalizedAppointment {
   dateFormatted: string;
   status: string;
   durationMinutes?: number;
+  // Sala e opcional: `null` quando a consulta nao tem sala vinculada.
+  roomName: string | null;
 }
 
 interface StatusConfig {
@@ -181,6 +184,7 @@ const normalize = (
     dateFormatted: formatDateTime(isoRaw),
     status: item.status ?? "scheduled",
     durationMinutes: item.duration_minutes,
+    roomName: resolveAppointmentRoomName(item),
   };
 };
 
@@ -259,6 +263,12 @@ const AppointmentCard = ({
           <View style={styles.detailItem}>
             <Ionicons name="medkit-outline" size={13} color="#6c8c80" />
             <Text style={styles.detailText}>{item.specialty}</Text>
+          </View>
+        ) : null}
+        {item.roomName ? (
+          <View style={styles.detailItem}>
+            <Ionicons name="easel-outline" size={13} color="#6c8c80" />
+            <Text style={styles.detailText}>{item.roomName}</Text>
           </View>
         ) : null}
       </View>

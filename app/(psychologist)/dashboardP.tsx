@@ -67,6 +67,15 @@ const buildQuickActions = (green: string, greenLight: string) => [
     route: "/(psychologist)/agenda",
   },
   {
+    id: "salas",
+    title: "Salas",
+    description: "Consulte as salas disponíveis para seus atendimentos.",
+    icon: "business-outline",
+    color: TEAL,
+    bg: TEAL_LIGHT,
+    route: "/(admin)/salas",
+  },
+  {
     id: "calendario",
     title: "Calendário",
     description: "Veja o mês inteiro e as consultas de cada dia.",

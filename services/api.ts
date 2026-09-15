@@ -37,6 +37,15 @@ export interface ClinicApiItem {
   email?: string;
 }
 
+export interface RoomApiItem {
+  id: string;
+  clinic: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  status?: "livre" | "ocupada";
+}
+
 export interface AppointmentApiItem {
   id: string;
   date?: string;
@@ -51,7 +60,12 @@ export interface AppointmentApiItem {
   psychologist?: string;
   specialty?: string;
   professional?: string;
+  professional_detail?: {
+    user?: { id: string; full_name?: string; email?: string };
+  };
   patient?: string;
+  room?: string | null;
+  room_detail?: RoomApiItem | null;
   duration_minutes?: number;
   patient_detail?: {
     user: {
@@ -1065,6 +1079,73 @@ export const updateClinic = async (
   return { ok: true, data };
 };
 
+// GET /api/clinics/{clinic_id}/rooms/ — salas ativas para profissionais;
+// administradores também recebem salas inativas para gerenciá-las.
+export const getClinicRooms = async (
+  clinicId: string,
+  options: { start?: string; end?: string } = {},
+): Promise<ApiResult<RoomApiItem[]>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const params = new URLSearchParams();
+  if (options.start) params.set("start", options.start);
+  if (options.end) params.set("end", options.end);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/rooms/${query}`,
+    { method: "GET", headers },
+  );
+  const rooms = extractList<RoomApiItem>(data);
+  if (!response.ok) return { ok: false, error: normalizeError(data), data: rooms };
+  return { ok: true, data: rooms };
+};
+
+// POST /api/clinics/{clinic_id}/rooms/
+export const createClinicRoom = async (
+  clinicId: string,
+  payload: { name: string; description?: string; is_active?: boolean },
+): Promise<ApiResult<RoomApiItem>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/rooms/`,
+    { method: "POST", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// PATCH /api/clinics/{clinic_id}/rooms/{room_id}/
+export const updateClinicRoom = async (
+  clinicId: string,
+  roomId: string,
+  payload: { name?: string; description?: string; is_active?: boolean },
+): Promise<ApiResult<RoomApiItem>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/rooms/${encodeURIComponent(roomId)}/`,
+    { method: "PATCH", headers, body: JSON.stringify(payload) },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// DELETE /api/clinics/{clinic_id}/rooms/{room_id}/
+export const deleteClinicRoom = async (
+  clinicId: string,
+  roomId: string,
+): Promise<ApiResult> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(
+    `${API_BASE_URL}/clinics/${encodeURIComponent(clinicId)}/rooms/${encodeURIComponent(roomId)}/`,
+    { method: "DELETE", headers },
+  );
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
 // Helper compartilhado: PATCH multipart pra trocar/remover um campo de
 // arquivo (logo da clínica, foto de perfil). `fieldName` é o campo de
 // arquivo no backend (ex: "logo", "photo"); `removeFieldName` é a flag
@@ -1240,6 +1321,7 @@ export const createAppointment = async (
     patientId?: string;
     clinicId?: string;
     ignoreAvailability?: boolean;
+    roomId?: string;
   } = {},
 ): Promise<ApiResult> => {
   const headers = await createAuthHeaders();
@@ -1259,6 +1341,10 @@ export const createAppointment = async (
 
   if (options.patientId) {
     payload.patient = options.patientId;
+  }
+
+  if (options.roomId) {
+    payload.room = options.roomId;
   }
 
   if (clinicId) {

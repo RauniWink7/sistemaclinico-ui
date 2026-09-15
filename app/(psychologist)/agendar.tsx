@@ -16,13 +16,17 @@ import { ThemeColors } from "../../constants/theme-palettes";
 import { useTheme } from "../../contexts/ThemeContext";
 import { showAlert } from "../../services/feedback";
 import { DateField, TimeField } from "../../components/DateTimeField";
+import RoomSelector from "../../components/RoomSelector";
 import { todayISODate } from "../../services/dateInput";
 import {
   createAppointment,
   getClinicPatients,
+  getClinicRooms,
   getMe,
   getPsychologists,
+  RoomApiItem,
 } from "../../services/api";
+import { buildRoomInterval, isRoomSelectable } from "../../services/rooms";
 
 const MAX_WIDTH = 1120;
 
@@ -141,6 +145,12 @@ export default function PsychologistAgendarScreen() {
   const [duration, setDuration] = useState("50");
   const [ignoreAvailability, setIgnoreAvailability] = useState(false);
 
+  // Sala é opcional: `null` significa "sem sala definida".
+  const [rooms, setRooms] = useState<RoomApiItem[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -210,6 +220,45 @@ export default function PsychologistAgendarScreen() {
     void init();
   }, []);
 
+  // Recarrega as salas sempre que o intervalo pretendido muda, para que o
+  // backend calcule `status` (livre/ocupada) já para a data/hora escolhidas.
+  useEffect(() => {
+    if (!clinicId) return;
+    let cancelled = false;
+
+    const loadRooms = async () => {
+      setLoadingRooms(true);
+      const interval = buildRoomInterval(date, time, parseInt(duration, 10));
+      const result = await getClinicRooms(clinicId, interval ?? {});
+      if (cancelled) return;
+      setLoadingRooms(false);
+
+      if (!result.ok) {
+        // Falha ao listar não impede agendar sem sala.
+        setRooms([]);
+        setRoomsError(
+          result.error ?? "Não foi possível carregar as salas da clínica.",
+        );
+        return;
+      }
+      setRoomsError(null);
+      setRooms(result.data ?? []);
+    };
+
+    void loadRooms();
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId, date, time, duration]);
+
+  // Se a sala escolhida ficar ocupada/inativa depois de trocar o horário, a
+  // seleção é desfeita para não enviar um valor que o backend recusaria.
+  useEffect(() => {
+    if (!selectedRoom) return;
+    const room = rooms.find((item) => item.id === selectedRoom);
+    if (room && !isRoomSelectable(room)) setSelectedRoom(null);
+  }, [rooms, selectedRoom]);
+
   const handleSave = async () => {
     if (!selectedPatient) {
       showAlert("Campo obrigatório", "Selecione o paciente.");
@@ -241,6 +290,7 @@ export default function PsychologistAgendarScreen() {
         patientId: selectedPatient,
         clinicId,
         ignoreAvailability,
+        roomId: selectedRoom ?? undefined,
       });
 
       if (!result.ok) {
@@ -341,6 +391,14 @@ export default function PsychologistAgendarScreen() {
               placeholder="50"
               placeholderTextColor="#94b3a6"
               keyboardType="numeric"
+            />
+
+            <RoomSelector
+              rooms={rooms}
+              selected={selectedRoom}
+              onSelect={setSelectedRoom}
+              loading={loadingRooms}
+              error={roomsError}
             />
 
             <TouchableOpacity

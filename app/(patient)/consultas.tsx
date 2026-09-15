@@ -24,6 +24,7 @@ import {
     isAppointmentOverdue,
     OVERDUE_STATUS_LABEL,
 } from "../../services/api";
+import { resolveAppointmentRoomName } from "../../services/rooms";
 
 // Alias para evitar conflitos
 const TextInput = RNTextInput;
@@ -38,6 +39,8 @@ interface Appointment {
   psychologist: string;
   specialty: string;
   status: AppointmentStatus;
+  // Somente leitura: o paciente nunca escolhe sala, so ve a que foi definida.
+  roomName: string | null;
 }
 
 // FIX 1: normalizeAppointment agora extrai data/hora pelo timezone local
@@ -85,6 +88,7 @@ const normalizeAppointment = (
     psychologist: psychologistName,
     specialty,
     status,
+    roomName: resolveAppointmentRoomName(item),
   };
 };
 
@@ -497,6 +501,19 @@ export default function ConsultasScreen() {
                             {formatDate(appointment.date)} as {appointment.time}
                           </Text>
                         </View>
+
+                        {appointment.roomName ? (
+                          <View style={styles.infoRow}>
+                            <Ionicons
+                              name="easel-outline"
+                              size={15}
+                              color={colors.primary}
+                            />
+                            <Text style={styles.infoText}>
+                              {appointment.roomName}
+                            </Text>
+                          </View>
+                        ) : null}
 
                         <View style={styles.professionalRow}>
                           <View style={styles.avatar}>
