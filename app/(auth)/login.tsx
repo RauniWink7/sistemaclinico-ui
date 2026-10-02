@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
   KeyboardTypeOptions,
   Platform,
   ScrollView,
@@ -27,11 +28,11 @@ const DecorativeBackground = () => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <>
+    <View style={styles.decor}>
       <View style={styles.circle1} />
       <View style={styles.circle2} />
       <View style={styles.circle3} />
-    </>
+    </View>
   );
 };
 
@@ -49,6 +50,8 @@ interface FloatingInputProps {
   returnKeyType?: "next" | "done" | "go" | "search" | "send";
   onSubmitEditing?: () => void;
   inputRef?: React.RefObject<TextInput | null>;
+  autoComplete?: "email" | "current-password" | "off";
+  textContentType?: "emailAddress" | "password" | "none";
 }
 
 // ─── Floating Label Input ────────────────────────────────────────────────────
@@ -65,6 +68,8 @@ const FloatingInput = ({
   returnKeyType = "next",
   onSubmitEditing,
   inputRef,
+  autoComplete = "off",
+  textContentType = "none",
 }: FloatingInputProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -72,25 +77,19 @@ const FloatingInput = ({
   const [focused, setFocused] = useState(false);
   const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
 
-  const handleFocus = useCallback(() => {
-    setFocused(true);
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
+
+  // O label sobe sempre que o campo tem foco OU conteudo. Depender so do foco
+  // fazia o label ficar em cima do texto quando o valor entra sem foco
+  // (autofill do navegador/gerenciador de senhas no celular).
+  useEffect(() => {
     Animated.timing(animatedLabel, {
-      toValue: 1,
+      toValue: focused || !!value ? 1 : 0,
       duration: 180,
       useNativeDriver: false,
     }).start();
-  }, [animatedLabel]);
-
-  const handleBlur = useCallback(() => {
-    setFocused(false);
-    if (!value) {
-      Animated.timing(animatedLabel, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [animatedLabel, value]);
+  }, [animatedLabel, focused, value]);
 
   const labelTop = animatedLabel.interpolate({
     inputRange: [0, 1],
@@ -118,7 +117,6 @@ const FloatingInput = ({
         ]}
       >
         <Animated.Text
-          pointerEvents="none"
           style={[
             styles.floatingLabel,
             { top: labelTop, fontSize: labelSize, color: labelColor },
@@ -138,12 +136,12 @@ const FloatingInput = ({
           keyboardType={keyboardType ?? "default"}
           autoCapitalize={autoCapitalize ?? "none"}
           placeholderTextColor="transparent"
-          blurOnSubmit={false} // false no Android permite digitar sem saltar
+          submitBehavior="submit"
           autoCorrect={false}
-          autoComplete={Platform.OS === "android" ? "off" : "off"}
+          autoComplete={autoComplete}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
-          textContentType={Platform.OS === "android" ? "none" : "none"}
+          textContentType={textContentType}
           editable={true}
           selectTextOnFocus={false} // evita seleção automática que pode interferir
         />
@@ -260,17 +258,15 @@ export default function LoginScreen() {
       <StatusBar barStyle="dark-content" backgroundColor={colors.authBg} />
       <DecorativeBackground />
 
-      {/*
-        KeyboardAvoidingView REMOVIDO — no Android causa conflito com ScrollView
-        e provoca o salto entre inputs. O ScrollView com
-        keyboardShouldPersistTaps="handled" é suficiente.
-      */}
+      {/* KeyboardAvoidingView so no iOS: no Android conflita com o ScrollView. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps={
-          Platform.OS === "android" ? "never" : "handled"
-        }
+        keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         nestedScrollEnabled={false}
         bounces={false}
@@ -294,6 +290,8 @@ export default function LoginScreen() {
             value={form.email}
             onChangeText={set("email")}
             keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
             error={errors.email}
             returnKeyType="next"
             // onSubmitEditing removido — forçar foco via código causa salto no Android
@@ -303,6 +301,8 @@ export default function LoginScreen() {
             value={form.senha}
             onChangeText={set("senha")}
             secureTextEntry={!showSenha}
+            autoComplete="current-password"
+            textContentType="password"
             error={errors.senha}
             rightIcon={showSenha ? "eye-off-outline" : "eye-outline"}
             onRightIconPress={toggleShowSenha}
@@ -385,6 +385,7 @@ export default function LoginScreen() {
 
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -395,6 +396,14 @@ const createStyles = (colors: ThemeColors) =>
     screen: {
       flex: 1,
       backgroundColor: colors.authBg,
+      // Os circulos decorativos ultrapassam a borda; sem isso a tela mobile
+      // ganha rolagem/largura horizontal e o layout quebra.
+      overflow: "hidden",
+    },
+    decor: {
+      ...StyleSheet.absoluteFillObject,
+      overflow: "hidden",
+      pointerEvents: "none",
     },
     scroll: {
       flexGrow: 1,

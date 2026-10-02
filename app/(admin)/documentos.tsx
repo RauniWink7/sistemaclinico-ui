@@ -22,9 +22,7 @@ import { showAlert } from "../../services/feedback";
 import {
   deleteDocument,
   DOCUMENT_MIME_TYPES,
-  getClinicPatients,
   getDocuments,
-  getMe,
   uploadDocument,
 } from "../../services/api";
 
@@ -56,20 +54,6 @@ interface DocItem {
   is_avulso?: boolean;
 }
 
-interface SimplePatient {
-  id: string; // PatientProfile.id
-  label: string;
-}
-
-type Filter = "todos" | "com_paciente" | "avulsos" | "arquivados";
-
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "todos", label: "Todos" },
-  { key: "com_paciente", label: "Com paciente" },
-  { key: "avulsos", label: "Avulsos" },
-  { key: "arquivados", label: "Pacientes removidos" },
-];
-
 const UPLOAD_TYPES: { label: string; value: string }[] = [
   { label: "PDF", value: "pdf" },
   { label: "Imagem", value: "image" },
@@ -95,26 +79,10 @@ const formatDate = (iso: string): string => {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-// Rótulo do vínculo do documento.
-const patientLabel = (
-  doc: DocItem,
-  primary: string,
-  primaryTint: string,
-): { text: string; color: string; bg: string } => {
-  if (doc.is_avulso || !doc.patient) {
-    return { text: "Avulso", color: "#8a55d9", bg: "#f3ecff" };
-  }
-  if (doc.patient_archived) {
-    return {
-      text: `${doc.patient_name || "Paciente"} (removido)`,
-      color: "#c46a1a",
-      bg: "#fef3e8",
-    };
-  }
-  return { text: doc.patient_name || "Paciente", color: primary, bg: primaryTint };
-};
-
 // ─── Tela ──────────────────────────────────────────────────────────────────────
+// Documentos vinculados a pacientes são clínicos e ficam visíveis apenas ao
+// psicólogo responsável (tela (psychologist)/ficha.tsx). O secretário/admin só
+// enxerga e cadastra documentos avulsos (administrativos, sem paciente).
 export default function AdminDocumentsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -124,10 +92,8 @@ export default function AdminDocumentsScreen() {
   );
 
   const [docs, setDocs] = useState<DocItem[]>([]);
-  const [patients, setPatients] = useState<SimplePatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("todos");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DocItem | null>(null);
@@ -139,8 +105,10 @@ export default function AdminDocumentsScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= DESKTOP_BREAKPOINT;
 
+  // scope: "avulsos" — o secretário/admin nunca carrega documentos clínicos
+  // vinculados a paciente, que são exclusivos do psicólogo responsável.
   const loadDocs = async () => {
-    const result = await getDocuments();
+    const result = await getDocuments({ scope: "avulsos" });
     if (result.ok && Array.isArray(result.data)) {
       setDocs(result.data as DocItem[]);
     } else {
@@ -152,20 +120,7 @@ export default function AdminDocumentsScreen() {
     const init = async () => {
       setLoading(true);
       try {
-        const meResult = await getMe();
-        const clinicId = meResult.ok ? meResult.data?.clinic : null;
-        const [, patientsRes] = await Promise.all([
-          loadDocs(),
-          clinicId ? getClinicPatients(clinicId) : Promise.resolve({ ok: false } as any),
-        ]);
-        if (patientsRes?.ok && Array.isArray(patientsRes.data)) {
-          setPatients(
-            patientsRes.data.map((p: any) => ({
-              id: p.id,
-              label: p.user?.full_name ?? p.user?.email ?? p.id,
-            })),
-          );
-        }
+        await loadDocs();
       } catch {
         showAlert("Erro", "Erro inesperado ao carregar documentos.");
       } finally {
@@ -184,29 +139,9 @@ export default function AdminDocumentsScreen() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return docs.filter((d) => {
-      // filtro por vínculo
-      if (filter === "avulsos" && !(d.is_avulso || !d.patient)) return false;
-      if (filter === "com_paciente" && (d.is_avulso || !d.patient)) return false;
-      if (filter === "arquivados" && !d.patient_archived) return false;
-      // busca por título ou nome do paciente
-      if (!q) return true;
-      return (
-        d.title.toLowerCase().includes(q) ||
-        (d.patient_name ?? "").toLowerCase().includes(q)
-      );
-    });
-  }, [docs, filter, search]);
-
-  const counts = useMemo(
-    () => ({
-      todos: docs.length,
-      com_paciente: docs.filter((d) => !(d.is_avulso || !d.patient)).length,
-      avulsos: docs.filter((d) => d.is_avulso || !d.patient).length,
-      arquivados: docs.filter((d) => d.patient_archived).length,
-    }),
-    [docs],
-  );
+    if (!q) return docs;
+    return docs.filter((d) => d.title.toLowerCase().includes(q));
+  }, [docs, search]);
 
   const handleDownload = async (doc: DocItem) => {
     if (doc.file_url) {
@@ -275,7 +210,7 @@ export default function AdminDocumentsScreen() {
               <Ionicons name="search-outline" size={16} color={colors.placeholder} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Buscar por título ou paciente..."
+                placeholder="Buscar por título..."
                 placeholderTextColor={colors.placeholder}
                 value={search}
                 onChangeText={setSearch}
@@ -287,38 +222,6 @@ export default function AdminDocumentsScreen() {
               )}
             </View>
 
-            {/* Filtros */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filtersRow}
-            >
-              {FILTERS.map((f) => (
-                <TouchableOpacity
-                  key={f.key}
-                  style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
-                  onPress={() => setFilter(f.key)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}
-                  >
-                    {f.label}
-                  </Text>
-                  <View style={[styles.filterCount, filter === f.key && styles.filterCountActive]}>
-                    <Text
-                      style={[
-                        styles.filterCountText,
-                        filter === f.key && styles.filterCountTextActive,
-                      ]}
-                    >
-                      {counts[f.key]}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
             {/* Lista */}
             {filtered.length === 0 ? (
               <View style={styles.emptyState}>
@@ -329,7 +232,6 @@ export default function AdminDocumentsScreen() {
               <View style={styles.cardsWrap}>
                 {filtered.map((doc) => {
                   const cfg = typeCfg(doc.file_type, typeConfig);
-                  const pl = patientLabel(doc, colors.primary, colors.primaryTint);
                   return (
                     <View
                       key={doc.id}
@@ -343,11 +245,6 @@ export default function AdminDocumentsScreen() {
                           {doc.title}
                         </Text>
                         <View style={styles.docMeta}>
-                          <View style={[styles.linkBadge, { backgroundColor: pl.bg }]}>
-                            <Text style={[styles.linkBadgeText, { color: pl.color }]}>
-                              {pl.text}
-                            </Text>
-                          </View>
                           <Text style={styles.docDate}>{formatDate(doc.uploaded_at)}</Text>
                         </View>
                         <View style={styles.docActions}>
@@ -380,7 +277,6 @@ export default function AdminDocumentsScreen() {
 
       <UploadModal
         visible={modalVisible}
-        patients={patients}
         onClose={() => setModalVisible(false)}
         onUploaded={() => {
           setModalVisible(false);
@@ -435,14 +331,15 @@ export default function AdminDocumentsScreen() {
 }
 
 // ─── Modal de upload ────────────────────────────────────────────────────────────
+// Sempre avulso: o secretário/admin não vincula documentos a pacientes por
+// aqui — documentos clínicos são cadastrados pelo psicólogo em sua própria
+// ficha do paciente.
 function UploadModal({
   visible,
-  patients,
   onClose,
   onUploaded,
 }: {
   visible: boolean;
-  patients: SimplePatient[];
   onClose: () => void;
   onUploaded: () => void;
 }) {
@@ -453,26 +350,12 @@ function UploadModal({
     [colors],
   );
 
-  const [avulso, setAvulso] = useState(true);
-  const [patientId, setPatientId] = useState<string | null>(null);
-  const [patientOpen, setPatientOpen] = useState(false);
-  const [patientSearch, setPatientSearch] = useState("");
   const [title, setTitle] = useState("");
   const [fileType, setFileType] = useState("pdf");
   const [file, setFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const filteredPatients = useMemo(() => {
-    const q = patientSearch.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter((p) => p.label.toLowerCase().includes(q));
-  }, [patients, patientSearch]);
-
   const reset = () => {
-    setAvulso(true);
-    setPatientId(null);
-    setPatientOpen(false);
-    setPatientSearch("");
     setTitle("");
     setFileType("pdf");
     setFile(null);
@@ -498,25 +381,16 @@ function UploadModal({
       showAlert("Campo obrigatório", "Informe o título do documento.");
       return;
     }
-    if (!avulso && !patientId) {
-      showAlert("Campo obrigatório", "Selecione o paciente ou marque como avulso.");
-      return;
-    }
     if (!file) {
       showAlert("Campo obrigatório", "Selecione um arquivo.");
       return;
     }
     setUploading(true);
-    const result = await uploadDocument(
-      title.trim(),
-      fileType,
-      {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || "application/octet-stream",
-      },
-      avulso ? undefined : patientId ?? undefined,
-    );
+    const result = await uploadDocument(title.trim(), fileType, {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType || "application/octet-stream",
+    });
     setUploading(false);
     if (!result.ok) {
       showAlert("Erro", (result as any).error || "Não foi possível enviar o documento.");
@@ -525,9 +399,6 @@ function UploadModal({
     reset();
     onUploaded();
   };
-
-  const selectedPatientLabel =
-    patients.find((p) => p.id === patientId)?.label ?? "Selecione o paciente...";
 
   return (
     <Modal
@@ -541,100 +412,6 @@ function UploadModal({
           <View style={styles.modalHandle} />
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.modalTitle}>Adicionar documento</Text>
-
-            {/* Vínculo */}
-            <Text style={styles.modalLabel}>Vínculo</Text>
-            <View style={styles.segment}>
-              <TouchableOpacity
-                style={[styles.segmentBtn, avulso && styles.segmentBtnActive]}
-                onPress={() => setAvulso(true)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.segmentText, avulso && styles.segmentTextActive]}>
-                  Avulso
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.segmentBtn, !avulso && styles.segmentBtnActive]}
-                onPress={() => setAvulso(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.segmentText, !avulso && styles.segmentTextActive]}>
-                  Vincular a paciente
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!avulso && (
-              <>
-                <Text style={styles.modalLabel}>Paciente</Text>
-                <TouchableOpacity
-                  style={styles.selectorBtn}
-                  onPress={() => setPatientOpen((v) => !v)}
-                  activeOpacity={0.85}
-                >
-                  <Text
-                    style={[styles.selectorBtnText, !patientId && { color: colors.placeholder }]}
-                    numberOfLines={1}
-                  >
-                    {selectedPatientLabel}
-                  </Text>
-                  <Ionicons
-                    name={patientOpen ? "chevron-up-outline" : "chevron-down-outline"}
-                    size={18}
-                    color="#6c8c80"
-                  />
-                </TouchableOpacity>
-                {patientOpen && (
-                  <View style={styles.dropdown}>
-                    {patients.length > 0 && (
-                      <View style={styles.dropdownSearchBox}>
-                        <Ionicons name="search-outline" size={15} color={colors.placeholder} />
-                        <TextInput
-                          style={styles.dropdownSearchInput}
-                          placeholder="Buscar paciente por nome..."
-                          placeholderTextColor={colors.placeholder}
-                          value={patientSearch}
-                          onChangeText={setPatientSearch}
-                          autoFocus
-                        />
-                        {patientSearch.length > 0 && (
-                          <TouchableOpacity onPress={() => setPatientSearch("")}>
-                            <Ionicons name="close-circle" size={15} color={colors.placeholder} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                    <ScrollView keyboardShouldPersistTaps="handled" style={styles.dropdownList}>
-                      {patients.length === 0 ? (
-                        <Text style={styles.dropdownEmpty}>Nenhum paciente disponível</Text>
-                      ) : filteredPatients.length === 0 ? (
-                        <Text style={styles.dropdownEmpty}>
-                          Nenhum paciente encontrado para "{patientSearch}"
-                        </Text>
-                      ) : (
-                        filteredPatients.map((p) => (
-                          <TouchableOpacity
-                            key={p.id}
-                            style={styles.dropdownItem}
-                            onPress={() => {
-                              setPatientId(p.id);
-                              setPatientOpen(false);
-                              setPatientSearch("");
-                            }}
-                          >
-                            <Text style={styles.dropdownItemText}>{p.label}</Text>
-                            {patientId === p.id && (
-                              <Ionicons name="checkmark-outline" size={16} color={colors.primary} />
-                            )}
-                          </TouchableOpacity>
-                        ))
-                      )}
-                    </ScrollView>
-                  </View>
-                )}
-              </>
-            )}
 
             {/* Título */}
             <Text style={styles.modalLabel}>Título</Text>
@@ -750,21 +527,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     // @ts-ignore — remove o contorno azul no web
     outlineStyle: "none",
   },
-  filtersRow: { gap: 8, paddingBottom: 16 },
-  filterChip: {
-    flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
-  },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterChipText: { fontSize: 13, fontWeight: "700", color: "#5e7b70" },
-  filterChipTextActive: { color: colors.white },
-  filterCount: {
-    minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#edf4f0",
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 4,
-  },
-  filterCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
-  filterCountText: { fontSize: 11, fontWeight: "700", color: "#5e7b70" },
-  filterCountTextActive: { color: colors.white },
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: "800", color: colors.textDark },
   cardsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
@@ -776,8 +538,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   docInfo: { flex: 1 },
   docTitle: { fontSize: 14, fontWeight: "800", color: colors.textDark, marginBottom: 6 },
   docMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 },
-  linkBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  linkBadgeText: { fontSize: 11, fontWeight: "700" },
   docDate: { fontSize: 11.5, color: colors.textMuted, fontWeight: "500" },
   docActions: { flexDirection: "row", gap: 8 },
   downloadBtn: {
@@ -805,40 +565,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 12, fontWeight: "700", color: "#5f7d70", marginBottom: 8, marginTop: 6,
     textTransform: "uppercase", letterSpacing: 0.5,
   },
-  segment: {
-    flexDirection: "row", backgroundColor: colors.authBg, borderRadius: 12, padding: 4, gap: 4,
-    borderWidth: 1, borderColor: "#d4ede3",
-  },
-  segmentBtn: { flex: 1, height: 40, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  segmentBtnActive: { backgroundColor: colors.primary },
-  segmentText: { fontSize: 13.5, fontWeight: "700", color: "#5e7b70" },
-  segmentTextActive: { color: colors.white },
-  selectorBtn: {
-    minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
-    backgroundColor: "#f6faf8", paddingHorizontal: 16,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-  },
-  selectorBtnText: { fontSize: 15, color: colors.textDark, fontWeight: "500", flex: 1 },
-  dropdown: {
-    marginTop: 6, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
-    backgroundColor: colors.white, overflow: "hidden",
-  },
-  dropdownSearchBox: {
-    flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14,
-    height: 44, borderBottomWidth: 1, borderBottomColor: "#e3efe8",
-  },
-  dropdownSearchInput: {
-    flex: 1, fontSize: 14, color: colors.textDark, fontWeight: "500",
-    // @ts-ignore — remove o contorno azul no web
-    outlineStyle: "none",
-  },
-  dropdownList: { maxHeight: 220 },
-  dropdownEmpty: { padding: 16, fontSize: 14, color: colors.placeholder, textAlign: "center" },
-  dropdownItem: {
-    paddingVertical: 13, paddingHorizontal: 16,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-  },
-  dropdownItemText: { fontSize: 15, color: colors.textDark, fontWeight: "500", flex: 1 },
   modalInput: {
     minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: "#d7ebe2",
     backgroundColor: "#f6faf8", paddingHorizontal: 14, fontSize: 15, color: colors.textDark,

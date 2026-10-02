@@ -117,7 +117,7 @@ const buildQuickActions = (green: string, greenLight: string) => [
   {
     id: "documentos",
     title: "Documentos",
-    description: "Documentos da clínica: avulsos, por paciente e de removidos.",
+    description: "Documentos administrativos da clínica (sem vínculo com pacientes).",
     icon: "folder-outline",
     color: BLUE,
     bg: BLUE_LIGHT,
