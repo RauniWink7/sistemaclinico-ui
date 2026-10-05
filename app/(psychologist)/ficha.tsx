@@ -1110,6 +1110,22 @@ export default function PsychologistPatientRecordScreen() {
               </Text>
             </TouchableOpacity>
 
+            {/* Prontuário (anamnese, evoluções, adendos) — tela própria */}
+            <TouchableOpacity
+              style={styles.scheduleButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/prontuario/[patientId]",
+                  // PatientProfile.id, não o id do usuário
+                  params: { patientId: patient?.id ?? params.patientProfileId },
+                } as any)
+              }
+              activeOpacity={0.85}
+            >
+              <Ionicons name="folder-open-outline" size={18} color={colors.primary} />
+              <Text style={styles.scheduleButtonText}>Abrir prontuário</Text>
+            </TouchableOpacity>
+
             {/* Agendar consulta para este paciente */}
             <TouchableOpacity
               style={styles.scheduleButton}

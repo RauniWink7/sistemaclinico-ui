@@ -94,6 +94,15 @@ const buildQuickActions = (green: string, greenLight: string) => [
     route: "/(psychologist)/lista",
   },
   {
+    id: "modelos-anamnese",
+    title: "Modelos de anamnese",
+    description: "Crie e organize seus modelos de anamnese.",
+    icon: "document-text-outline",
+    color: INDIGO,
+    bg: INDIGO_LIGHT,
+    route: "/(psychologist)/modelos-anamnese",
+  },
+  {
     id: "relatorios",
     title: "Relatórios",
     description: "Indicadores, relatórios por paciente e exportações.",

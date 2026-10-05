@@ -123,6 +123,11 @@ export interface DocumentApi {
   uploaded_at: string;
   size?: string;
   download_url?: string;
+  // Documento anexado ao prontuário (Res. CFP 001/2009, art. 2º V e VI).
+  medical_record?: string | null;
+  purpose?: string;
+  recipient?: string;
+  is_assessment_instrument?: boolean;
 }
 
 export interface NotificationApiItem {
@@ -2128,6 +2133,340 @@ export const confirmInvite = async (payload: {
 
   if (!response.ok) return { ok: false, error: normalizeError(data), data };
   return { ok: true, data };
+};
+
+// ─── Anamnese e prontuário ───────────────────────────────────────────────────
+// Contrato da sprint "Anamnese e Prontuário" (seção 5 do plano). Os caminhos
+// abaixo são SUPOSIÇÃO do front enquanto o back não está acessível a partir do
+// repositório: conferir com as rotas reais de /api/records/ e ajustar aqui.
+
+export type AnamnesisQuestionType =
+  | "short_text"
+  | "long_text"
+  | "single_choice"
+  | "multiple_choice"
+  | "yes_no"
+  | "date"
+  | "scale";
+
+export interface AnamnesisQuestionConfig {
+  options?: string[]; // single_choice / multiple_choice
+  min?: number; // scale
+  max?: number;
+  min_label?: string;
+  max_label?: string;
+}
+
+export interface AnamnesisQuestionApiItem {
+  id?: string;
+  order: number;
+  type: AnamnesisQuestionType;
+  label: string;
+  help_text?: string;
+  required: boolean;
+  config: AnamnesisQuestionConfig;
+}
+
+export interface AnamnesisTemplateApiItem {
+  id: string;
+  title: string;
+  description?: string;
+  is_system_default: boolean;
+  is_archived: boolean;
+  questions: AnamnesisQuestionApiItem[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AnamnesisTemplatePayload {
+  title: string;
+  description?: string;
+  questions: Omit<AnamnesisQuestionApiItem, "id">[];
+}
+
+export type RecordStatus = "draft" | "finalized";
+
+export type RecordEntryKind =
+  | "demand"
+  | "evolution"
+  | "referral"
+  | "closure"
+  | "addendum";
+
+export interface RecordEntryApiItem {
+  id: string;
+  kind: RecordEntryKind;
+  status: RecordStatus;
+  content: string;
+  appointment?: string | null;
+  amends?: string | null; // id do registro corrigido (adendo)
+  amends_anamnesis?: string | null; // id da anamnese corrigida (adendo)
+  referral_to?: string;
+  author: string;
+  author_name?: string;
+  occurred_at: string;
+  created_at?: string;
+  finalized_at?: string | null;
+}
+
+export interface AnamnesisSnapshot {
+  title: string;
+  description?: string;
+  questions: (AnamnesisQuestionApiItem & { id: string })[];
+}
+
+// Valor de uma resposta: depende do tipo da pergunta (ver services/anamnesis.ts).
+export type AnamnesisAnswerValue = string | number | boolean | string[] | null;
+export type AnamnesisAnswers = Record<string, AnamnesisAnswerValue>;
+
+export interface AnamnesisApiItem {
+  id: string;
+  template?: string | null;
+  template_snapshot: AnamnesisSnapshot;
+  answers: AnamnesisAnswers;
+  status: RecordStatus;
+  author: string;
+  author_name?: string;
+  created_at?: string;
+  updated_at?: string;
+  finalized_at?: string | null;
+}
+
+export interface MedicalRecordApiItem {
+  id: string;
+  patient: string;
+  responsible: string;
+  opened_at: string;
+  closed_at?: string | null;
+  retention_until?: string | null;
+  // Identificação (art. 2º I)
+  patient_detail?: PatientProfileApiItem;
+  entries: RecordEntryApiItem[];
+  anamneses: AnamnesisApiItem[];
+  // Quando o usuário não pode ler o conteúdo (admin/recepção), só metadados.
+  metadata_only?: boolean;
+  entries_count?: number;
+  // Permissões do usuário atual sobre este prontuário.
+  can_write?: boolean;
+  can_authorize?: boolean;
+}
+
+export interface RecordAccessGrantApiItem {
+  id: string;
+  grantee: string;
+  grantee_name?: string;
+  can_write: boolean;
+  granted_at: string;
+  revoked_at?: string | null;
+}
+
+export interface RecordAccessLogItem {
+  id: string;
+  action: string;
+  actor_name?: string;
+  created_at: string;
+}
+
+// Requisição autenticada genérica para /api/records/...
+const recordsRequest = async <T = any>(
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<ApiResult<T>> => {
+  const headers = await createAuthHeaders();
+  if (!headers) return { ok: false, error: "Usuário não autenticado." };
+  const { response, data } = await fetchJson(`${API_BASE_URL}/records/${path}`, {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) return { ok: false, error: normalizeError(data), data };
+  return { ok: true, data };
+};
+
+// Modelos de anamnese
+export const getAnamnesisTemplates = async (
+  options: { archived?: boolean } = {},
+): Promise<ApiResult<AnamnesisTemplateApiItem[]>> => {
+  const query = options.archived ? "?archived=true" : "";
+  const result = await recordsRequest("GET", `anamnesis-templates/${query}`);
+  return result.ok
+    ? { ok: true, data: extractList<AnamnesisTemplateApiItem>(result.data) }
+    : result;
+};
+
+export const getAnamnesisTemplate = (id: string) =>
+  recordsRequest<AnamnesisTemplateApiItem>(
+    "GET",
+    `anamnesis-templates/${encodeURIComponent(id)}/`,
+  );
+
+export const createAnamnesisTemplate = (payload: AnamnesisTemplatePayload) =>
+  recordsRequest<AnamnesisTemplateApiItem>("POST", "anamnesis-templates/", payload);
+
+export const updateAnamnesisTemplate = (
+  id: string,
+  payload: Partial<AnamnesisTemplatePayload> & { is_archived?: boolean },
+) =>
+  recordsRequest<AnamnesisTemplateApiItem>(
+    "PATCH",
+    `anamnesis-templates/${encodeURIComponent(id)}/`,
+    payload,
+  );
+
+export const duplicateAnamnesisTemplate = (id: string) =>
+  recordsRequest<AnamnesisTemplateApiItem>(
+    "POST",
+    `anamnesis-templates/${encodeURIComponent(id)}/duplicate/`,
+  );
+
+// Modelo já aplicado não pode ser excluído, só arquivado (is_archived).
+export const deleteAnamnesisTemplate = (id: string) =>
+  recordsRequest("DELETE", `anamnesis-templates/${encodeURIComponent(id)}/`);
+
+// Prontuário — criado no primeiro acesso do responsável.
+export const getMedicalRecordByPatient = (patientProfileId: string) =>
+  recordsRequest<MedicalRecordApiItem>(
+    "GET",
+    `medical-records/by-patient/${encodeURIComponent(patientProfileId)}/`,
+  );
+
+export const createRecordEntry = (
+  recordId: string,
+  payload: {
+    kind: Exclude<RecordEntryKind, "addendum">;
+    content: string;
+    occurred_at?: string;
+    appointment?: string | null;
+    referral_to?: string;
+  },
+) =>
+  recordsRequest<RecordEntryApiItem>(
+    "POST",
+    `medical-records/${encodeURIComponent(recordId)}/entries/`,
+    payload,
+  );
+
+// Só rascunhos podem ser editados.
+export const updateRecordEntry = (
+  entryId: string,
+  payload: { content?: string; occurred_at?: string; referral_to?: string },
+) =>
+  recordsRequest<RecordEntryApiItem>(
+    "PATCH",
+    `record-entries/${encodeURIComponent(entryId)}/`,
+    payload,
+  );
+
+// Só rascunhos podem ser descartados.
+export const deleteRecordEntry = (entryId: string) =>
+  recordsRequest("DELETE", `record-entries/${encodeURIComponent(entryId)}/`);
+
+export const finalizeRecordEntry = (entryId: string) =>
+  recordsRequest<RecordEntryApiItem>(
+    "POST",
+    `record-entries/${encodeURIComponent(entryId)}/finalize/`,
+  );
+
+// Correção de um registro finalizado: cria um adendo vinculado ao original.
+export const createRecordAddendum = (
+  entryId: string,
+  payload: { content: string },
+) =>
+  recordsRequest<RecordEntryApiItem>(
+    "POST",
+    `record-entries/${encodeURIComponent(entryId)}/addendum/`,
+    payload,
+  );
+
+// Anamnese preenchida
+export const startAnamnesis = (recordId: string, templateId: string) =>
+  recordsRequest<AnamnesisApiItem>("POST", "anamneses/", {
+    record: recordId,
+    template: templateId,
+  });
+
+export const getAnamnesis = (id: string) =>
+  recordsRequest<AnamnesisApiItem>("GET", `anamneses/${encodeURIComponent(id)}/`);
+
+export const saveAnamnesisDraft = (id: string, answers: AnamnesisAnswers) =>
+  recordsRequest<AnamnesisApiItem>(
+    "PATCH",
+    `anamneses/${encodeURIComponent(id)}/`,
+    { answers },
+  );
+
+export const discardAnamnesisDraft = (id: string) =>
+  recordsRequest("DELETE", `anamneses/${encodeURIComponent(id)}/`);
+
+export const finalizeAnamnesis = (id: string) =>
+  recordsRequest<AnamnesisApiItem>(
+    "POST",
+    `anamneses/${encodeURIComponent(id)}/finalize/`,
+  );
+
+export const createAnamnesisAddendum = (
+  id: string,
+  payload: { content: string },
+) =>
+  recordsRequest<RecordEntryApiItem>(
+    "POST",
+    `anamneses/${encodeURIComponent(id)}/addendum/`,
+    payload,
+  );
+
+// Autorizações (só o responsável) e log de acesso
+export const getRecordGrants = async (
+  recordId: string,
+): Promise<ApiResult<RecordAccessGrantApiItem[]>> => {
+  const result = await recordsRequest(
+    "GET",
+    `medical-records/${encodeURIComponent(recordId)}/grants/`,
+  );
+  return result.ok
+    ? { ok: true, data: extractList<RecordAccessGrantApiItem>(result.data) }
+    : result;
+};
+
+export const grantRecordAccess = (
+  recordId: string,
+  payload: { grantee: string; can_write: boolean },
+) =>
+  recordsRequest<RecordAccessGrantApiItem>(
+    "POST",
+    `medical-records/${encodeURIComponent(recordId)}/grants/`,
+    payload,
+  );
+
+export const revokeRecordAccess = (recordId: string, grantId: string) =>
+  recordsRequest(
+    "DELETE",
+    `medical-records/${encodeURIComponent(recordId)}/grants/${encodeURIComponent(grantId)}/`,
+  );
+
+// Exporta o prontuário em PDF (só registros finalizados e adendos; sem
+// rascunhos nem instrumentos de avaliação). O backend registra a exportação
+// no log de acesso. Mesmo mecanismo dos relatórios: download no navegador.
+export const exportMedicalRecordPdf = (
+  recordId: string,
+  filename: string,
+): Promise<ApiResult> =>
+  downloadReportFile(
+    `/records/medical-records/${encodeURIComponent(recordId)}/export/`,
+    {},
+    filename,
+  );
+
+export const getRecordAccessLog = async (
+  recordId: string,
+): Promise<ApiResult<RecordAccessLogItem[]>> => {
+  const result = await recordsRequest(
+    "GET",
+    `medical-records/${encodeURIComponent(recordId)}/access-log/`,
+  );
+  return result.ok
+    ? { ok: true, data: extractList<RecordAccessLogItem>(result.data) }
+    : result;
 };
 
 export const getRoleFromToken = (token: string): string => {
