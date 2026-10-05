@@ -8,6 +8,7 @@ import {
   buildTimeline,
   buildOccurredAt,
   canAddAddendum,
+  findEvolutionForAppointment,
   formatDate,
   formatDateTime,
   getCurrentDemand,
@@ -280,6 +281,22 @@ describe("formatDate / formatDateTime", () => {
   it("formata em pt-BR", () => {
     expect(formatDate("2026-09-10T12:00:00-03:00")).toBe("10/09/2026");
     expect(formatDateTime("2026-09-10T12:00:00-03:00")).toContain("10/09/2026");
+  });
+});
+
+describe("findEvolutionForAppointment", () => {
+  const entries = [
+    entry({ id: "e1", kind: "evolution", appointment: "c1" }),
+    entry({ id: "e2", kind: "referral", appointment: "c2" }),
+  ];
+
+  it("acha a evolução ligada à consulta", () => {
+    expect(findEvolutionForAppointment(entries, "c1")?.id).toBe("e1");
+  });
+
+  it("ignora outros tipos e consultas sem evolução", () => {
+    expect(findEvolutionForAppointment(entries, "c2")).toBeNull();
+    expect(findEvolutionForAppointment(entries, "c9")).toBeNull();
   });
 });
 

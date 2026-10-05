@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -32,6 +32,7 @@ import {
   buildTimeline,
   CREATABLE_ENTRY_KINDS,
   ENTRY_KIND_LABELS,
+  findEvolutionForAppointment,
   formatDate,
   formatDateTime,
   getCurrentDemand,
@@ -44,6 +45,8 @@ import { showAlert, showConfirm } from "../../../services/feedback";
 
 interface Composer {
   editingId: string | null;
+  appointment: string | null; // consulta a que a evolução se refere
+
   kind: Exclude<RecordEntryKind, "addendum">;
   content: string;
   referralTo: string;
@@ -53,6 +56,7 @@ interface Composer {
 
 const emptyComposer = (): Composer => ({
   editingId: null,
+  appointment: null,
   kind: "evolution",
   content: "",
   referralTo: "",
@@ -63,7 +67,14 @@ const emptyComposer = (): Composer => ({
 export default function MedicalRecordScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { patientId } = useLocalSearchParams<{ patientId: string }>();
+  // `appointmentId`: vindo de "concluir consulta" na agenda/calendário —
+  // abre o rascunho de evolução daquela consulta.
+  const { patientId, appointmentId } = useLocalSearchParams<{
+    patientId: string;
+    appointmentId?: string;
+  }>();
+  // Cada consulta abre o editor uma única vez, para recargas não reabrirem.
+  const handledAppointment = useRef<string | null>(null);
 
   const [record, setRecord] = useState<MedicalRecordApiItem | null>(null);
   const [documents, setDocuments] = useState<DocumentApi[]>([]);
@@ -82,6 +93,27 @@ export default function MedicalRecordScreen() {
     setLoadError(null);
     setRecord(result.data);
 
+    if (
+      appointmentId &&
+      handledAppointment.current !== appointmentId &&
+      result.data.can_write &&
+      !result.data.metadata_only
+    ) {
+      handledAppointment.current = appointmentId;
+      const existing = findEvolutionForAppointment(result.data.entries, appointmentId);
+      if (!existing) {
+        setComposer({ ...emptyComposer(), appointment: appointmentId });
+      } else if (existing.status === "draft") {
+        setComposer({
+          ...emptyComposer(),
+          editingId: existing.id,
+          appointment: appointmentId,
+          content: existing.content,
+        });
+      }
+      // Evolução já finalizada: nada a abrir, ela aparece na linha do tempo.
+    }
+
     // Documentos usam o id do usuário do paciente. Só carrega quando o
     // conteúdo clínico é visível para quem abriu o prontuário.
     const userId = result.data.patient_detail?.user?.id;
@@ -96,7 +128,7 @@ export default function MedicalRecordScreen() {
       }
     }
     setLoading(false);
-  }, [patientId]);
+  }, [patientId, appointmentId]);
 
   // Recarrega ao voltar da tela de anamnese, que muda a linha do tempo.
   useFocusEffect(
@@ -137,6 +169,8 @@ export default function MedicalRecordScreen() {
           content,
           occurred_at,
           referral_to,
+          // Só evolução se liga à consulta (regra do backend).
+          appointment: composer.kind === "evolution" ? composer.appointment : null,
         });
     setSaving(false);
 
@@ -152,6 +186,7 @@ export default function MedicalRecordScreen() {
   const editEntry = (entry: RecordEntryApiItem) =>
     setComposer({
       editingId: entry.id,
+      appointment: entry.appointment ?? null,
       kind: entry.kind as Composer["kind"],
       content: entry.content,
       referralTo: entry.referral_to ?? "",

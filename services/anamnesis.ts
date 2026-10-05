@@ -326,6 +326,13 @@ export const formatDate = (value?: string | null): string => {
   return parsed.toLocaleDateString("pt-BR");
 };
 
+/** Evolução já registrada para a consulta (no máximo uma por consulta), ou `null`. */
+export const findEvolutionForAppointment = (
+  entries: RecordEntryApiItem[],
+  appointmentId: string,
+): RecordEntryApiItem | null =>
+  entries.find((e) => e.kind === "evolution" && e.appointment === appointmentId) ?? null;
+
 /** Registro finalizado é imutável: só aceita adendo. Rascunho aceita edição e descarte. */
 export const isImmutable = (item: { status: string }): boolean =>
   item.status === "finalized";

@@ -47,6 +47,7 @@ interface CalendarAppointment {
   type: string;
   status: AppointmentStatus;
   scheduledAt: string; // ISO original — usado para saber se o dia já passou
+  patientId?: string; // id do PatientProfile — abre o prontuário ao concluir
 }
 
 // ─── Cores semânticas fixas (status de consulta, não mudam com a paleta) ─────
@@ -112,6 +113,7 @@ const toCalendarAppointment = (item: AppointmentApiItem): CalendarAppointment =>
     type: "Sessão individual",
     status: (item.status as AppointmentStatus) ?? "scheduled",
     scheduledAt: item.scheduled_at!,
+    patientId: item.patient,
   };
 };
 
@@ -351,9 +353,17 @@ export default function PsychologistCalendarScreen() {
     setAppointments((current) =>
       current.map((item) => (item.id === doneId ? { ...item, status: "completed" } : item)),
     );
+    const patientId = completing.patientId;
     setCompleting(null);
     setSelectedAppointment(null);
     showAlert("Consulta concluída", "A consulta foi marcada como realizada.");
+    // Abre o rascunho de evolução desta consulta no prontuário do paciente.
+    if (patientId) {
+      router.push({
+        pathname: "/prontuario/[patientId]",
+        params: { patientId, appointmentId: doneId },
+      } as any);
+    }
   };
 
   const handleUndoCompleted = () =>
