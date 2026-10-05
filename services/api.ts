@@ -123,6 +123,11 @@ export interface DocumentApi {
   uploaded_at: string;
   size?: string;
   download_url?: string;
+  // Documento anexado ao prontuário (Res. CFP 001/2009, art. 2º V e VI).
+  medical_record?: string | null;
+  purpose?: string;
+  recipient?: string;
+  is_assessment_instrument?: boolean;
 }
 
 export interface NotificationApiItem {

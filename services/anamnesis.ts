@@ -7,6 +7,7 @@ import type {
   AnamnesisApiItem,
   AnamnesisQuestionApiItem,
   RecordEntryApiItem,
+  RecordEntryKind,
 } from "./api";
 
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -279,6 +280,50 @@ export const getCurrentDemand = (
       ? e
       : latest,
   );
+};
+
+export const ENTRY_KIND_LABELS: Record<RecordEntryKind, string> = {
+  demand: "Demanda",
+  evolution: "Evolução",
+  referral: "Encaminhamento",
+  closure: "Encerramento",
+  addendum: "Adendo",
+};
+
+/** Tipos que o psicólogo cria direto; adendo só nasce de um registro finalizado. */
+export const CREATABLE_ENTRY_KINDS: Exclude<RecordEntryKind, "addendum">[] = [
+  "demand",
+  "evolution",
+  "referral",
+  "closure",
+];
+
+// Mesmo fuso fixo da clínica usado nos formulários de agendamento.
+const FUSO_CLINICA = "-03:00";
+
+/**
+ * Monta o `occurred_at` (data do atendimento) a partir dos campos de data e
+ * hora. Sem data devolve `undefined` e o backend usa o momento atual; com data
+ * e sem hora usa o meio-dia, para o fuso não empurrar o registro de dia.
+ */
+export const buildOccurredAt = (date: string, time: string): string | undefined => {
+  if (!DATA_RE.test(date)) return undefined;
+  const hora = /^\d{2}:\d{2}$/.test(time) ? time : "12:00";
+  return `${date}T${hora}:00${FUSO_CLINICA}`;
+};
+
+/** "10/09/2026 14:30" no fuso do dispositivo; vazio se a data for inválida. */
+export const formatDateTime = (value?: string | null): string => {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+};
+
+/** "10/09/2026"; vazio se a data for inválida. */
+export const formatDate = (value?: string | null): string => {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString("pt-BR");
 };
 
 /** Registro finalizado é imutável: só aceita adendo. Rascunho aceita edição e descarte. */
