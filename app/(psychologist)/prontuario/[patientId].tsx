@@ -322,6 +322,21 @@ export default function MedicalRecordScreen() {
             )}
           </TouchableOpacity>
 
+          {/* Só o responsável autoriza e vê o log de acesso */}
+          {record.can_authorize && (
+            <TouchableOpacity
+              style={[styles.secondaryBtn, styles.exportBtn]}
+              onPress={() =>
+                router.push({
+                  pathname: "/prontuario-acesso/[recordId]",
+                  params: { recordId: record.id, responsibleId: record.responsible },
+                } as any)
+              }
+            >
+              <Text style={styles.secondaryBtnText}>Acessos e autorizações</Text>
+            </TouchableOpacity>
+          )}
+
           {canWrite && (
             <View style={styles.buttonRow}>
               <TouchableOpacity
