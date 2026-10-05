@@ -2444,6 +2444,19 @@ export const revokeRecordAccess = (recordId: string, grantId: string) =>
     `medical-records/${encodeURIComponent(recordId)}/grants/${encodeURIComponent(grantId)}/`,
   );
 
+// Exporta o prontuário em PDF (só registros finalizados e adendos; sem
+// rascunhos nem instrumentos de avaliação). O backend registra a exportação
+// no log de acesso. Mesmo mecanismo dos relatórios: download no navegador.
+export const exportMedicalRecordPdf = (
+  recordId: string,
+  filename: string,
+): Promise<ApiResult> =>
+  downloadReportFile(
+    `/records/medical-records/${encodeURIComponent(recordId)}/export/`,
+    {},
+    filename,
+  );
+
 export const getRecordAccessLog = async (
   recordId: string,
 ): Promise<ApiResult<RecordAccessLogItem[]>> => {

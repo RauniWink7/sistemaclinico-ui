@@ -7,6 +7,7 @@ import type {
 import {
   buildTimeline,
   buildOccurredAt,
+  buildRecordPdfFilename,
   canAddAddendum,
   findEvolutionForAppointment,
   formatDate,
@@ -281,6 +282,17 @@ describe("formatDate / formatDateTime", () => {
   it("formata em pt-BR", () => {
     expect(formatDate("2026-09-10T12:00:00-03:00")).toBe("10/09/2026");
     expect(formatDateTime("2026-09-10T12:00:00-03:00")).toContain("10/09/2026");
+  });
+});
+
+describe("buildRecordPdfFilename", () => {
+  it("remove acentos e símbolos", () => {
+    expect(buildRecordPdfFilename("José  da Silva-Ñ!")).toBe("prontuario-jose-da-silva-n.pdf");
+  });
+
+  it("usa nome genérico sem nome do paciente", () => {
+    expect(buildRecordPdfFilename(undefined)).toBe("prontuario.pdf");
+    expect(buildRecordPdfFilename("   ")).toBe("prontuario.pdf");
   });
 });
 
