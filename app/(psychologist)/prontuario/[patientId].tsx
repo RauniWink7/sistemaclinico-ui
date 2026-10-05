@@ -19,6 +19,7 @@ import {
   createRecordEntry,
   deleteRecordEntry,
   DocumentApi,
+  exportMedicalRecordPdf,
   finalizeRecordEntry,
   getDocumentsByPatient,
   getMedicalRecordByPatient,
@@ -29,6 +30,7 @@ import {
 } from "../../../services/api";
 import {
   buildOccurredAt,
+  buildRecordPdfFilename,
   buildTimeline,
   CREATABLE_ENTRY_KINDS,
   ENTRY_KIND_LABELS,
@@ -82,6 +84,7 @@ export default function MedicalRecordScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [composer, setComposer] = useState<Composer | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     const result = await getMedicalRecordByPatient(patientId);
@@ -234,6 +237,25 @@ export default function MedicalRecordScreen() {
     return false;
   };
 
+  const exportPdf = () => {
+    if (!record) return;
+    showConfirm({
+      title: "Exportar prontuário em PDF",
+      message:
+        "O PDF inclui os registros finalizados e seus adendos. Rascunhos e instrumentos de avaliação ficam de fora. A exportação é registrada no log de acesso.",
+      confirmText: "Exportar",
+      onConfirm: async () => {
+        setExporting(true);
+        const result = await exportMedicalRecordPdf(
+          record.id,
+          buildRecordPdfFilename(patient?.user?.full_name),
+        );
+        setExporting(false);
+        if (!result.ok) showAlert("Exportação", result.error || "Falha ao exportar.");
+      },
+    });
+  };
+
   const newAnamnesis = () =>
     router.push({
       pathname: "/anamnese/[id]",
@@ -286,6 +308,19 @@ export default function MedicalRecordScreen() {
               {demand ? demand.content : "Nenhuma demanda finalizada ainda."}
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.exportBtn, exporting && styles.off]}
+            onPress={exportPdf}
+            disabled={exporting}
+            accessibilityLabel="Exportar prontuário em PDF"
+          >
+            {exporting ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={styles.secondaryBtnText}>Exportar PDF</Text>
+            )}
+          </TouchableOpacity>
 
           {canWrite && (
             <View style={styles.buttonRow}>
@@ -463,6 +498,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     secondaryBtnText: { color: colors.primary, fontSize: 15, fontWeight: "700" },
     off: { opacity: 0.5 },
+    exportBtn: { flex: 0, alignSelf: "stretch", marginBottom: 12 },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
     chip: {
       borderWidth: 1,

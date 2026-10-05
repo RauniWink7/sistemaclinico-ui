@@ -326,6 +326,17 @@ export const formatDate = (value?: string | null): string => {
   return parsed.toLocaleDateString("pt-BR");
 };
 
+/** Nome do PDF exportado: "prontuario-maria-da-silva.pdf" (sem acento nem símbolos). */
+export const buildRecordPdfFilename = (patientName?: string | null): string => {
+  const slug = (patientName ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `prontuario-${slug}.pdf` : "prontuario.pdf";
+};
+
 /** Evolução já registrada para a consulta (no máximo uma por consulta), ou `null`. */
 export const findEvolutionForAppointment = (
   entries: RecordEntryApiItem[],
