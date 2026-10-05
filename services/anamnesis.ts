@@ -41,6 +41,18 @@ const isValidDate = (value: string): boolean => {
   );
 };
 
+/** Remove respostas vazias (e de perguntas que não existem mais) antes de enviar. */
+export const pruneAnswers = (
+  questions: { id: string }[],
+  answers: AnamnesisAnswers,
+): AnamnesisAnswers => {
+  const pruned: AnamnesisAnswers = {};
+  for (const { id } of questions) {
+    if (!isAnswerEmpty(answers[id])) pruned[id] = answers[id];
+  }
+  return pruned;
+};
+
 /** Valores selecionáveis de uma escala, de `min` a `max` (padrão 0 a 10). */
 export const getScaleValues = (
   config: AnamnesisQuestionApiItem["config"],
