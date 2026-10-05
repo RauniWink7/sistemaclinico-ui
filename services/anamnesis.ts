@@ -41,6 +41,31 @@ const isValidDate = (value: string): boolean => {
   );
 };
 
+/** Valores selecionáveis de uma escala, de `min` a `max` (padrão 0 a 10). */
+export const getScaleValues = (
+  config: AnamnesisQuestionApiItem["config"],
+): number[] => {
+  const min = Math.trunc(config.min ?? ESCALA_MIN_PADRAO);
+  const max = Math.trunc(config.max ?? ESCALA_MAX_PADRAO);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return [];
+  return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+};
+
+/**
+ * Marca/desmarca uma opção da múltipla escolha. O resultado segue a ordem das
+ * opções da pergunta (não a ordem dos toques), para o valor ficar estável.
+ */
+export const toggleOption = (
+  current: AnamnesisAnswerValue | undefined,
+  option: string,
+  options: string[],
+): string[] => {
+  const selected = new Set(Array.isArray(current) ? current : []);
+  if (selected.has(option)) selected.delete(option);
+  else selected.add(option);
+  return options.filter((item) => selected.has(item));
+};
+
 /**
  * Valida o valor de UMA resposta contra o tipo da pergunta. Resposta vazia é
  * válida aqui (a obrigatoriedade é checada em `validateAnswers`).
