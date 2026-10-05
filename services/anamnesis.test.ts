@@ -11,6 +11,7 @@ import {
   getScaleValues,
   toggleOption,
   isAnswerEmpty,
+  pruneAnswers,
   sortQuestions,
   validateAnswer,
   validateAnswers,
@@ -63,6 +64,19 @@ describe("isAnswerEmpty", () => {
   it("false e 0 são respostas válidas", () => {
     expect(isAnswerEmpty(false)).toBe(false);
     expect(isAnswerEmpty(0)).toBe(false);
+  });
+});
+
+describe("pruneAnswers", () => {
+  it("mantém false e 0, remove vazios e perguntas desconhecidas", () => {
+    const result = pruneAnswers([{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }], {
+      a: "",
+      b: false,
+      c: 0,
+      d: "texto",
+      fantasma: "x",
+    });
+    expect(result).toEqual({ b: false, c: 0, d: "texto" });
   });
 });
 
