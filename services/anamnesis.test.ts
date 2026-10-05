@@ -8,6 +8,8 @@ import {
   buildTimeline,
   canAddAddendum,
   getCurrentDemand,
+  getScaleValues,
+  toggleOption,
   isAnswerEmpty,
   sortQuestions,
   validateAnswer,
@@ -61,6 +63,30 @@ describe("isAnswerEmpty", () => {
   it("false e 0 são respostas válidas", () => {
     expect(isAnswerEmpty(false)).toBe(false);
     expect(isAnswerEmpty(0)).toBe(false);
+  });
+});
+
+describe("getScaleValues", () => {
+  it("lista de min a max e usa 0 a 10 por padrão", () => {
+    expect(getScaleValues({ min: 1, max: 5 })).toEqual([1, 2, 3, 4, 5]);
+    expect(getScaleValues({})).toHaveLength(11);
+  });
+
+  it("devolve vazio quando max é menor que min", () => {
+    expect(getScaleValues({ min: 5, max: 1 })).toEqual([]);
+  });
+});
+
+describe("toggleOption", () => {
+  const options = ["A", "B", "C"];
+
+  it("marca e desmarca mantendo a ordem das opções", () => {
+    expect(toggleOption(["C"], "A", options)).toEqual(["A", "C"]);
+    expect(toggleOption(["A", "C"], "A", options)).toEqual(["C"]);
+  });
+
+  it("parte de lista vazia quando não há resposta", () => {
+    expect(toggleOption(undefined, "B", options)).toEqual(["B"]);
   });
 });
 
