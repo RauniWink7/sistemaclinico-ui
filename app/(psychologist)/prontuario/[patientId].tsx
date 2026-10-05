@@ -310,7 +310,7 @@ export default function MedicalRecordScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.secondaryBtn, styles.exportBtn, exporting && styles.off]}
+            style={[styles.exportBtn, exporting && styles.off]}
             onPress={exportPdf}
             disabled={exporting}
             accessibilityLabel="Exportar prontuário em PDF"
@@ -325,7 +325,7 @@ export default function MedicalRecordScreen() {
           {/* Só o responsável autoriza e vê o log de acesso */}
           {record.can_authorize && (
             <TouchableOpacity
-              style={[styles.secondaryBtn, styles.exportBtn]}
+              style={styles.exportBtn}
               onPress={() =>
                 router.push({
                   pathname: "/prontuario-acesso/[recordId]",
@@ -420,7 +420,7 @@ export default function MedicalRecordScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.primaryBtn, styles.fullBtn, saving && styles.off]}
+                style={[styles.fullBtn, saving && styles.off]}
                 onPress={() => void submitComposer()}
                 disabled={saving}
               >
@@ -500,7 +500,16 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.primary,
       alignItems: "center",
     },
-    fullBtn: { flex: 0, alignSelf: "stretch", marginTop: 16 },
+    // Botões em coluna: estilo próprio, sem `flex` (herdar o `flex: 1` dos botões
+    // lado a lado zera a altura na web e o texto vaza para fora do botão).
+    fullBtn: {
+      alignSelf: "stretch",
+      alignItems: "center",
+      marginTop: 16,
+      paddingVertical: 14,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+    },
     primaryBtnText: { color: colors.white, fontSize: 15, fontWeight: "800" },
     secondaryBtn: {
       flex: 1,
@@ -513,7 +522,15 @@ const createStyles = (colors: ThemeColors) =>
     },
     secondaryBtnText: { color: colors.primary, fontSize: 15, fontWeight: "700" },
     off: { opacity: 0.5 },
-    exportBtn: { flex: 0, alignSelf: "stretch", marginBottom: 12 },
+    exportBtn: {
+      alignSelf: "stretch",
+      alignItems: "center",
+      marginBottom: 12,
+      paddingVertical: 13,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+    },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
     chip: {
       borderWidth: 1,
