@@ -6,7 +6,10 @@ import type {
 } from "./api";
 import {
   buildTimeline,
+  buildOccurredAt,
   canAddAddendum,
+  formatDate,
+  formatDateTime,
   getCurrentDemand,
   getScaleValues,
   toggleOption,
@@ -252,6 +255,31 @@ describe("getCurrentDemand", () => {
 
   it("devolve null sem demanda finalizada", () => {
     expect(getCurrentDemand([entry({ kind: "demand", status: "draft" })])).toBeNull();
+  });
+});
+
+describe("buildOccurredAt", () => {
+  it("monta data e hora no fuso da clínica", () => {
+    expect(buildOccurredAt("2026-09-10", "14:30")).toBe("2026-09-10T14:30:00-03:00");
+  });
+
+  it("sem hora usa meio-dia e sem data deixa o backend decidir", () => {
+    expect(buildOccurredAt("2026-09-10", "")).toBe("2026-09-10T12:00:00-03:00");
+    expect(buildOccurredAt("", "14:30")).toBeUndefined();
+    expect(buildOccurredAt("10/09/2026", "14:30")).toBeUndefined();
+  });
+});
+
+describe("formatDate / formatDateTime", () => {
+  it("devolve vazio para valor ausente ou inválido", () => {
+    expect(formatDate(undefined)).toBe("");
+    expect(formatDate("não é data")).toBe("");
+    expect(formatDateTime(null)).toBe("");
+  });
+
+  it("formata em pt-BR", () => {
+    expect(formatDate("2026-09-10T12:00:00-03:00")).toBe("10/09/2026");
+    expect(formatDateTime("2026-09-10T12:00:00-03:00")).toContain("10/09/2026");
   });
 });
 
