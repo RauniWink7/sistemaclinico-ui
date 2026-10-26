@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
   Animated,
   ScrollView,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { showAlert } from '../../services/feedback';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { getMe, getPatientsByClinic } from '../../services/api';
 import type { PatientProfileApiItem } from '../../services/api';
 import { ThemeColors } from '../../constants/theme-palettes';
@@ -63,29 +63,33 @@ export default function AdminPacientesScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const meResult = await getMe();
-        if (!meResult.ok || !meResult.data) {
-          showAlert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
-          return;
-        }
-        const cId = meResult.data.clinic;
-        if (!cId) { showAlert('Erro', 'Nenhuma clínica associada.'); return; }
+  // Recarrega ao voltar para a tela (ex.: depois de cadastrar um paciente),
+  // e não só ao montar — senão o paciente novo só aparecia reabrindo a lista.
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        try {
+          setLoading(true);
+          const meResult = await getMe();
+          if (!meResult.ok || !meResult.data) {
+            showAlert('Erro', meResult.error ?? 'Não foi possível carregar o perfil.');
+            return;
+          }
+          const cId = meResult.data.clinic;
+          if (!cId) { showAlert('Erro', 'Nenhuma clínica associada.'); return; }
 
-        const result = await getPatientsByClinic(cId);
-        if (!result.ok) { showAlert('Erro', result.error ?? 'Erro ao carregar pacientes.'); return; }
-        setPatients(result.data || []);
-      } catch (err: any) {
-        showAlert('Erro', err?.message ?? 'Erro inesperado.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, []);
+          const result = await getPatientsByClinic(cId);
+          if (!result.ok) { showAlert('Erro', result.error ?? 'Erro ao carregar pacientes.'); return; }
+          setPatients(result.data || []);
+        } catch (err: any) {
+          showAlert('Erro', err?.message ?? 'Erro inesperado.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      void load();
+    }, []),
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
