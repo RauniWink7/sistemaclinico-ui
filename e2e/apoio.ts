@@ -12,6 +12,7 @@ export const USUARIOS = {
   pacienteA1: "paciente.a1@e2e.local",
   pacienteA2: "paciente.a2@e2e.local",
   adminB: "admin.b@e2e.local",
+  psicologoB: "psi.b@e2e.local",
 } as const;
 
 // ─── Interface ───────────────────────────────────────────────────────────────
