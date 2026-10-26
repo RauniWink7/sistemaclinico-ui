@@ -19,5 +19,12 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
     removeItem: vi.fn(async (key: string) => {
       storage.delete(key);
     }),
+    // Usados por saveTokens/clearTokens em services/api.ts.
+    multiSet: vi.fn(async (pairs: [string, string][]) => {
+      pairs.forEach(([key, value]) => storage.set(key, value));
+    }),
+    multiRemove: vi.fn(async (keys: string[]) => {
+      keys.forEach((key) => storage.delete(key));
+    }),
   },
 }));
