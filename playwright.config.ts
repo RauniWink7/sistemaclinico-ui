@@ -17,7 +17,7 @@ import path from "node:path";
 
 const BACKEND_DIR = path.resolve(
   __dirname,
-  process.env.E2E_BACKEND_DIR ?? "../ClinicSystem",
+  process.env.E2E_BACKEND_DIR ?? "../Back",
 );
 const PYTHON =
   process.env.E2E_PYTHON ??
